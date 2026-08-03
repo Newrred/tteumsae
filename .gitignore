@@ -1,0 +1,29 @@
+# OS / editors
+.DS_Store
+Thumbs.db
+**/.idea/
+**/.vscode/
+**/*.iml
+
+# Android
+**/.gradle/
+**/.kotlin/
+**/build/
+**/local.properties
+**/*.apk
+**/*.aab
+**/*.jks
+**/*.keystore
+
+# Node / Vercel
+**/node_modules/
+**/.vercel/
+**/coverage/
+**/.env*
+!**/.env.example
+
+# Temporary and sensitive files
+**/*.log
+**/*.tmp
+**/*.zip
+**/recovery-codes.txt
