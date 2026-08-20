@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseRecommendationRequest } from "../lib/validation.js";
+import {
+  parseRecommendationRequest,
+  parseRouteRequest
+} from "../lib/validation.js";
 
 const valid = {
   mode: "ON_THE_WAY",
@@ -40,5 +43,31 @@ test("잘못된 좌표를 거부한다", () => {
   assert.throws(
     () => parseRecommendationRequest({ ...valid, start: { latitude: 200, longitude: 0 } }),
     /좌표/
+  );
+});
+
+test("경로 요청은 경유지 0~5개만 허용한다", () => {
+  const route = {
+    start: valid.start,
+    destination: valid.destination
+  };
+  assert.deepEqual(parseRouteRequest(route), { ...route, waypoints: [] });
+  assert.equal(
+    parseRouteRequest({
+      ...route,
+      waypoints: Array.from({ length: 5 }, () => valid.start)
+    }).waypoints.length,
+    5
+  );
+  assert.throws(
+    () => parseRouteRequest({
+      ...route,
+      waypoints: Array.from({ length: 6 }, () => valid.start)
+    }),
+    /최대 5개/
+  );
+  assert.throws(
+    () => parseRouteRequest({ ...route, waypoints: [{ latitude: 200, longitude: 0 }] }),
+    /경유지 좌표/
   );
 });

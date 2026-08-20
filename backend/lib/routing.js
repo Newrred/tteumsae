@@ -52,3 +52,51 @@ export function createSearchBounds(start, destination, transport) {
   };
 }
 
+export function createPathBounds(path, paddingKm) {
+  const latitudePadding = paddingKm / 111;
+  const meanLatitude = path.reduce((sum, point) => sum + point.latitude, 0) /
+    Math.max(path.length, 1);
+  const longitudePadding = paddingKm /
+    (111 * Math.max(0.1, Math.cos(meanLatitude * Math.PI / 180)));
+  return {
+    minLatitude: Math.min(...path.map((point) => point.latitude)) - latitudePadding,
+    maxLatitude: Math.max(...path.map((point) => point.latitude)) + latitudePadding,
+    minLongitude: Math.min(...path.map((point) => point.longitude)) - longitudePadding,
+    maxLongitude: Math.max(...path.map((point) => point.longitude)) + longitudePadding
+  };
+}
+
+export function distanceToPathKm(point, path) {
+  if (
+    !Number.isFinite(point?.latitude) ||
+    !Number.isFinite(point?.longitude) ||
+    path.length === 0
+  ) {
+    return Infinity;
+  }
+  if (path.length === 1) return haversineKm(point, path[0]);
+
+  // ponytail: local projection is sufficient for an 8 km corridor; use PostGIS if wider regions need exact geometry.
+  const latitudeScale = 111.32;
+  const longitudeScale = latitudeScale * Math.cos(point.latitude * Math.PI / 180);
+  const projected = path.map((pathPoint) => ({
+    x: (pathPoint.longitude - point.longitude) * longitudeScale,
+    y: (pathPoint.latitude - point.latitude) * latitudeScale
+  }));
+  let minimum = Infinity;
+  for (let index = 0; index + 1 < projected.length; index += 1) {
+    const from = projected[index];
+    const to = projected[index + 1];
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const ratio = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, -(from.x * dx + from.y * dy) / lengthSquared));
+    minimum = Math.min(
+      minimum,
+      Math.hypot(from.x + ratio * dx, from.y + ratio * dy)
+    );
+  }
+  return minimum;
+}

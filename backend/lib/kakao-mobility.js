@@ -11,7 +11,19 @@ function secondsToMinutes(seconds) {
   return Math.max(1, Math.ceil(seconds / 60));
 }
 
-export function routePath(sections, start, destination, place, maxPoints = 200) {
+function normalizeWaypoints(placeOrWaypoints) {
+  if (Array.isArray(placeOrWaypoints)) return placeOrWaypoints;
+  return placeOrWaypoints ? [placeOrWaypoints] : [];
+}
+
+export function routePath(
+  sections,
+  start,
+  destination,
+  placeOrWaypoints = [],
+  maxPoints = 200
+) {
+  const waypoints = normalizeWaypoints(placeOrWaypoints);
   const roadPoints = sections.flatMap((section) =>
     (section.roads ?? []).flatMap((road) => {
       const points = [];
@@ -26,7 +38,7 @@ export function routePath(sections, start, destination, place, maxPoints = 200) 
   );
   const points = roadPoints.length > 0
     ? [start, ...roadPoints, destination]
-    : [start, { latitude: place.latitude, longitude: place.longitude }, destination];
+    : [start, ...waypoints.map(({ latitude, longitude }) => ({ latitude, longitude })), destination];
   if (points.length <= maxPoints) return points;
 
   // ponytail: uniform sampling keeps API payloads small; use geometry simplification if map fidelity needs it.
@@ -35,13 +47,21 @@ export function routePath(sections, start, destination, place, maxPoints = 200) 
   );
 }
 
-export function parseKakaoRoute(payload, start, destination, place) {
+export function parseKakaoRoute(
+  payload,
+  start,
+  destination,
+  placeOrWaypoints = []
+) {
+  const waypoints = normalizeWaypoints(placeOrWaypoints);
   const result = payload?.routes?.find((route) => route.result_code === 0);
   const sections = result?.sections;
   if (
     !result?.summary ||
+    !Number.isFinite(result.summary.duration) ||
+    !Number.isFinite(result.summary.distance) ||
     !Array.isArray(sections) ||
-    sections.length !== 2 ||
+    sections.length !== waypoints.length + 1 ||
     !sections.every(
       (section) =>
         Number.isFinite(section.duration) && Number.isFinite(section.distance)
@@ -50,47 +70,68 @@ export function parseKakaoRoute(payload, start, destination, place) {
     return null;
   }
 
-  const firstLegMinutes = secondsToMinutes(sections[0].duration);
-  const secondLegMinutes = secondsToMinutes(sections[1].duration);
-  const directMinutes = estimateRoute(start, destination, place, "CAR").directMinutes;
-
-  return {
-    firstLegMinutes,
-    secondLegMinutes,
-    directMinutes,
-    detourMinutes: Math.max(
-      0,
-      firstLegMinutes + secondLegMinutes - directMinutes
-    ),
-    firstLegDistanceMeters: sections[0].distance,
-    secondLegDistanceMeters: sections[1].distance,
-    totalDistanceMeters: result.summary.distance,
-    path: routePath(sections, start, destination, place),
+  const durationMinutes = secondsToMinutes(result.summary.duration);
+  const distanceMeters = result.summary.distance;
+  const tollFare = Number.isFinite(result.summary.fare?.toll)
+    ? result.summary.fare.toll
+    : 0;
+  const route = {
+    waypointCount: waypoints.length,
+    durationMinutes,
+    distanceMeters,
+    tollFare,
+    totalDrivingMinutes: durationMinutes,
+    totalDistanceMeters: distanceMeters,
+    tollFareWon: tollFare,
+    legs: sections.map((section) => ({
+      drivingMinutes: secondsToMinutes(section.duration),
+      distanceMeters: section.distance
+    })),
+    path: routePath(sections, start, destination, waypoints),
     provider: "KAKAO_MOBILITY"
   };
+
+  if (waypoints.length === 1) {
+    const firstLegMinutes = route.legs[0].drivingMinutes;
+    const secondLegMinutes = route.legs[1].drivingMinutes;
+    const directMinutes = estimateRoute(start, destination, waypoints[0], "CAR").directMinutes;
+    Object.assign(route, {
+      firstLegMinutes,
+      secondLegMinutes,
+      directMinutes,
+      detourMinutes: Math.max(0, durationMinutes - directMinutes),
+      firstLegDistanceMeters: sections[0].distance,
+      secondLegDistanceMeters: sections[1].distance
+    });
+  }
+
+  return route;
 }
 
 export async function fetchKakaoRoute(
   start,
   destination,
-  place,
+  placeOrWaypoints = [],
   {
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
     fetchImpl = fetch
   } = {}
 ) {
+  const waypoints = normalizeWaypoints(placeOrWaypoints);
+  if (waypoints.length > 5) {
+    throw new Error("Kakao Mobility accepts at most 5 waypoints");
+  }
   const query = new URLSearchParams({
     origin: coordinateString(start),
     destination: coordinateString(destination),
-    waypoints: coordinateString({
-      latitude: place.latitude,
-      longitude: place.longitude
-    }),
     priority: "TIME",
     alternatives: "false",
     road_details: "false",
     summary: "false"
   });
+  if (waypoints.length > 0) {
+    query.set("waypoints", waypoints.map(coordinateString).join("|"));
+  }
   const response = await fetchImpl(`${directionsUrl}?${query}`, {
     headers: {
       authorization: `KakaoAK ${apiKey}`,
@@ -102,14 +143,14 @@ export async function fetchKakaoRoute(
     throw new Error(`Kakao Mobility request failed (${response.status})`);
   }
 
-  return parseKakaoRoute(await response.json(), start, destination, place);
+  return parseKakaoRoute(await response.json(), start, destination, waypoints);
 }
 
 export async function fetchKakaoRoutes(
   start,
   destination,
   places,
-  { concurrency = 5, apiKey, fetchImpl = fetch } = {}
+  { concurrency = 5, apiKey, fetchImpl = fetch, baseRoute } = {}
 ) {
   const routes = new Map();
   let failedCount = 0;
@@ -125,6 +166,13 @@ export async function fetchKakaoRoutes(
           apiKey,
           fetchImpl
         });
+        if (route && baseRoute) {
+          route.directMinutes = baseRoute.durationMinutes;
+          route.detourMinutes = Math.max(
+            0,
+            route.durationMinutes - baseRoute.durationMinutes
+          );
+        }
         if (route) routes.set(String(place.content_id), route);
         else failedCount += 1;
       } catch {

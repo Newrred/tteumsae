@@ -1,6 +1,6 @@
 # API 및 데이터 설계
 
-작성 기준: 2026-08-16 통합 소스
+작성 기준: 2026-08-20 통합 소스
 백엔드 패키지 버전: `0.2.0`
 운영 API 기준 주소: `https://tteumsae-backend.vercel.app`
 
@@ -16,11 +16,13 @@ TourAPI 동기화 과정을 설명한다. 기획상 예정된 동작이 아니�
 Android 앱
   ├─ 위치 검색 ──────────────> GET /api/geocode ──> Kakao Local 키워드 검색
   ├─ 행정구역 확인/역지오코딩 > GET /api/region ───> Kakao Local 좌표→행정구역
-  ├─ 저장소 목록 ────────────> GET /api/places ────> Supabase places
-  └─ 추천 요청 ──────────────> POST /api/recommendations
-                                    ├─ Supabase 후보 조회
-                                    ├─ CAR: Kakao Mobility 후보별 경로
-                                    └─ WALK: 직선거리 기반 보수적 추정
+  ├─ 틈새 발견 목록 ─────────> GET /api/places ────> Supabase places
+  ├─ 추천 요청 ──────────────> POST /api/recommendations
+  │                                 ├─ Kakao Mobility 출발→목적 baseRoute
+  │                                 ├─ baseRoute corridor의 Supabase 후보 조회
+  │                                 └─ 후보별 출발→후보→목적 경로
+  └─ 경유지 변경 ────────────> POST /api/route
+                                    └─ Kakao Mobility 출발→경유지 0~5→목적
 
 Vercel Cron
   ├─ /api/cron/tour-sync ───────> TourAPI areaBasedList2 → Supabase
@@ -33,9 +35,14 @@ Vercel Cron
 - Android는 Vercel 공개 API만 호출한다.
 - Kakao Maps **네이티브 앱 키**만 Android 빌드 시 주입된다.
 - Supabase는 앱에서 직접 읽지 않는다. 서버의 service role 요청만 사용한다.
-- 추천 API는 현재 후보 한 곳을 경유하는 경로를 장소별로 계산한다. 결과 화면에서
-  여러 경유지를 선택하고 카카오맵으로 넘기는 기능은 Android 측 기능이며,
-  선택된 복수 경유지의 통합 실시간 경로를 백엔드가 다시 계산하지는 않는다.
+- 추천 API는 직행 `baseRoute`를 먼저 계산한 뒤 그 경로 주변에서 후보를 찾고,
+  후보 한 곳을 경유하는 경로를 장소별로 계산한다.
+- 결과 화면에서 경유지를 추가·제거할 때 Android가 `POST /api/route`를 호출한다.
+  선택 순서의 0~5개 경유지를 포함한 통합 시간·거리·통행료·path를 Kakao
+  Mobility에서 다시 계산한다.
+- 새 Android 흐름은 시간 입력 화면을 건너뛰고 내부값 `deadlineMinutes=1440`,
+  `safetyBufferMinutes=15`를 보낸다. 이 값은 현재 후보 범위를 넓게 잡는 구현값이지
+  사용자가 지정한 도착 마감이 아니다.
 
 ## 2. 공통 HTTP 규칙
 
@@ -90,7 +97,7 @@ Android는 비정상 HTTP 응답의 `error.message`를 우선 표시하고, JSON
 ### 2.3 공개 범위
 
 `/api/health`, `/api/places`, `/api/geocode`, `/api/region`,
-`/api/recommendations`에는 현재 사용자 인증이나 Rate Limit이 없다. Cron 두
+`/api/recommendations`, `/api/route`에는 현재 사용자 인증이나 Rate Limit이 없다. Cron 두
 개만 `Authorization: Bearer {CRON_SECRET}`을 요구한다. 공개 출시 전 남용 방지
 정책을 추가해야 한다.
 
@@ -104,6 +111,7 @@ Android는 비정상 HTTP 응답의 `error.message`를 우선 표시하고, JSON
 | GET | `/api/geocode` | 없음 | 카카오 키워드 장소 검색 |
 | GET | `/api/region` | 없음 | 좌표의 행정구역 및 강원도 여부 |
 | POST | `/api/recommendations` | 없음 | 시간·경로·카테고리 기반 추천 |
+| POST | `/api/route` | 없음 | 출발·최종 목적지와 경유지 0~5개의 통합 차량 경로 재계산 |
 | GET | `/api/cron/tour-sync` | Bearer | TourAPI 기본 장소 페이지 동기화 |
 | GET | `/api/cron/tour-detail-sync` | Bearer | 이미지·편의·운영정보 보강 |
 
@@ -194,11 +202,16 @@ ATTRACTION, RESTAURANT, CAFE, CULTURE, FESTIVAL, SHOPPING, LEISURE
 | `page` | 1 | 1 이상 정수 | 페이지 번호 |
 | `pageSize` | 30 | 1~100 | 한 페이지 항목 수 |
 | `category` | 없음 | 내부 카테고리 7종 | 대소문자 무관 |
+| `sigunguCode` | 없음 | 1~18 정수 | TourAPI 강원 시군구 코드. 생략하면 강원도 전체 |
 
 정렬은 장소명 오름차순이고 `is_active=true`인 행만 반환한다.
+`sigunguCode`를 전달하면 DB의 `sigungu_code`가 정확히 같은 행만 서버에서
+필터링한다. 지원 범위는 강릉 1, 고성 2, 동해 3, 삼척 4, 속초 5, 양구 6,
+양양 7, 영월 8, 원주 9, 인제 10, 정선 11, 철원 12, 춘천 13, 태백 14,
+평창 15, 홍천 16, 화천 17, 횡성 18이다.
 
 ```http
-GET /api/places?page=1&pageSize=100&category=ATTRACTION
+GET /api/places?page=1&pageSize=100&category=ATTRACTION&sigunguCode=1
 ```
 
 ```json
@@ -235,8 +248,16 @@ GET /api/places?page=1&pageSize=100&category=ATTRACTION
 
 `hasMore`는 `returned === pageSize`인지로만 계산하며 전체 개수는 제공하지
 않는다. 마지막 페이지가 정확히 `pageSize`개이면 다음 빈 페이지를 요청할 수
-있다. 숫자가 아닌 `page`/`pageSize`의 명시적 400 검증도 현재 없어서 DB 오류로
-500이 될 수 있다.
+있다. `sigunguCode`가 정수가 아니거나 1~18 밖이면 400
+`지원하지 않는 강원도 지역입니다.`를 반환한다. 숫자가 아닌 `page`/`pageSize`의
+명시적 400 검증은 현재 없어서 DB 오류로 500이 될 수 있다.
+
+Android 틈새 발견 화면은 최초 `강릉`을 선택해 `sigunguCode=1`을 요청한다.
+지역을 바꾸면 페이지를 1로 초기화하고 이후 추가 페이지에도 같은 코드를
+유지하며, `강원도 전체`에서는 코드를 생략한다. 서버 카탈로그는 코드로
+필터링하지만 Android가 로컬에 저장한 장소 사본에는 `sigungu_code`가 없으므로,
+이 사본은 주소에 선택 지역명이 포함되는지로 보완 필터한다. 주소가 비어 있거나
+표기가 다른 경우 로컬 찜이 해당 지역 목록에서 누락될 수 있다.
 
 ### 5.3 `GET /api/places/{contentId}`
 
@@ -312,7 +333,7 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
   "mode": "ON_THE_WAY",
   "start": { "latitude": 37.7519, "longitude": 128.8761 },
   "destination": { "latitude": 37.7644, "longitude": 128.8996 },
-  "deadlineMinutes": 180,
+  "deadlineMinutes": 1440,
   "safetyBufferMinutes": 15,
   "transport": "CAR",
   "categories": ["ATTRACTION", "CULTURE"]
@@ -329,10 +350,27 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
 | `transport` | `CAR` 또는 `WALK` |
 | `categories` | 내부 카테고리 배열. 생략/빈 배열이면 전체 |
 
+현재 Android 활성 흐름은 이 API의 일반 범위를 모두 쓰지 않는다. 시간 입력
+화면을 건너뛰고 항상 `ON_THE_WAY`, `CAR`, `deadlineMinutes=1440`,
+`safetyBufferMinutes=15`를 보낸다. 따라서 아래 `marginMinutes`는 현재 사용자
+약속까지 실제 남은 시간이 아니다.
+
 응답 예시:
 
 ```json
 {
+  "baseRoute": {
+    "provider": "KAKAO_MOBILITY",
+    "waypointCount": 0,
+    "totalDrivingMinutes": 25,
+    "totalDistanceMeters": 15100,
+    "tollFareWon": 0,
+    "legs": [{ "drivingMinutes": 25, "distanceMeters": 15100 }],
+    "path": [
+      { "latitude": 37.7519, "longitude": 128.8761 },
+      { "latitude": 37.7644, "longitude": 128.8996 }
+    ]
+  },
   "data": [
     {
       "place": { "content_id": "123456", "name": "예시 관광지" },
@@ -359,28 +397,46 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
   ],
   "meta": {
     "candidateCount": 200,
+    "corridorCandidateCount": 80,
     "routeCandidateCount": 20,
     "routeFailureCount": 0,
     "recommendationCount": 20,
-    "routeProvider": "KAKAO_MOBILITY"
+    "routeProvider": "KAKAO_MOBILITY",
+    "corridorRadiusMeters": 8000,
+    "baseRoute": { "waypointCount": 0, "provider": "KAKAO_MOBILITY" }
   }
 }
 ```
+
+`baseRoute`는 `CAR + ON_THE_WAY`일 때만 최상위와 `meta`에 모두 포함된다.
+Android는 최상위 객체를 `RouteSummary`로 파싱하고 `meta.corridorRadiusMeters`를
+결과 지도에 사용한다. `RouteSummary`는 provider, waypointCount,
+totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한다.
 
 `WALK`이면 경로 객체에 거리·path가 없고 `provider`는 `ESTIMATE`다. 또한
 `meta.warning`에 도보 시간이 직선거리 기반 예상값이라는 안내가 포함된다.
 
 #### 후보 조회와 상한
 
-1. 출발지·목적지를 감싸는 사각형에 자동차 약 ±0.22도, 도보 약 ±0.055도
-   패딩을 더한다.
-2. 해당 범위에서 활성 장소를 이름순 최대 500개 읽는다.
-3. 카테고리를 적용한다.
-4. `CAR`는 추정 우회시간이 짧은 최대 20개만 Kakao Mobility로 계산한다.
-5. 시간 조건을 통과한 결과를 최대 20개 반환한다.
+`CAR + ON_THE_WAY`:
 
-따라서 `candidateCount`는 DB 전체 개수가 아니라 검색 사각형에서 이번 요청이
-읽은 최대 500개의 개수다.
+1. Kakao Mobility에 경유지 없는 출발→목적 `baseRoute`를 요청한다.
+2. corridor 반경을 `(deadlineMinutes - baseRoute.durationMinutes) × 20m`로
+   계산하고 800~8000m로 제한한다.
+3. `baseRoute.path`의 위·경도 bounds를 corridor만큼 넓혀 활성 장소를 최대
+   500개 읽는다.
+4. 각 장소에서 path 선분까지의 로컬 평면 근사 거리가 corridor 이내인 것만
+   남긴다.
+5. 카테고리를 적용하고 추정 우회시간이 짧은 최대 20개를 고른다.
+6. 각 후보에 출발→후보 1곳→목적 Kakao 경로를 요청하고 시간 조건을 통과한
+   최대 20개를 반환한다.
+
+그 밖의 모드/이동수단은 출발·목적 사각형에 자동차 약 ±0.22도, 도보 약
+±0.055도 패딩을 더한 기존 bounds를 사용한다.
+
+따라서 `candidateCount`는 bounds에서 읽은 최대 500개의 개수,
+`corridorCandidateCount`는 path 거리 필터 후 개수다. 둘 다 DB 전체 개수가
+아니다.
 
 #### 시간 공식
 
@@ -402,16 +458,20 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
 판정된 `CLOSED` 장소는 제외한다. 데이터가 없거나 복잡해서 해석하지 못하면
 `UNKNOWN`으로 추천에 남기며 앱이 `운영시간 확인 필요`를 표시한다.
 
+중요: 현재 Android가 24시간을 고정 전송하므로 이 공식은 후보 대부분을
+통과시키는 상한에 가깝다. 사용자의 도착 마감 입력을 받지 않은 상태에서
+`marginMinutes`, `safetyLevel`, 15분 버퍼를 “늦지 않음 보장”으로 설명하면 안
+된다. 현재 제품 의미는 **기본 자동차 경로 주변에서 들를 후보를 찾는 단계**다.
+
 #### 자동차 경로의 현재 한계
 
 - 장소마다 `origin → waypoint 1개 → destination`을 요청한다.
 - 후보별 요청은 동시성 5로 실행한다.
 - 일부 실패는 제외하고 `routeFailureCount`에 넣는다.
 - 후보가 있는데 모든 경로가 실패하면 추천 API 전체가 500이다.
-- `directMinutes`는 Kakao의 직행 경로를 별도 호출한 값이 아니라 직선거리 기반
-  자동차 추정값이다. 따라서 `detourMinutes`도 이 추정 직행시간을 기준으로 한다.
-- Android에서 선택한 최대 5개 경유지의 순서·최종 시간은 Kakao Mobility 서버
-  API로 재계산하지 않는다. 카카오맵 링크 실행 후 카카오맵이 최종 경로를 다시
+- `directMinutes`는 앞에서 받은 Kakao `baseRoute.durationMinutes`로 덮어쓰며,
+  후보의 `detourMinutes`는 후보 경유 경로와 baseRoute의 차이다.
+- 후보별 계산은 한 곳만 경유한다. 여러 후보 조합은 아래 `/api/route`가 별도로
   계산한다.
 
 #### 도보 경로의 현재 한계
@@ -422,6 +482,67 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
 
 에 기반한 예상값이다. 실제 보행로, 횡단보도, 경사, 통행 제한을 반영하지 않는다.
 앱과 문구에서 100% 시간 보장을 표현하면 안 된다.
+
+### 5.7 `POST /api/route`
+
+결과 화면에서 경유지를 추가하거나 제거할 때 호출하는 차량 전용 통합 경로
+계산 API다.
+
+```json
+{
+  "start": { "latitude": 37.7519, "longitude": 128.8761 },
+  "destination": { "latitude": 37.7644, "longitude": 128.8996 },
+  "waypoints": [
+    {
+      "contentId": "123456",
+      "latitude": 37.758,
+      "longitude": 128.887
+    }
+  ]
+}
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `start`, `destination` | 유효한 위도·경도 숫자 |
+| `waypoints` | 생략 가능, 배열 0~5개, 각 항목에 유효한 좌표 필수 |
+| `contentId` | Android가 함께 보내지만 현재 서버 검증/경로 요청은 좌표만 사용 |
+
+6개 이상, 좌표 범위 오류, 잘못된 JSON은 Kakao 호출 전에 400으로 거부한다.
+서버는 waypoint 배열 순서를 그대로 Kakao `waypoints=lon,lat|...`에 전달하며
+순서를 최적화하지 않는다.
+
+성공 응답:
+
+```json
+{
+  "data": {
+    "provider": "KAKAO_MOBILITY",
+    "waypointCount": 1,
+    "durationMinutes": 38,
+    "distanceMeters": 19200,
+    "tollFare": 0,
+    "totalDrivingMinutes": 38,
+    "totalDistanceMeters": 19200,
+    "tollFareWon": 0,
+    "legs": [
+      { "drivingMinutes": 17, "distanceMeters": 8000 },
+      { "drivingMinutes": 21, "distanceMeters": 11200 }
+    ],
+    "path": [
+      { "latitude": 37.7519, "longitude": 128.8761 },
+      { "latitude": 37.758, "longitude": 128.887 },
+      { "latitude": 37.7644, "longitude": 128.8996 }
+    ]
+  }
+}
+```
+
+`path`는 Kakao road vertex를 출발·목적과 합친 뒤 최대 200점으로 균등
+샘플링한다. `legs`는 경유지 수+1개여야 하며 Kakao 응답이 이 계약을 만족하지
+않으면 서버가 500을 반환한다. Android는 실패 시 단일 후보 우회값을 합친
+`ESTIMATE` fallback을 표시하고 토스트를 띄운다. fallback은 Kakao 통합
+경로와 동급 정확도가 아니다.
 
 ## 6. TourAPI 동기화
 
@@ -576,21 +697,32 @@ numOfRows=100
 | 변경 종류 | 백엔드 | Android |
 |---|---|---|
 | 장소 필드 추가 | `lib/database.js`, 마이그레이션 | `data/TteumsaeApi.kt`, `domain/Models.kt` |
+| 장소 지역 필터 변경 | `api/places.js`, `lib/database.js` | `TteumsaeApi.places`, `gangwonRegionCodes`, `SavedPlacesScreen` |
 | 카테고리 추가 | `lib/validation.js`, `lib/tour-api.js` | `domain/Models.kt`, 필터 UI |
 | 추천 요청 변경 | `lib/validation.js`, `api/recommendations.js` | `data/TteumsaeApi.kt` |
 | 추천 응답 변경 | `lib/time-safe.js`, 경로 provider | `toRecommendation()` |
+| 기준 경로/corridor 변경 | `api/recommendations.js`, `lib/routing.js`, `lib/kakao-mobility.js` | `RecommendationResult`, `RouteMap` |
+| 복수 경유 경로 변경 | `api/route.js`, `parseRouteRequest`, `fetchKakaoRoute` | `TteumsaeApi.route`, `RouteSummary`, `ResultsScreen` |
 | 운영시간 규칙 변경 | `lib/time-safe.js`, `lib/tour-api.js` | 카드 상태 문구 |
 | Cron 변경 | `vercel.json`, `api/cron/*` | 해당 없음 |
 
 계약 변경에는 반드시 백엔드 Node 테스트와 Android JSON 파서 테스트를 함께
-추가한다. 현재 백엔드 테스트는 2026-08-16 기준 16/16 통과했다.
+추가한다. 현재 소스의 `sigunguCode` 검증과 route/baseRoute/corridor를 포함한
+백엔드 테스트는 `2026-08-20` 기준 25/25 통과했다.
 
 ## 9. 알려진 데이터·API 부채
 
 - 추천 API의 공개 인증·Rate Limit·요청 추적이 없다.
 - 장소 목록은 총 개수를 제공하지 않는다.
-- 복수 경유지의 통합 Kakao Mobility 재계산이 없다.
-- 자동차 `directMinutes`가 실제 Kakao 직행 시간이 아니다.
+- Android의 지역 카탈로그는 서버 코드 필터를 사용하지만 로컬 찜 사본은 주소
+  문자열로 판정해 주소 누락·행정구역 표기 차이에 취약하다.
+- `/api/route`는 인증·Rate Limit 없이 Kakao Mobility 호출을 발생시킨다.
+- 경유지 순서는 사용자가 추가한 순서이며 서버 최적화가 없다.
+- Android의 `/api/route` 실패 fallback은 실제 통합 경로가 아닌 단일 후보
+  우회값 합산이다.
+- 활성 Android 흐름이 24시간 상한을 고정 전송하여 시간 안전성 지표의 제품
+  의미가 약해졌다.
+- corridor는 path까지의 평면 근사 거리이며 도로 등시간선이 아니다.
 - 도보는 실제 길찾기가 아닌 추정이다.
 - 영업시간 파서는 단순 요일·시간 범위만 안전하게 해석한다.
 - TourAPI 원문 변경이나 복잡한 휴무 표현은 `UNKNOWN`으로 남는다.

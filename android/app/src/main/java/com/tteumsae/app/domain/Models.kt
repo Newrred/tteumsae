@@ -39,6 +39,8 @@ data class PlaceCandidate(
     val firstLegMinutes: Int,
     val secondLegMinutes: Int,
     val detourMinutes: Int,
+    val firstLegDistanceMeters: Int = 0,
+    val secondLegDistanceMeters: Int = 0,
     val reason: String,
     val tags: List<String>,
     val address: String = "",
@@ -48,6 +50,21 @@ data class PlaceCandidate(
     val isOpen: Boolean = true,
     val openingHours: String = "",
     val closedDays: String = "",
+)
+
+data class RouteLeg(
+    val drivingMinutes: Int,
+    val distanceMeters: Int,
+)
+
+data class RouteSummary(
+    val provider: String,
+    val waypointCount: Int,
+    val totalDrivingMinutes: Int,
+    val totalDistanceMeters: Int,
+    val tollFareWon: Int,
+    val legs: List<RouteLeg> = emptyList(),
+    val path: List<Coordinates> = emptyList(),
 )
 
 data class Coordinates(

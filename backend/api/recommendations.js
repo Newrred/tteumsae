@@ -7,8 +7,12 @@ import {
   readJson,
   serverError
 } from "../lib/http.js";
-import { fetchKakaoRoutes } from "../lib/kakao-mobility.js";
-import { createSearchBounds } from "../lib/routing.js";
+import { fetchKakaoRoute, fetchKakaoRoutes } from "../lib/kakao-mobility.js";
+import {
+  createPathBounds,
+  createSearchBounds,
+  distanceToPathKm
+} from "../lib/routing.js";
 import {
   recommendPlaces,
   selectRouteCandidates
@@ -29,12 +33,40 @@ export default {
     }
 
     try {
-      const bounds = createSearchBounds(
+      let bounds = createSearchBounds(
         criteria.start,
         criteria.destination,
         criteria.transport
       );
-      const candidates = await listPlaces({ ...bounds, limit: 500 });
+      let baseRoute;
+      let corridorRadiusMeters;
+      if (criteria.transport === "CAR" && criteria.mode === "ON_THE_WAY") {
+        baseRoute = await fetchKakaoRoute(
+          criteria.start,
+          criteria.destination,
+          []
+        );
+        if (!baseRoute) {
+          throw new Error("Kakao Mobility could not calculate the base route");
+        }
+        corridorRadiusMeters = Math.min(
+          8_000,
+          Math.max(
+            800,
+            (criteria.deadlineMinutes - baseRoute.durationMinutes) * 20
+          )
+        );
+        bounds = createPathBounds(
+          baseRoute.path,
+          corridorRadiusMeters / 1_000
+        );
+      }
+      const boundedCandidates = await listPlaces({ ...bounds, limit: 500 });
+      const candidates = corridorRadiusMeters
+        ? boundedCandidates.filter((place) =>
+            distanceToPathKm(place, baseRoute.path) <= corridorRadiusMeters / 1_000
+          )
+        : boundedCandidates;
       let recommendations;
       let routeProvider;
       let routeCandidateCount;
@@ -54,7 +86,8 @@ export default {
         const routeResult = await fetchKakaoRoutes(
           criteria.start,
           criteria.destination,
-          routeCandidates
+          routeCandidates,
+          { baseRoute }
         );
         routeCandidateCount = routeCandidates.length;
         routeFailureCount = routeResult.failedCount;
@@ -74,13 +107,17 @@ export default {
       }
 
       return json({
+        ...(baseRoute ? { baseRoute } : {}),
         data: recommendations,
         meta: {
-          candidateCount: candidates.length,
+          candidateCount: boundedCandidates.length,
+          corridorCandidateCount: candidates.length,
           routeCandidateCount,
           routeFailureCount,
           recommendationCount: recommendations.length,
           routeProvider,
+          ...(baseRoute ? { baseRoute } : {}),
+          ...(corridorRadiusMeters ? { corridorRadiusMeters } : {}),
           ...(warning ? { warning } : {})
         }
       });

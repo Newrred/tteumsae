@@ -10,6 +10,7 @@ const requiredFiles = [
   "api/places/index.js",
   "api/places/[id].js",
   "api/recommendations.js",
+  "api/route.js",
   "api/cron/tour-sync.js",
   "api/cron/tour-detail-sync.js",
   "migrations/001_initial.sql",

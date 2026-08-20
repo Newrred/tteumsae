@@ -58,6 +58,7 @@ export async function listPlaces({
   limit = 30,
   offset = 0,
   category,
+  sigunguCode,
   minLatitude,
   maxLatitude,
   minLongitude,
@@ -71,6 +72,7 @@ export async function listPlaces({
     offset: String(Math.max(offset, 0))
   });
   if (category) query.set("category", `eq.${category}`);
+  if (Number.isInteger(sigunguCode)) query.set("sigungu_code", `eq.${sigunguCode}`);
   if (Number.isFinite(minLatitude)) query.set("latitude", `gte.${minLatitude}`);
   if (Number.isFinite(maxLatitude)) query.append("latitude", `lte.${maxLatitude}`);
   if (Number.isFinite(minLongitude)) query.set("longitude", `gte.${minLongitude}`);

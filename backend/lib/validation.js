@@ -10,7 +10,7 @@ export const placeCategories = new Set([
   "LEISURE"
 ]);
 
-function isCoordinates(value) {
+export function isCoordinates(value) {
   return Boolean(
     value &&
       typeof value === "object" &&
@@ -21,6 +21,29 @@ function isCoordinates(value) {
       value.longitude >= -180 &&
       value.longitude <= 180
   );
+}
+
+export function parseRouteRequest(value) {
+  if (!value || typeof value !== "object") {
+    throw new Error("요청 본문이 올바르지 않습니다.");
+  }
+  if (!isCoordinates(value.start) || !isCoordinates(value.destination)) {
+    throw new Error("출발지와 도착지 좌표가 올바르지 않습니다.");
+  }
+
+  const waypoints = value.waypoints ?? [];
+  if (!Array.isArray(waypoints) || waypoints.length > 5) {
+    throw new Error("waypoints는 최대 5개까지 입력할 수 있습니다.");
+  }
+  if (!waypoints.every(isCoordinates)) {
+    throw new Error("경유지 좌표가 올바르지 않습니다.");
+  }
+
+  return {
+    start: value.start,
+    destination: value.destination,
+    waypoints
+  };
 }
 
 export function parseRecommendationRequest(value) {

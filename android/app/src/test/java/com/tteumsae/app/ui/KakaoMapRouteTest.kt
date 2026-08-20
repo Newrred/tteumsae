@@ -133,6 +133,26 @@ class KakaoMapRouteTest {
     }
 
     @Test
+    fun `여러 관심사를 함께 고르고 충돌하는 선택은 정리한다`() {
+        val selected = toggleRecommendationIntent(
+            toggleRecommendationIntent(setOf(RecommendationIntent.ANY), RecommendationIntent.MEAL),
+            RecommendationIntent.WALK_TOUR,
+        )
+        assertEquals(
+            setOf(PlaceCategory.RESTAURANT, PlaceCategory.ATTRACTION, PlaceCategory.LEISURE) to false,
+            recommendationIntentFilters(selected),
+        )
+        assertEquals(
+            setOf(RecommendationIntent.NO_FOOD),
+            toggleRecommendationIntent(setOf(RecommendationIntent.MEAL), RecommendationIntent.NO_FOOD),
+        )
+        assertEquals(
+            setOf(RecommendationIntent.ANY),
+            toggleRecommendationIntent(selected, RecommendationIntent.ANY),
+        )
+    }
+
+    @Test
     fun `결과가 없으면 여유시간을 30분 늘리되 하루를 넘지 않는다`() {
         assertEquals(120, extendedDeadlineMinutes(90))
         assertEquals(1440, extendedDeadlineMinutes(1430))
@@ -160,5 +180,12 @@ class KakaoMapRouteTest {
             "장소 추천에 실패했어요. 네트워크 연결을 확인해 주세요.",
             networkFailureMessage("장소 추천", null),
         )
+    }
+
+    @Test
+    fun `선택한 강원도 지역과 주소가 일치하는 장소만 보여준다`() {
+        assertEquals(true, matchesGangwonRegion("강원특별자치도 강릉시 용지로", "강릉"))
+        assertEquals(false, matchesGangwonRegion("강원특별자치도 춘천시 중앙로", "강릉"))
+        assertEquals(true, matchesGangwonRegion("강원특별자치도 춘천시 중앙로", "강원도 전체"))
     }
 }

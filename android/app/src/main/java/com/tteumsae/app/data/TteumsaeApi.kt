@@ -6,6 +6,8 @@ import com.tteumsae.app.domain.LocationSearchResult
 import com.tteumsae.app.domain.OperationStatus
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
+import com.tteumsae.app.domain.RouteLeg
+import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SafetyLevel
 import com.tteumsae.app.domain.SearchCriteria
@@ -77,14 +79,55 @@ class TteumsaeApi(
             RecommendationResult(
                 recommendations = response.getJSONArray("data").mapObjects { it.toRecommendation() },
                 warning = response.optJSONObject("meta")?.optString("warning").orEmpty(),
+                baseRoute = (
+                    response.optJSONObject("baseRoute")
+                        ?: response.optJSONObject("meta")?.optJSONObject("baseRoute")
+                    )?.toRouteSummary(),
+                corridorRadiusMeters = response.optJSONObject("meta")
+                    ?.optInt("corridorRadiusMeters", 1_600)
+                    ?: 1_600,
             )
         }
 
-    suspend fun places(page: Int = 1, pageSize: Int = 100): PlacePage =
+    suspend fun route(
+        start: Coordinates,
+        destination: Coordinates,
+        waypoints: List<PlaceCandidate> = emptyList(),
+    ): RouteSummary = withContext(Dispatchers.IO) {
+        if (waypoints.size > 5) throw ApiException("경유지는 최대 5곳까지 추가할 수 있어요.")
+        val body = JSONObject()
+            .put("start", start.toJson())
+            .put("destination", destination.toJson())
+            .put(
+                "waypoints",
+                JSONArray().apply {
+                    waypoints.forEach { place ->
+                        val latitude = place.latitude
+                            ?: throw ApiException("경유지 좌표가 없습니다.")
+                        val longitude = place.longitude
+                            ?: throw ApiException("경유지 좌표가 없습니다.")
+                        put(
+                            JSONObject()
+                                .put("contentId", place.id)
+                                .put("latitude", latitude)
+                                .put("longitude", longitude),
+                        )
+                    }
+                },
+            )
+        request("POST", "/api/route", body).getJSONObject("data").toRouteSummary()
+    }
+
+    suspend fun places(
+        page: Int = 1,
+        pageSize: Int = 100,
+        sigunguCode: Int? = null,
+    ): PlacePage =
         withContext(Dispatchers.IO) {
+            val regionQuery = sigunguCode?.let { "&sigunguCode=$it" }.orEmpty()
             val response = request(
                 "GET",
-                "/api/places?page=${page.coerceAtLeast(1)}&pageSize=${pageSize.coerceIn(1, 100)}",
+                "/api/places?page=${page.coerceAtLeast(1)}&pageSize=${pageSize.coerceIn(1, 100)}$regionQuery",
             )
             PlacePage(
                 places = response.getJSONArray("data")
@@ -135,6 +178,8 @@ class TteumsaeApi(
 data class RecommendationResult(
     val recommendations: List<SafeRecommendation>,
     val warning: String,
+    val baseRoute: RouteSummary? = null,
+    val corridorRadiusMeters: Int = 1_600,
 )
 
 internal fun locationSearchQuery(query: String, gangwonOnly: Boolean): String =
@@ -178,15 +223,14 @@ private fun JSONObject.toRecommendation(): SafeRecommendation {
             firstLegMinutes = route.getInt("firstLegMinutes"),
             secondLegMinutes = route.getInt("secondLegMinutes"),
             detourMinutes = route.getInt("detourMinutes"),
+            firstLegDistanceMeters = route.optInt("firstLegDistanceMeters"),
+            secondLegDistanceMeters = route.optInt("secondLegDistanceMeters"),
             reason = if (routeProvider == "KAKAO_MOBILITY") {
                 "카카오 실시간 차량 이동시간을 반영했어요."
             } else {
                 "도보 거리 추정 시간을 반영했어요."
             },
-            tags = listOfNotNull(
-                address.takeIf { it.isNotBlank() },
-                routeProvider.takeIf { it == "KAKAO_MOBILITY" }?.let { "실시간 교통" },
-            ),
+            tags = place.optJSONArray("tags")?.mapStrings().orEmpty(),
             address = address,
             imageUrl = place.optString("image_url"),
             latitude = place.optDouble("latitude").takeUnless { it.isNaN() },
@@ -227,6 +271,26 @@ private fun JSONObject.toPlaceCandidate() = PlaceCandidate(
     longitude = optDouble("longitude").takeUnless { it.isNaN() },
     openingHours = optString("opening_hours"),
     closedDays = optString("closed_days"),
+)
+
+private fun JSONObject.toRouteSummary() = RouteSummary(
+    provider = optString("provider", "KAKAO_MOBILITY"),
+    waypointCount = optInt("waypointCount"),
+    totalDrivingMinutes = optInt("totalDrivingMinutes", optInt("durationMinutes")),
+    totalDistanceMeters = optInt("totalDistanceMeters", optInt("distanceMeters")),
+    tollFareWon = optInt("tollFareWon", optInt("tollFare")),
+    legs = optJSONArray("legs")?.mapObjects {
+        RouteLeg(
+            drivingMinutes = it.optInt("drivingMinutes"),
+            distanceMeters = it.optInt("distanceMeters"),
+        )
+    }.orEmpty(),
+    path = optJSONArray("path")?.mapObjects {
+        Coordinates(
+            latitude = it.getDouble("latitude"),
+            longitude = it.getDouble("longitude"),
+        )
+    }.orEmpty(),
 )
 
 private fun placeCategory(value: String): PlaceCategory = runCatching {

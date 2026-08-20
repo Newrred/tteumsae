@@ -22,18 +22,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
@@ -74,6 +80,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -83,6 +91,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
@@ -111,6 +120,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -123,6 +133,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -158,6 +170,7 @@ import com.tteumsae.app.domain.LocationSearchResult
 import com.tteumsae.app.domain.OperationStatus
 import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.domain.PlaceCandidate
+import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SafetyLevel
 import com.tteumsae.app.domain.SearchCriteria
@@ -201,6 +214,31 @@ private enum class SavedSort {
     RECENT,
     NAME,
 }
+
+private val gangwonRegionCodes = linkedMapOf(
+    "강원도 전체" to null,
+    "강릉" to 1,
+    "고성" to 2,
+    "동해" to 3,
+    "삼척" to 4,
+    "속초" to 5,
+    "양구" to 6,
+    "양양" to 7,
+    "영월" to 8,
+    "원주" to 9,
+    "인제" to 10,
+    "정선" to 11,
+    "철원" to 12,
+    "춘천" to 13,
+    "태백" to 14,
+    "평창" to 15,
+    "홍천" to 16,
+    "화천" to 17,
+    "횡성" to 18,
+)
+
+internal fun matchesGangwonRegion(address: String, region: String): Boolean =
+    region == "강원도 전체" || address.contains(region)
 
 internal enum class RecommendationIntent(val label: String) {
     ANY("아무거나"),
@@ -302,8 +340,12 @@ fun TteumsaeApp() {
     var transport by rememberSaveable { mutableStateOf(TransportMode.CAR) }
     var categories by remember { mutableStateOf(emptySet<PlaceCategory>()) }
     var excludeRestaurants by rememberSaveable { mutableStateOf(false) }
+    var selectedIntents by remember { mutableStateOf(setOf(RecommendationIntent.ANY)) }
     var recommendations by remember { mutableStateOf(emptyList<SafeRecommendation>()) }
     var recommendationWarning by remember { mutableStateOf("") }
+    var baseRoute by remember { mutableStateOf<RouteSummary?>(null) }
+    var corridorRadiusMeters by remember { mutableStateOf(1_600) }
+    var selectedWaypointIds by remember { mutableStateOf(emptyList<String>()) }
     var selected by remember { mutableStateOf<SafeRecommendation?>(null) }
     var activeCriteria by remember { mutableStateOf<SearchCriteria?>(null) }
     var locationChecking by remember { mutableStateOf(false) }
@@ -314,6 +356,7 @@ fun TteumsaeApp() {
     var catalogLoadingMore by remember { mutableStateOf(false) }
     var catalogPage by remember { mutableStateOf(1) }
     var catalogHasMore by remember { mutableStateOf(true) }
+    var catalogRegion by rememberSaveable { mutableStateOf("강릉") }
     var catalogError by remember { mutableStateOf<String?>(null) }
     var catalogLoadAttempt by rememberSaveable { mutableStateOf(0) }
     var showHomeIntro by rememberSaveable { mutableStateOf(shouldShowHomeIntro(context)) }
@@ -323,12 +366,12 @@ fun TteumsaeApp() {
         storeSavedPlaces(context, updated)
     }
 
-    LaunchedEffect(screen, catalogLoadAttempt) {
+    LaunchedEffect(screen, catalogLoadAttempt, catalogRegion) {
         if (screen == AppScreen.SAVED) {
             catalogLoading = true
             catalogError = null
             try {
-                val firstPage = api.places()
+                val firstPage = api.places(sigunguCode = gangwonRegionCodes[catalogRegion])
                 catalogPlaces = firstPage.places
                 catalogPage = 1
                 catalogHasMore = firstPage.hasMore
@@ -362,6 +405,10 @@ fun TteumsaeApp() {
                 showHomeIntro = false
             },
             onStart = { coordinates ->
+                mode = SearchMode.ON_THE_WAY
+                deadline = MAX_DEADLINE_MINUTES
+                buffer = 15
+                selectedWaypointIds = emptyList()
                 startName = "현재 위치"
                 val currentLocation = coordinates?.let {
                     LocationSearchResult(
@@ -372,13 +419,8 @@ fun TteumsaeApp() {
                     )
                 }
                 startLocation = currentLocation
-                if (mode == SearchMode.NEARBY) {
-                    endName = "현재 위치"
-                    endLocation = currentLocation
-                } else {
-                    endName = ""
-                    endLocation = null
-                }
+                endName = ""
+                endLocation = null
                 screen = AppScreen.LOCATION
             },
             onTabSelected = { tab ->
@@ -393,6 +435,8 @@ fun TteumsaeApp() {
         AppScreen.SAVED -> SavedPlacesScreen(
             catalogPlaces = catalogPlaces,
             savedPlaces = savedPlaces,
+            selectedRegion = catalogRegion,
+            onRegionSelected = { catalogRegion = it },
             isLoading = catalogLoading,
             isLoadingMore = catalogLoadingMore,
             hasMore = catalogHasMore,
@@ -403,7 +447,10 @@ fun TteumsaeApp() {
                     catalogLoadingMore = true
                     appScope.launch {
                         try {
-                            val nextPage = api.places(page = catalogPage + 1)
+                            val nextPage = api.places(
+                                page = catalogPage + 1,
+                                sigunguCode = gangwonRegionCodes[catalogRegion],
+                            )
                             catalogPlaces = (catalogPlaces + nextPage.places)
                                 .distinctBy { it.id }
                             catalogPage += 1
@@ -456,32 +503,16 @@ fun TteumsaeApp() {
         )
 
         AppScreen.LOCATION -> LocationScreen(
-            mode = mode,
             startName = startName,
             endName = endName,
             startLocation = startLocation,
             endLocation = endLocation,
             searchPlaces = api::searchPlaces,
             resolveCurrentAddress = api::regionAddress,
-            onModeChange = {
-                mode = it
-                if (it == SearchMode.NEARBY) {
-                    endName = startName
-                    endLocation = startLocation
-                } else {
-                    endName = ""
-                    endLocation = null
-                }
-                if (it == SearchMode.ON_THE_WAY) transport = TransportMode.CAR
-            },
             onStartNameChange = {
                 startName = it
                 startLocation = null
                 currentLocationTarget = null
-                if (mode == SearchMode.NEARBY) {
-                    endName = it
-                    endLocation = null
-                }
             },
             onEndNameChange = {
                 endName = it
@@ -499,18 +530,10 @@ fun TteumsaeApp() {
                 } else {
                     null
                 }
-                if (mode == SearchMode.NEARBY) {
-                    endName = it.name
-                    endLocation = it
-                }
             },
             onEndSelected = {
                 endName = it.name
                 endLocation = it
-            },
-            onUseStartAsEnd = {
-                endName = startName
-                endLocation = startLocation
             },
             isChecking = locationChecking,
             onBack = { screen = AppScreen.HOME },
@@ -544,7 +567,7 @@ fun TteumsaeApp() {
                                 startLocation = resolvedStart
                                 endName = resolvedEnd.name
                                 endLocation = resolvedEnd
-                                screen = AppScreen.TIME
+                                screen = AppScreen.CONDITIONS
                             }
                         } catch (error: Exception) {
                             Toast.makeText(
@@ -573,15 +596,14 @@ fun TteumsaeApp() {
         )
 
         AppScreen.CONDITIONS -> ConditionsScreen(
-            mode = mode,
-            categories = categories,
-            excludeRestaurants = excludeRestaurants,
+            selectedIntents = selectedIntents,
             onIntentSelected = { intent ->
-                val (selectedCategories, excludeFood) = recommendationIntentFilters(intent)
+                selectedIntents = toggleRecommendationIntent(selectedIntents, intent)
+                val (selectedCategories, excludeFood) = recommendationIntentFilters(selectedIntents)
                 categories = selectedCategories
                 excludeRestaurants = excludeFood
             },
-            onBack = { screen = AppScreen.TIME },
+            onBack = { screen = AppScreen.LOCATION },
             onSearch = { screen = AppScreen.LOADING },
         )
 
@@ -605,6 +627,9 @@ fun TteumsaeApp() {
                 val result = api.recommendations(resolvedCriteria)
                 recommendations = result.recommendations
                 recommendationWarning = result.warning
+                baseRoute = result.baseRoute
+                corridorRadiusMeters = result.corridorRadiusMeters
+                selectedWaypointIds = emptyList()
                 activeCriteria = resolvedCriteria
             },
             onFinished = { screen = AppScreen.RESULTS },
@@ -615,15 +640,21 @@ fun TteumsaeApp() {
             criteria = activeCriteria ?: criteria,
             recommendations = recommendations,
             warning = recommendationWarning,
-            onBack = { screen = AppScreen.CONDITIONS },
-            onEdit = { screen = AppScreen.TIME },
-            onWidenSearch = {
-                deadline = extendedDeadlineMinutes(deadline)
-                screen = AppScreen.LOADING
+            baseRoute = baseRoute,
+            corridorRadiusMeters = corridorRadiusMeters,
+            selectedIds = selectedWaypointIds,
+            onSelectedIdsChange = { selectedWaypointIds = it },
+            calculateRoute = { waypoints ->
+                val resolved = activeCriteria ?: criteria
+                val start = requireNotNull(resolved.startCoordinates)
+                val destination = requireNotNull(resolved.endCoordinates)
+                api.route(start, destination, waypoints)
             },
+            onBack = { screen = AppScreen.CONDITIONS },
             onClearConditions = {
                 categories = emptySet()
                 excludeRestaurants = false
+                selectedIntents = setOf(RecommendationIntent.ANY)
                 screen = AppScreen.LOADING
             },
             onSearchOtherPlace = { screen = AppScreen.LOCATION },
@@ -751,7 +782,7 @@ private fun HomeScreen(
                 requestedLocation = currentLocationTarget,
             )
             SearchBar(
-                text = "장소 검색",
+                text = "목적지 검색",
                 onClick = {
                     onStart(
                         currentLocationTarget?.let {
@@ -761,13 +792,14 @@ private fun HomeScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
+                    .statusBarsPadding()
                     .padding(20.dp),
             )
 
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 106.dp),
+                    .padding(end = 20.dp, bottom = 24.dp),
             ) {
                 RoundMapButton(
                     onClick = if (isLocating) null else {
@@ -809,23 +841,6 @@ private fun HomeScreen(
                 )
             }
 
-            Button(
-                onClick = {
-                    onStart(
-                        currentLocationTarget?.let {
-                            Coordinates(it.latitude, it.longitude)
-                        },
-                    )
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(20.dp)
-                    .height(58.dp),
-                shape = RoundedCornerShape(18.dp),
-            ) {
-                Text("남는 시간으로 장소 찾기", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-            }
         }
     }
 
@@ -931,7 +946,8 @@ private fun BottomNavigation(
     selectedTab: MainTab,
     onTabSelected: (MainTab) -> Unit,
 ) {
-    val shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+    val mapSelected = selectedTab == MainTab.EXPLORE
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -944,26 +960,27 @@ private fun BottomNavigation(
         color = Color.White,
         shape = shape,
     ) {
-        Row(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .padding(top = 16.dp, bottom = 12.dp),
+                .height(92.dp),
         ) {
-            BottomNavItem(
-                icon = Icons.Default.Explore,
-                label = "장소 찾기",
-                selected = selectedTab == MainTab.EXPLORE,
-                modifier = Modifier.weight(1f),
-                onClick = { onTabSelected(MainTab.EXPLORE) },
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.BottomCenter)
+                    .padding(top = 20.dp, bottom = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
             BottomNavItem(
                 icon = Icons.Default.FormatListBulleted,
-                label = "장소 둘러보기",
+                label = "틈새 발견",
                 selected = selectedTab == MainTab.SAVED,
                 modifier = Modifier.weight(1f),
                 onClick = { onTabSelected(MainTab.SAVED) },
             )
+                Spacer(Modifier.weight(1f))
             BottomNavItem(
                 icon = Icons.Default.Settings,
                 label = "설정",
@@ -971,6 +988,29 @@ private fun BottomNavigation(
                 modifier = Modifier.weight(1f),
                 onClick = { onTabSelected(MainTab.SETTINGS) },
             )
+            }
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .size(58.dp)
+                    .clickable { onTabSelected(MainTab.EXPLORE) },
+                color = if (mapSelected) TteumRed else Color(0xFFF4F5F7),
+                contentColor = if (mapSelected) Color.White else Color(0xFF6F747D),
+                shape = CircleShape,
+                shadowElevation = if (mapSelected) 5.dp else 0.dp,
+                border = BorderStroke(
+                    5.dp,
+                    if (mapSelected) Color(0xFFE4E5E8) else Color(0xFFD9DCE1),
+                ),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Map,
+                        contentDescription = "지도 홈",
+                        modifier = Modifier.size(27.dp),
+                    )
+                }
+            }
         }
     }
 }
@@ -1009,6 +1049,8 @@ private fun BottomNavItem(
 private fun SavedPlacesScreen(
     catalogPlaces: List<PlaceCandidate>,
     savedPlaces: List<SavedPlaceEntry>,
+    selectedRegion: String,
+    onRegionSelected: (String) -> Unit,
     isLoading: Boolean,
     isLoadingMore: Boolean,
     hasMore: Boolean,
@@ -1020,6 +1062,8 @@ private fun SavedPlacesScreen(
     onTabSelected: (MainTab) -> Unit,
 ) {
     var selectedCategory by rememberSaveable { mutableStateOf<PlaceCategory?>(null) }
+    var regionMenuExpanded by remember { mutableStateOf(false) }
+    var savedOnly by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf(SavedSort.RECENT) }
     var selectedPlace by remember { mutableStateOf<PlaceCandidate?>(null) }
@@ -1036,8 +1080,12 @@ private fun SavedPlacesScreen(
     }
 
     val savedById = savedPlaces.associateBy { it.place.id }
-    val visiblePlaces = catalogPlaces
+    val catalogIds = catalogPlaces.mapTo(mutableSetOf()) { it.id }
+    val allPlaces = (catalogPlaces + savedPlaces.map { it.place }).distinctBy { it.id }
+    val visiblePlaces = allPlaces
         .asSequence()
+        .filter { it.id in catalogIds || matchesGangwonRegion(it.address, selectedRegion) }
+        .filter { !savedOnly || it.id in savedById }
         .filter { selectedCategory == null || it.category == selectedCategory }
         .filter { place ->
             query.isBlank() ||
@@ -1096,42 +1144,98 @@ private fun SavedPlacesScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
-                    .padding(top = 20.dp, bottom = 16.dp),
+                    .statusBarsPadding()
+                    .padding(top = 24.dp, bottom = 16.dp),
             ) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("장소 검색") },
+                    placeholder = { Text("틈새 위치 검색", color = TteumMuted) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     singleLine = true,
                     shape = RoundedCornerShape(18.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedContainerColor = Color.White,
+                        unfocusedContainerColor = Color.White,
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 20.dp)
+                        .shadow(8.dp, RoundedCornerShape(18.dp)),
                 )
-                Spacer(Modifier.height(24.dp))
-                Row(
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("강원도 전체", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(26.dp))
+                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .clickable { regionMenuExpanded = true }
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(selectedRegion, fontSize = 25.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(4.dp))
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = "지역 선택",
+                            tint = TteumMuted,
+                            modifier = Modifier.size(24.dp),
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = regionMenuExpanded,
+                        onDismissRequest = { regionMenuExpanded = false },
+                    ) {
+                        gangwonRegionCodes.keys.forEach { region ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        region,
+                                        fontWeight = if (selectedRegion == region) {
+                                            FontWeight.Bold
+                                        } else {
+                                            FontWeight.Normal
+                                        },
+                                    )
+                                },
+                                onClick = {
+                                    onRegionSelected(region)
+                                    regionMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
                 }
                 Spacer(Modifier.height(14.dp))
                 LazyRow(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
+                    contentPadding = PaddingValues(horizontal = 20.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item {
                         SavedFilterChip(
                             text = "전체",
-                            selected = selectedCategory == null,
-                            onClick = { selectedCategory = null },
+                            selected = selectedCategory == null && !savedOnly,
+                            onClick = {
+                                selectedCategory = null
+                                savedOnly = false
+                            },
+                        )
+                    }
+                    item {
+                        SavedFilterChip(
+                            text = "찜",
+                            selected = savedOnly,
+                            showHeart = true,
+                            onClick = { savedOnly = !savedOnly },
                         )
                     }
                     items(PlaceCategory.entries) { category ->
                         SavedFilterChip(
-                            text = category.label,
+                            text = when (category) {
+                                PlaceCategory.CULTURE -> "문화/예술"
+                                PlaceCategory.FESTIVAL -> "행사/공연/축제"
+                                else -> category.label
+                            },
                             selected = selectedCategory == category,
                             onClick = { selectedCategory = category },
                         )
@@ -1148,7 +1252,7 @@ private fun SavedPlacesScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "현재 ${visiblePlaces.size}개 표시 중",
+                        "스팟 (${visiblePlaces.size})",
                         color = TteumMuted,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1556,7 +1660,7 @@ private fun SavedPlaceDetailScreen(
                     }
                     Spacer(Modifier.height(18.dp))
                     Text(
-                        "추천 머무는 시간 ${formatMinutes(place.stayMinutes)}",
+                        "평균 머무름 ${formatMinutes(place.stayMinutes)}",
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1585,6 +1689,7 @@ private fun SavedPlaceDetailScreen(
 private fun SavedFilterChip(
     text: String,
     selected: Boolean,
+    showHeart: Boolean = false,
     onClick: () -> Unit,
 ) {
     Surface(
@@ -1593,12 +1698,25 @@ private fun SavedFilterChip(
         shape = RoundedCornerShape(50),
         border = if (selected) null else BorderStroke(1.dp, Color(0xFFE1E3E8)),
     ) {
-        Text(
-            text,
+        Row(
             modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
-            color = if (selected) Color.White else Color(0xFF596170),
-            fontWeight = FontWeight.Bold,
-        )
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text,
+                color = if (selected) Color.White else Color(0xFF596170),
+                fontWeight = FontWeight.Bold,
+            )
+            if (showHeart) {
+                Spacer(Modifier.width(4.dp))
+                Icon(
+                    Icons.Default.Favorite,
+                    contentDescription = null,
+                    tint = TteumRed,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
     }
 }
 
@@ -1652,7 +1770,7 @@ private fun SavedPlaceCard(
                 Text(place.category.label, color = Color(0xFF55585F), fontSize = 14.sp)
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "추천 머무는 시간 ${formatMinutes(place.stayMinutes)}",
+                    "평균 머무름 ${formatMinutes(place.stayMinutes)}",
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Bold,
                 )
@@ -1768,6 +1886,28 @@ internal fun recommendationIntentFilters(
     RecommendationIntent.NO_FOOD -> emptySet<PlaceCategory>() to true
 }
 
+internal fun toggleRecommendationIntent(
+    current: Set<RecommendationIntent>,
+    intent: RecommendationIntent,
+): Set<RecommendationIntent> {
+    if (intent == RecommendationIntent.ANY) return setOf(RecommendationIntent.ANY)
+    val updated = (current - RecommendationIntent.ANY).toMutableSet()
+    if (!updated.add(intent)) updated.remove(intent)
+    if (intent == RecommendationIntent.NO_FOOD) updated.remove(RecommendationIntent.MEAL)
+    if (intent == RecommendationIntent.MEAL) updated.remove(RecommendationIntent.NO_FOOD)
+    return updated.ifEmpty { setOf(RecommendationIntent.ANY) }
+}
+
+internal fun recommendationIntentFilters(
+    intents: Set<RecommendationIntent>,
+): Pair<Set<PlaceCategory>, Boolean> {
+    if (RecommendationIntent.ANY in intents) return emptySet<PlaceCategory>() to false
+    val categories = buildSet {
+        intents.forEach { intent -> addAll(recommendationIntentFilters(intent).first) }
+    }
+    return categories to (RecommendationIntent.NO_FOOD in intents)
+}
+
 internal fun selectedRecommendationIntent(
     categories: Set<PlaceCategory>,
     excludeRestaurants: Boolean,
@@ -1786,6 +1926,58 @@ private fun formatMinutes(minutes: Int): String =
         minutes % 60 == 0 -> "${minutes / 60}시간"
         else -> "${minutes / 60}시간 ${minutes % 60}분"
     }
+
+private fun formatDistance(meters: Int): String = when {
+    meters <= 0 -> "거리 계산 중"
+    meters < 1_000 -> "${meters}m"
+    else -> "${"%.1f".format(meters / 1_000.0)}km"
+}
+
+private fun fallbackRouteSummary(
+    criteria: SearchCriteria,
+    recommendations: List<SafeRecommendation>,
+): RouteSummary {
+    val reference = recommendations.firstOrNull()
+    val directMinutes = reference?.place?.let {
+        (it.firstLegMinutes + it.secondLegMinutes - it.detourMinutes).coerceAtLeast(0)
+    } ?: 0
+    return RouteSummary(
+        provider = "ESTIMATE",
+        waypointCount = recommendations.size,
+        totalDrivingMinutes = directMinutes + recommendations.sumOf { it.place.detourMinutes },
+        totalDistanceMeters = reference?.place?.let {
+            it.firstLegDistanceMeters + it.secondLegDistanceMeters
+        } ?: 0,
+        tollFareWon = 0,
+        path = buildList {
+            criteria.startCoordinates?.let(::add)
+            recommendations.forEach { recommendation ->
+                val latitude = recommendation.place.latitude
+                val longitude = recommendation.place.longitude
+                if (latitude != null && longitude != null) add(Coordinates(latitude, longitude))
+            }
+            criteria.endCoordinates?.let(::add)
+        },
+    )
+}
+
+private fun fallbackBaseRouteSummary(
+    criteria: SearchCriteria,
+    recommendations: List<SafeRecommendation>,
+): RouteSummary {
+    val reference = recommendations.firstOrNull()?.place
+    val directMinutes = reference?.let {
+        (it.firstLegMinutes + it.secondLegMinutes - it.detourMinutes).coerceAtLeast(0)
+    } ?: 0
+    return RouteSummary(
+        provider = "ESTIMATE",
+        waypointCount = 0,
+        totalDrivingMinutes = directMinutes,
+        totalDistanceMeters = 0,
+        tollFareWon = 0,
+        path = listOfNotNull(criteria.startCoordinates, criteria.endCoordinates),
+    )
+}
 
 private fun PlaceCategory.activityLabel(): String = when (this) {
     PlaceCategory.ATTRACTION -> "관광·구경"
@@ -1885,24 +2077,23 @@ private fun storeSavedPlaces(
 
 @Composable
 private fun LocationScreen(
-    mode: SearchMode,
     startName: String,
     endName: String,
     startLocation: LocationSearchResult?,
     endLocation: LocationSearchResult?,
     searchPlaces: suspend (String, Boolean) -> List<LocationSearchResult>,
     resolveCurrentAddress: suspend (Coordinates) -> String,
-    onModeChange: (SearchMode) -> Unit,
     onStartNameChange: (String) -> Unit,
     onEndNameChange: (String) -> Unit,
     onStartSelected: (LocationSearchResult) -> Unit,
     onEndSelected: (LocationSearchResult) -> Unit,
-    onUseStartAsEnd: () -> Unit,
     isChecking: Boolean,
     onBack: () -> Unit,
     onNext: () -> Unit,
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var isLocating by remember { mutableStateOf(false) }
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     var showPermissionSettingsDialog by remember { mutableStateOf(false) }
@@ -1989,103 +2180,94 @@ private fun LocationScreen(
         }
     }
 
-    MapSheetScreen(
-        onBack = onBack,
-        mapCoordinates = startLocation?.coordinates,
-        bottomContent = {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = onBack,
-                    modifier = Modifier
-                        .weight(0.32f)
-                        .height(56.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color(0xFFF3F4F6),
-                        contentColor = TteumInk,
-                    ),
-                    border = null,
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Text("이전", fontSize = 17.sp)
-                }
+    val canContinue = startLocation != null && endLocation != null && !isChecking && !isLocating
+    Scaffold(
+        containerColor = Color.White,
+        bottomBar = {
+            Surface(color = Color.White) {
                 Button(
-                    onClick = onNext,
-                    enabled = startName.isNotBlank() &&
-                        endName.isNotBlank() &&
-                        !(startName == "현재 위치" && startLocation == null) &&
-                        !isChecking &&
-                        !isLocating,
+                    onClick = {
+                        focusManager.clearFocus(force = true)
+                        keyboardController?.hide()
+                        onNext()
+                    },
+                    enabled = canContinue,
                     modifier = Modifier
-                        .weight(0.68f)
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                         .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                 ) {
                     Text(
                         if (isChecking) "위치 확인 중..." else "다음",
-                        fontSize = 17.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                     )
                 }
             }
         },
-    ) {
-        ModeSelector(mode = mode, onModeChange = onModeChange)
-        Spacer(Modifier.height(30.dp))
-        Text(
-            if (mode == SearchMode.ON_THE_WAY) {
-                "지금 어디로 가는 길인가요?"
-            } else {
-                "어디에서 출발하고,\n어디로 돌아갈까요?"
-            },
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            if (mode == SearchMode.ON_THE_WAY) {
-                "목적지로 가는 길에 잠깐 들를 곳을 찾아요."
-            } else {
-                "주변을 둘러본 뒤 원하는 장소에 시간 맞춰 도착해요."
-            },
-            color = TteumMuted,
-        )
-        Spacer(Modifier.height(24.dp))
-        Surface(
-            color = Color(0xFFF3F4F6),
-            shape = RoundedCornerShape(16.dp),
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .statusBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            Column {
-                LocationSearchField(
-                    value = startName,
-                    onValueChange = onStartNameChange,
-                    selected = startLocation,
-                    label = if (mode == SearchMode.ON_THE_WAY) "출발지" else "시작",
-                    labelBackground = Color(0xFF9EA3AB),
-                    searchPlaces = searchPlaces,
-                    gangwonOnly = mode == SearchMode.NEARBY,
-                    onSelected = onStartSelected,
-                    onUseCurrentLocation = useCurrentLocation,
-                    isLocating = isLocating,
+            item {
+                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", modifier = Modifier.size(30.dp))
+                }
+                Spacer(Modifier.height(32.dp))
+                Text(
+                    "지금 어디로 가는 길인가요?",
+                    fontSize = 31.sp,
+                    lineHeight = 39.sp,
+                    fontWeight = FontWeight.Bold,
                 )
-                HorizontalDivider(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    color = Color(0xFFDDE0E5),
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "틈새를 찾기 전 경로를 먼저 설정해야 해요",
+                    color = TteumMuted,
+                    fontSize = 16.sp,
                 )
-                LocationSearchField(
-                    value = endName,
-                    onValueChange = onEndNameChange,
-                    selected = endLocation,
-                    label = if (mode == SearchMode.ON_THE_WAY) "목적지" else "돌아올 곳",
-                    labelBackground = TteumInk,
-                    searchPlaces = searchPlaces,
-                    gangwonOnly = true,
-                    onSelected = onEndSelected,
-                )
-            }
-        }
-        if (mode == SearchMode.NEARBY) {
-            TextButton(onClick = onUseStartAsEnd) {
-                Text("시작 위치로 돌아오기")
+                Spacer(Modifier.height(36.dp))
+                Surface(
+                    color = Color(0xFFF5F6F8),
+                    shape = RoundedCornerShape(14.dp),
+                ) {
+                    Column {
+                        LocationSearchField(
+                            value = startName,
+                            onValueChange = onStartNameChange,
+                            selected = startLocation,
+                            label = "출발지",
+                            labelBackground = Color(0xFF9EA3AB),
+                            searchPlaces = searchPlaces,
+                            gangwonOnly = false,
+                            onSelected = onStartSelected,
+                            onUseCurrentLocation = useCurrentLocation,
+                            isLocating = isLocating,
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = Color(0xFFDDE0E5),
+                        )
+                        LocationSearchField(
+                            value = endName,
+                            onValueChange = onEndNameChange,
+                            selected = endLocation,
+                            label = "목적지",
+                            labelBackground = TteumInk,
+                            searchPlaces = searchPlaces,
+                            gangwonOnly = true,
+                            onSelected = onEndSelected,
+                            autoFocus = endLocation == null,
+                        )
+                    }
+                }
             }
         }
     }
@@ -2157,6 +2339,7 @@ private fun LocationSearchField(
     labelBackground: Color,
     onUseCurrentLocation: (() -> Unit)? = null,
     isLocating: Boolean = false,
+    autoFocus: Boolean = false,
 ) {
     var results by remember { mutableStateOf(emptyList<LocationSearchResult>()) }
     var isLoading by remember { mutableStateOf(false) }
@@ -2166,6 +2349,13 @@ private fun LocationSearchField(
     var focusAfterClear by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val isCurrentLocation = selected?.id == "current-location"
+
+    LaunchedEffect(autoFocus, selected?.id) {
+        if (autoFocus && selected == null) {
+            delay(250)
+            focusRequester.requestFocus()
+        }
+    }
 
     LaunchedEffect(selected) {
         if (selected == null && focusAfterClear) {
@@ -2611,80 +2801,84 @@ private fun TimeSliderThumb(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ConditionsScreen(
-    mode: SearchMode,
-    categories: Set<PlaceCategory>,
-    excludeRestaurants: Boolean,
+    selectedIntents: Set<RecommendationIntent>,
     onIntentSelected: (RecommendationIntent) -> Unit,
     onBack: () -> Unit,
     onSearch: () -> Unit,
 ) {
-    MapSheetScreen(
-        onBack = onBack,
-        bottomContent = {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedButton(
-                    onClick = onBack,
-                    modifier = Modifier.weight(0.32f).height(56.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color(0xFFF3F4F6),
-                        contentColor = TteumInk,
-                    ),
+    val keyboardController = LocalSoftwareKeyboardController.current
+    LaunchedEffect(Unit) { keyboardController?.hide() }
+
+    Scaffold(
+        containerColor = Color.White,
+        bottomBar = {
+            Surface(color = Color.White) {
+                Button(
+                    onClick = onSearch,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
                 ) {
-                    Text("이전", fontWeight = FontWeight.Bold)
-                }
-                Box(Modifier.weight(0.68f)) {
-                    PrimaryButton(text = "장소 추천받기", onClick = onSearch)
+                    Text("다음", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 }
             }
         },
-    ) {
-        Row(
+    ) { padding ->
+        LazyColumn(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFFF1F2F5), RoundedCornerShape(14.dp))
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .fillMaxSize()
+                .padding(padding)
+                .statusBarsPadding(),
+            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            Icon(
-                if (mode == SearchMode.ON_THE_WAY) Icons.Default.DirectionsCar else Icons.Default.DirectionsWalk,
-                contentDescription = null,
-                tint = TteumInk,
-            )
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text("탐색 방식", color = TteumMuted, fontSize = 12.sp)
+            item {
+                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", modifier = Modifier.size(30.dp))
+                }
+                Spacer(Modifier.height(32.dp))
                 Text(
-                    if (mode == SearchMode.ON_THE_WAY) "경로 따라 갈 장소" else "근처에서 갈 장소",
-                    fontWeight = FontWeight.SemiBold,
+                    "좀 더 끌리는 장소가 있나요?",
+                    fontSize = 31.sp,
+                    lineHeight = 39.sp,
+                    fontWeight = FontWeight.Bold,
                 )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    "1개 이상 골라주시면 더 만족스러운 틈새 장소가 될거예요",
+                    color = TteumMuted,
+                    fontSize = 16.sp,
+                    lineHeight = 24.sp,
+                )
+                Spacer(Modifier.height(36.dp))
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    RecommendationIntent.entries.forEach { intent ->
+                        val selected = intent in selectedIntents
+                        Surface(
+                            modifier = Modifier.clickable { onIntentSelected(intent) },
+                            color = if (selected) TteumRedSoft else Color(0xFFF5F6F8),
+                            contentColor = if (selected) TteumRed else TteumMuted,
+                            border = if (selected) BorderStroke(1.dp, TteumRed) else null,
+                            shape = RoundedCornerShape(50),
+                        ) {
+                            Text(
+                                intent.label,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 11.dp),
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                }
             }
         }
-        Spacer(Modifier.height(26.dp))
-        Text(
-            "지금 무엇이 끌리나요?",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            "하나만 골라주시면 어울리는 장소를 먼저 보여드려요.",
-            color = TteumMuted,
-            fontSize = 13.sp,
-        )
-        Spacer(Modifier.height(12.dp))
-        val selectedIntent = selectedRecommendationIntent(categories, excludeRestaurants)
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(RecommendationIntent.entries) { intent ->
-                FilterChip(
-                    selected = intent == selectedIntent,
-                    onClick = { onIntentSelected(intent) },
-                    label = { Text(intent.label) },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
     }
 }
 
@@ -2771,214 +2965,215 @@ private fun ResultsScreen(
     criteria: SearchCriteria,
     recommendations: List<SafeRecommendation>,
     warning: String,
+    baseRoute: RouteSummary?,
+    corridorRadiusMeters: Int,
+    selectedIds: List<String>,
+    onSelectedIdsChange: (List<String>) -> Unit,
+    calculateRoute: suspend (List<PlaceCandidate>) -> RouteSummary,
     onBack: () -> Unit,
-    onEdit: () -> Unit,
-    onWidenSearch: () -> Unit,
     onClearConditions: () -> Unit,
     onSearchOtherPlace: () -> Unit,
     onOpenRoute: (List<SafeRecommendation>) -> Unit,
     onSelect: (SafeRecommendation) -> Unit,
 ) {
     val context = LocalContext.current
-    var selectedIds by rememberSaveable(criteria.startName, criteria.endName) {
-        mutableStateOf(emptyList<String>())
+    val scope = rememberCoroutineScope()
+    var currentRoute by remember(baseRoute, criteria.startName, criteria.endName) {
+        mutableStateOf(baseRoute ?: fallbackBaseRouteSummary(criteria, recommendations))
     }
+    var isRecalculating by remember { mutableStateOf(false) }
+    var showRouteInfo by remember { mutableStateOf(false) }
+    var requestedLocation by remember { mutableStateOf<RequestedMapLocation?>(null) }
     val recommendationsById = recommendations.associateBy { it.place.id }
     val selectedRecommendations = selectedIds.mapNotNull(recommendationsById::get)
-    val (selectedTotalMinutes, selectedMarginMinutes) = selectedRouteEstimate(
-        criteria.deadlineMinutesFromNow,
-        selectedRecommendations,
-    )
+    val totalMinutes = currentRoute.totalDrivingMinutes + selectedRecommendations.sumOf { it.place.stayMinutes }
+
+    LaunchedEffect(selectedIds, baseRoute) {
+        if (selectedIds.isEmpty()) {
+            currentRoute = baseRoute ?: fallbackBaseRouteSummary(criteria, recommendations)
+        } else if (currentRoute.waypointCount != selectedIds.size) {
+            isRecalculating = true
+            currentRoute = runCatching {
+                calculateRoute(selectedRecommendations.map { it.place })
+            }.getOrElse {
+                fallbackRouteSummary(criteria, selectedRecommendations)
+            }
+            isRecalculating = false
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { permissions ->
+        if (permissions.values.any { it }) {
+            requestCurrentLocation(
+                context,
+                onSuccess = {
+                    requestedLocation = RequestedMapLocation(it.latitude, it.longitude, System.nanoTime())
+                },
+                onLocationDisabled = {
+                    Toast.makeText(context, "휴대폰 위치 서비스를 켜 주세요.", Toast.LENGTH_SHORT).show()
+                },
+                onUnavailable = {
+                    Toast.makeText(context, "현재 위치를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
+                },
+            )
+        } else {
+            Toast.makeText(context, "현재 위치를 보려면 위치 권한을 허용해 주세요.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     val toggleSelection: (SafeRecommendation) -> Unit = { recommendation ->
-        if (recommendation.place.id in selectedIds) {
-            selectedIds = selectedIds - recommendation.place.id
-        } else if (selectedIds.size >= MAX_KAKAO_WAYPOINTS) {
+        if (isRecalculating) {
+            Unit
+        } else if (recommendation.place.id !in selectedIds && selectedIds.size >= MAX_KAKAO_WAYPOINTS) {
             Toast.makeText(context, "경유지는 최대 5곳까지 선택할 수 있어요.", Toast.LENGTH_SHORT).show()
         } else {
-            val updatedIds = selectedIds + recommendation.place.id
-            val orderedIds = if (criteria.startCoordinates != null && criteria.endCoordinates != null) {
-                orderWaypointIdsAlongRoute(
-                    criteria.startCoordinates,
-                    criteria.endCoordinates,
-                    updatedIds.mapNotNull { id ->
-                        recommendationsById[id]?.place?.let { place ->
-                            place.latitude?.let { latitude ->
-                                place.longitude?.let { longitude -> id to Coordinates(latitude, longitude) }
-                            }
-                        }
-                    },
-                )
+            val nextIds = if (recommendation.place.id in selectedIds) {
+                selectedIds - recommendation.place.id
             } else {
-                updatedIds
+                selectedIds + recommendation.place.id
             }
-            val (_, remainingMinutes) = selectedRouteEstimate(
-                criteria.deadlineMinutesFromNow,
-                orderedIds.mapNotNull(recommendationsById::get),
-            )
-            if (remainingMinutes < criteria.safetyBufferMinutes) {
-                Toast.makeText(
-                    context,
-                    "이 장소를 추가하면 도착 전 여유시간이 부족해요.",
-                    Toast.LENGTH_SHORT,
-                ).show()
-            } else {
-                selectedIds = orderedIds
+            val nextPlaces = nextIds.mapNotNull { recommendationsById[it]?.place }
+            isRecalculating = true
+            scope.launch {
+                val calculated = runCatching { calculateRoute(nextPlaces) }
+                currentRoute = calculated.getOrElse {
+                    Toast.makeText(
+                        context,
+                        "실시간 경로를 다시 계산하지 못해 예상 경로를 보여드려요.",
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                    fallbackRouteSummary(criteria, nextIds.mapNotNull(recommendationsById::get))
+                }
+                onSelectedIdsChange(nextIds)
+                isRecalculating = false
             }
         }
     }
+
     Scaffold(
-        topBar = {
-            Surface(shadowElevation = 3.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
-                    }
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("${criteria.startName} → ${criteria.endName}", fontWeight = FontWeight.Bold)
-                        Text("${formatMinutes(criteria.deadlineMinutesFromNow)} 내 · 도착 전 여유 ${criteria.safetyBufferMinutes}분", color = TteumMuted, fontSize = 13.sp)
-                    }
-                    TextButton(onClick = onEdit) { Text("조건 수정") }
-                }
-            }
-        },
         bottomBar = {
-            if (recommendations.isNotEmpty()) {
-                Surface(color = Color.White, shadowElevation = 10.dp) {
-                    Column(
-                        modifier = Modifier
-                            .navigationBarsPadding()
-                            .padding(horizontal = 18.dp, vertical = 12.dp),
-                    ) {
-                        Text(
-                            "경유지 ${selectedIds.size}/$MAX_KAKAO_WAYPOINTS 선택" +
-                                if (selectedIds.isEmpty()) "" else " · 약 ${selectedTotalMinutes}분 · ${selectedMarginMinutes}분 여유",
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        PrimaryButton(
-                            text = if (selectedIds.isEmpty()) "지도에서 장소를 선택해 주세요" else "선택한 경유지로 안내",
-                            enabled = selectedIds.isNotEmpty(),
-                            onClick = { onOpenRoute(selectedRecommendations) },
-                        )
-                    }
+            Surface(color = Color.White, shadowElevation = 8.dp) {
+                Button(
+                    onClick = { onOpenRoute(selectedRecommendations) },
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 14.dp)
+                        .height(56.dp),
+                    shape = RoundedCornerShape(12.dp),
+                ) {
+                    Text("이 경로로 카카오맵으로 안내받기", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
             }
         },
     ) { padding ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
-                RouteMap(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(380.dp),
-                    criteria = criteria,
-                    recommendation = recommendations.minByOrNull { it.place.detourMinutes },
-                    candidates = recommendations,
-                    selectedIds = selectedIds,
-                    onCandidateClick = { id -> recommendationsById[id]?.let(toggleSelection) },
-                )
-            }
-            item {
-                Column(Modifier.padding(horizontal = 18.dp)) {
-                    Text(
-                        if (recommendations.isEmpty()) "조건에 맞는 예상 장소가 없어요" else "경로 주변에서 장소를 선택해 보세요",
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        if (recommendations.isEmpty()) {
-                            "도착 시간을 늦추거나 조건을 줄여 다시 찾아보세요."
-                        } else {
-                            "붉은 영역 안의 핀이나 카드를 눌러 최대 5곳까지 추가할 수 있어요."
-                        },
-                        color = TteumMuted,
-                    )
-                    if (warning.isNotBlank()) {
-                        Spacer(Modifier.height(10.dp))
-                        Text(
-                            warning,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFFFF6E7), RoundedCornerShape(12.dp))
-                                .padding(12.dp),
-                            color = Color(0xFF765A22),
-                            fontSize = 13.sp,
-                        )
-                    }
-                    recommendationConditionSummary(criteria.categories)?.let { summary ->
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "반영한 선택: $summary",
-                            color = TteumRed,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
-                }
-            }
-            if (recommendations.isEmpty()) {
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        PrimaryButton(
-                            text = if (criteria.mode == SearchMode.NEARBY) {
-                                "주변 반경 넓혀 다시 찾기"
-                            } else {
-                                "여유시간 30분 늘려 다시 찾기"
+            RouteMap(
+                modifier = Modifier.fillMaxSize(),
+                criteria = criteria,
+                recommendation = null,
+                routeSummary = currentRoute,
+                candidates = recommendations,
+                selectedIds = selectedIds,
+                corridorRadiusMeters = corridorRadiusMeters,
+                requestedLocation = requestedLocation,
+                onCandidateClick = { id -> recommendationsById[id]?.let(toggleSelection) },
+            )
+
+            RouteSummaryCard(
+                totalMinutes = totalMinutes,
+                distanceMeters = currentRoute.totalDistanceMeters,
+                tollFareWon = currentRoute.tollFareWon,
+                waypointCount = selectedIds.size,
+                isLoading = isRecalculating,
+                onBack = onBack,
+                onInfo = { showRouteInfo = true },
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 14.dp),
+            )
+
+            RoundMapButton(
+                onClick = {
+                    if (hasLocationPermission(context)) {
+                        requestCurrentLocation(
+                            context,
+                            onSuccess = {
+                                requestedLocation = RequestedMapLocation(it.latitude, it.longitude, System.nanoTime())
                             },
-                            onClick = onWidenSearch,
+                            onLocationDisabled = {
+                                Toast.makeText(context, "휴대폰 위치 서비스를 켜 주세요.", Toast.LENGTH_SHORT).show()
+                            },
+                            onUnavailable = {
+                                Toast.makeText(context, "현재 위치를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
+                            },
                         )
-                        if (criteria.categories.isNotEmpty()) {
-                            OutlinedButton(
-                                onClick = onClearConditions,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("조건 일부 해제하기")
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = onSearchOtherPlace,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("다른 장소 검색하기")
-                        }
-                        TextButton(
-                            onClick = onEdit,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text("시간과 조건 직접 수정하기")
-                        }
+                    } else {
+                        locationPermissionLauncher.launch(
+                            arrayOf(
+                                Manifest.permission.ACCESS_FINE_LOCATION,
+                                Manifest.permission.ACCESS_COARSE_LOCATION,
+                            ),
+                        )
+                    }
+                },
+                icon = { Icon(Icons.Default.MyLocation, contentDescription = "현재 위치") },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = if (recommendations.isEmpty()) 170.dp else 350.dp),
+            )
+
+            if (recommendations.isEmpty()) {
+                EmptyRouteResults(
+                    warning = warning,
+                    onClearConditions = onClearConditions,
+                    onSearchOtherPlace = onSearchOtherPlace,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(20.dp),
+                )
+            } else {
+                LazyRow(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    itemsIndexed(recommendations, key = { _, item -> item.place.id }) { index, recommendation ->
+                        RecommendationCard(
+                            recommendation = recommendation,
+                            position = index + 1,
+                            total = recommendations.size,
+                            selectedOrder = selectedIds.indexOf(recommendation.place.id)
+                                .takeIf { it >= 0 }
+                                ?.plus(1),
+                            modifier = Modifier.width(maxWidth - 40.dp),
+                            onToggle = { toggleSelection(recommendation) },
+                            onClick = { onSelect(recommendation) },
+                        )
                     }
                 }
-            } else {
-                itemsIndexed(recommendations, key = { _, item -> item.place.id }) { index, recommendation ->
-                    RecommendationCard(
-                        recommendation = recommendation,
-                        position = index + 1,
-                        total = recommendations.size,
-                        selectedOrder = selectedIds.indexOf(recommendation.place.id)
-                            .takeIf { it >= 0 }
-                            ?.plus(1),
-                        modifier = Modifier.padding(horizontal = 18.dp),
-                        onToggle = { toggleSelection(recommendation) },
-                        onClick = { onSelect(recommendation) },
-                    )
-                }
             }
-            item { Spacer(Modifier.height(24.dp)) }
         }
+    }
+
+    if (showRouteInfo) {
+        AlertDialog(
+            onDismissRequest = { showRouteInfo = false },
+            title = { Text("경유지 안내") },
+            text = { Text("장소는 최대 5곳까지 추가할 수 있어요. 추가하거나 빼면 카카오 실시간 경로로 시간·거리·통행료를 다시 계산해요.") },
+            confirmButton = {
+                TextButton(onClick = { showRouteInfo = false }) { Text("확인") }
+            },
+        )
     }
 }
 
@@ -2993,67 +3188,150 @@ private fun RecommendationCard(
     onClick: () -> Unit,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        modifier = modifier,
+        shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        border = selectedOrder?.let { BorderStroke(2.dp, TteumRed) },
+        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
     ) {
-        Column(Modifier.padding(18.dp)) {
+        Column(Modifier.padding(16.dp)) {
+            Box {
+                SavedPlaceImage(
+                    imageUrl = recommendation.place.imageUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(142.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(TteumRedSoft),
+                )
+                RouteCardBadge(
+                    text = "$position/$total",
+                    selected = false,
+                    modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
+                )
+                RouteCardBadge(
+                    text = selectedOrder?.let { "추가됨" } ?: "추가하기",
+                    selected = selectedOrder != null,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(10.dp)
+                        .clickable(onClick = onToggle),
+                )
+            }
+            Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    "${position}번 후보 [$position/$total]",
+                    recommendation.place.name,
                     modifier = Modifier.weight(1f),
-                    color = TteumMuted,
-                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    fontSize = 23.sp,
+                    fontWeight = FontWeight.Bold,
                 )
-                OutlinedButton(onClick = onToggle) {
-                    Text(selectedOrder?.let { "경유지 $it" } ?: "추가")
+                TextButton(onClick = onClick) {
+                    Text("상세보기", color = TteumMuted)
+                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TteumMuted)
                 }
             }
+            Text(
+                listOfNotNull(
+                    recommendation.place.firstLegDistanceMeters.takeIf { it > 0 }?.let(::formatDistance),
+                    "약 ${recommendation.place.firstLegMinutes}분",
+                    recommendation.place.category.label,
+                ).joinToString(" | "),
+                color = TteumMuted,
+                fontSize = 14.sp,
+            )
+            Spacer(Modifier.height(7.dp))
+            Text("평균 머무름 [${formatMinutes(recommendation.place.stayMinutes)}]", fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Top) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(recommendation.place.category.label, color = TteumRed, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    Text(recommendation.place.name, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                }
-                SafetyBadge(recommendation)
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(recommendation.place.reason, color = TteumMuted)
-            Spacer(Modifier.height(8.dp))
-            OperationStatusText(recommendation)
-            Spacer(Modifier.height(15.dp))
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))
-                    .padding(14.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Metric("머무는 시간", "${recommendation.place.stayMinutes}분")
-                Metric("전체 예상", "${recommendation.totalMinutes}분")
-                Metric("남는 시간", "${recommendation.marginMinutes}분", TteumRed)
-            }
-            Spacer(Modifier.height(12.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(recommendation.place.tags) { tag ->
+                items(recommendation.place.tags.take(4)) { tag ->
                     Surface(color = Color(0xFFF1F2F5), shape = RoundedCornerShape(50)) {
                         Text(tag, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontSize = 12.sp)
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+private fun RouteCardBadge(text: String, selected: Boolean, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier,
+        color = if (selected) TteumRed else Color.White,
+        contentColor = if (selected) Color.White else TteumRed,
+        border = if (selected) null else BorderStroke(1.5.dp, TteumRed),
+        shape = RoundedCornerShape(50),
+    ) {
+        Text(
+            text,
+            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold,
+        )
+    }
+}
+
+@Composable
+private fun RouteSummaryCard(
+    totalMinutes: Int,
+    distanceMeters: Int,
+    tollFareWon: Int,
+    waypointCount: Int,
+    isLoading: Boolean,
+    onBack: () -> Unit,
+    onInfo: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
+    ) {
+        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.Top) {
+            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
+            }
+            Column(Modifier.weight(1f)) {
+                Text("총 소요시간", fontWeight = FontWeight.Bold)
+                if (isLoading) {
+                    CircularProgressIndicator(Modifier.padding(top = 8.dp).size(28.dp), strokeWidth = 3.dp)
+                } else {
+                    Text(formatMinutes(totalMinutes), color = TteumRed, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                }
+                Text(
+                    "${formatDistance(distanceMeters)} | 통행료 ${"%,d".format(tollFareWon)}원",
+                    color = TteumRed,
+                    fontSize = 13.sp,
+                )
+            }
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                modifier = Modifier.clickable(onClick = onInfo),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = onClick) {
-                    Text("상세 보기", color = TteumRed, fontWeight = FontWeight.Bold)
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TteumRed)
-                }
+                Text("경유지 $waypointCount/$MAX_KAKAO_WAYPOINTS 추가됨", color = TteumMuted, fontSize = 13.sp)
+                Spacer(Modifier.width(4.dp))
+                Icon(Icons.Default.Info, contentDescription = "경유지 안내", tint = TteumMuted, modifier = Modifier.size(18.dp))
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptyRouteResults(
+    warning: String,
+    onClearConditions: () -> Unit,
+    onSearchOtherPlace: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("경로 주변에서 장소를 찾지 못했어요", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(warning.ifBlank { "관심 조건을 줄이거나 다른 목적지를 검색해 보세요." }, color = TteumMuted)
+            OutlinedButton(onClick = onClearConditions, modifier = Modifier.fillMaxWidth()) { Text("관심 조건 해제하기") }
+            TextButton(onClick = onSearchOtherPlace, modifier = Modifier.fillMaxWidth()) { Text("다른 목적지 검색하기") }
         }
     }
 }
@@ -3069,11 +3347,60 @@ private fun DetailScreen(
 ) {
     val context = LocalContext.current
     Scaffold(
+        containerColor = Color.White,
+        topBar = {
+            Surface(color = Color.White) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", modifier = Modifier.size(30.dp))
+                    }
+                    Text(
+                        "장소 상세",
+                        modifier = Modifier.weight(1f),
+                        textAlign = TextAlign.Center,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    IconButton(onClick = onToggleSave, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isSaved) "저장 해제" else "저장",
+                            tint = if (isSaved) TteumRed else TteumInk,
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                }
+            }
+        },
         bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                Button(
-                    onClick = {
-                        if (criteria.mode == SearchMode.ON_THE_WAY) {
+            Surface(color = Color.White, shadowElevation = 8.dp) {
+                Column(
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = TteumRedSoft,
+                        contentColor = TteumInk,
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            "목적지에 늦지 않도록 15분의 여유를 남겨요",
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            textAlign = TextAlign.Center,
+                            fontSize = 13.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
                             openKakaoMapRoute(
                                 context = context,
                                 start = criteria.startCoordinates,
@@ -3087,39 +3414,14 @@ private fun DetailScreen(
                                 destinationName = criteria.endName,
                                 transport = TransportMode.CAR,
                             )
-                        } else {
-                            openKakaoMapRoute(
-                                context = context,
-                                start = criteria.startCoordinates,
-                                startName = criteria.startName,
-                                waypoint = null,
-                                destination = recommendation.place.latitude?.let { latitude ->
-                                    recommendation.place.longitude?.let { longitude ->
-                                        Coordinates(latitude, longitude)
-                                    }
-                                },
-                                destinationName = recommendation.place.name,
-                                transport = criteria.transportMode,
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(Icons.Default.Map, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        if (criteria.mode == SearchMode.ON_THE_WAY) {
-                            "카카오맵으로 들르는 길 안내"
-                        } else {
-                            "카카오맵으로 길 안내"
                         },
-                        fontWeight = FontWeight.Bold,
-                    )
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Icon(Icons.Default.Place, contentDescription = null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("카카오맵에서 경유지로 안내", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         },
@@ -3128,85 +3430,112 @@ private fun DetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
+            contentPadding = PaddingValues(bottom = 24.dp),
         ) {
             item {
-                Box {
-                    RouteMap(
-                        modifier = Modifier.fillMaxWidth().height(280.dp),
-                        criteria = criteria,
-                        recommendation = recommendation,
-                    )
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .padding(14.dp)
-                            .background(Color.White, CircleShape),
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
-                    }
-                }
-            }
-            item {
-                Column(Modifier.padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.Top) {
-                        Column(Modifier.weight(1f)) {
-                            Text(recommendation.place.category.label, color = TteumRed, fontWeight = FontWeight.Bold)
-                            Text(recommendation.place.name, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                        }
-                        IconButton(onClick = onToggleSave) {
-                            Icon(
-                                if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = if (isSaved) "저장 해제" else "저장",
-                                tint = if (isSaved) TteumRed else TteumMuted,
-                            )
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(recommendation.place.reason, color = TteumMuted)
-                    if (warning.isNotBlank()) {
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            warning,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFFFF6E7), RoundedCornerShape(12.dp))
-                                .padding(12.dp),
-                            color = Color(0xFF765A22),
-                            fontSize = 13.sp,
+                SavedPlaceImage(
+                    imageUrl = recommendation.place.imageUrl,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .aspectRatio(1.58f),
+                )
+                Column(Modifier.padding(horizontal = 24.dp, vertical = 20.dp)) {
+                    Text(recommendation.place.category.label, color = TteumRed, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(recommendation.place.name, fontSize = 30.sp, lineHeight = 37.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(18.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        DetailMetric(
+                            icon = Icons.Default.Info,
+                            text = "평균 머무름 ${formatMinutes(recommendation.place.stayMinutes)}",
+                            modifier = Modifier.weight(0.9f),
+                        )
+                        DetailMetric(
+                            icon = Icons.Default.DirectionsCar,
+                            text = "현재 위치에서 ${recommendation.place.firstLegMinutes}분  |  목적지까지 +${recommendation.place.detourMinutes}분",
+                            modifier = Modifier.weight(1.4f),
                         )
                     }
-                    Spacer(Modifier.height(20.dp))
-                    SafetySummary(recommendation)
-                    SectionTitle("시간 예상")
-                    TimelineRow(criteria.startName, "${recommendation.place.firstLegMinutes}분 이동")
-                    TimelineRow(recommendation.place.name, "${recommendation.place.stayMinutes}분 머물기", highlighted = true)
-                    TimelineRow(criteria.endName, "${recommendation.place.secondLegMinutes}분 이동")
-                    SectionTitle("장소 정보")
-                    OperationStatusText(recommendation)
-                    recommendation.place.openingHours.takeIf { it.isNotBlank() }?.let {
-                        Spacer(Modifier.height(6.dp))
-                        Text("운영시간  $it", color = TteumMuted, fontSize = 14.sp)
+                    Spacer(Modifier.height(22.dp))
+                    Text("방문 정보", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(12.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F6F8)),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Row(Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                VisitInfo("운영시간", recommendation.place.openingHours.ifBlank { "정보 확인 필요" })
+                                VisitInfo("휴무일", recommendation.place.closedDays.ifBlank { "정보 확인 필요" })
+                                VisitInfo("이용요금", "정보 확인 필요")
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                VisitInfo("주차", if ("주차 가능" in recommendation.place.tags) "가능" else "정보 확인 필요")
+                                VisitInfo("활동", if (recommendation.place.category in setOf(PlaceCategory.ATTRACTION, PlaceCategory.LEISURE)) "야외 활동" else "실내·외 확인 필요")
+                                VisitInfo("반려동물", if ("반려동물 동반" in recommendation.place.tags) "동반 가능" else "정보 확인 필요")
+                            }
+                        }
                     }
-                    recommendation.place.closedDays.takeIf { it.isNotBlank() }?.let {
-                        Spacer(Modifier.height(4.dp))
-                        Text("휴무일  $it", color = TteumMuted, fontSize = 14.sp)
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Text(recommendation.place.tags.joinToString(" · "), color = TteumMuted)
                     Spacer(Modifier.height(24.dp))
+                    Text("장소 소개", fontSize = 21.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(10.dp))
                     Text(
-                        "이동시간과 영업 정보는 실시간 상황에 따라 달라질 수 있어요. 출발 전 최신 정보를 확인해 주세요.",
+                        recommendation.place.reason.ifBlank { "강원도 여행 중 잠깐 들르기 좋은 장소예요." },
+                        color = Color(0xFF4F535B),
+                        lineHeight = 23.sp,
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(Color(0xFFFFF6E7), RoundedCornerShape(14.dp))
-                            .padding(14.dp),
-                        color = Color(0xFF765A22),
-                        fontSize = 13.sp,
-                    )
-                    Spacer(Modifier.height(30.dp))
+                            .clickable { openKakaoMap(context, recommendation.place.name) },
+                        color = Color(0xFFF5F6F8),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Place, contentDescription = null, tint = TteumMuted)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                recommendation.place.address.ifBlank { "주소 정보 확인 필요" },
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = TteumMuted)
+                        }
+                    }
+                    if (warning.isNotBlank()) {
+                        Spacer(Modifier.height(14.dp))
+                        Text(warning, color = TteumMuted, fontSize = 12.sp)
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DetailMetric(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier = modifier, color = Color(0xFFF5F6F8), shape = RoundedCornerShape(12.dp)) {
+        Row(Modifier.padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, contentDescription = null, tint = TteumRed, modifier = Modifier.size(21.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+@Composable
+private fun VisitInfo(label: String, value: String) {
+    Column {
+        Text(label, color = TteumMuted, fontSize = 12.sp)
+        Text(value, maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 13.sp, fontWeight = FontWeight.Medium)
     }
 }
 
@@ -3411,12 +3740,13 @@ private fun SearchBar(
 private fun RoundMapButton(
     onClick: (() -> Unit)?,
     icon: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
     background: Color = Color.White,
     foreground: Color = TteumInk,
     border: BorderStroke? = null,
 ) {
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .size(52.dp)
             .clickable(enabled = onClick != null) { onClick?.invoke() },
         color = background,
@@ -3544,8 +3874,11 @@ private fun RouteMap(
     modifier: Modifier = Modifier,
     criteria: SearchCriteria,
     recommendation: SafeRecommendation?,
+    routeSummary: RouteSummary? = null,
     candidates: List<SafeRecommendation> = emptyList(),
     selectedIds: List<String> = emptyList(),
+    corridorRadiusMeters: Int = 0,
+    requestedLocation: RequestedMapLocation? = null,
     onCandidateClick: (String) -> Unit = {},
 ) {
     val waypoint = recommendation?.place?.latitude?.let { latitude ->
@@ -3557,9 +3890,9 @@ private fun RouteMap(
         criteria.endCoordinates,
     )
     val routeStops = buildList {
-        criteria.startCoordinates?.let { add("출발" to it) }
+        criteria.startCoordinates?.let { add("출발지" to it) }
         if (criteria.mode == SearchMode.ON_THE_WAY) {
-            criteria.endCoordinates?.let { add("도착" to it) }
+            criteria.endCoordinates?.let { add("목적지" to it) }
         }
     }
     val mapCandidates = candidates.mapNotNull { candidate ->
@@ -3574,17 +3907,21 @@ private fun RouteMap(
             }
         }
     }
-    val routePoints = recommendation?.routePoints?.ifEmpty { fallbackPoints } ?: fallbackPoints
+    val routePoints = routeSummary?.path?.ifEmpty { fallbackPoints }
+        ?: recommendation?.routePoints?.ifEmpty { fallbackPoints }
+        ?: fallbackPoints
     KakaoMapSurface(
         modifier = modifier,
         latitude = waypoint?.latitude ?: criteria.endCoordinates?.latitude ?: 37.7645,
         longitude = waypoint?.longitude ?: criteria.endCoordinates?.longitude ?: 128.8996,
         zoomLevel = 15,
+        requestedLocation = requestedLocation,
         routePoints = routePoints,
         routeStops = routeStops,
         candidateMarkers = mapCandidates,
         corridorPoints = routePoints,
-        corridorRadiusMeters = (criteria.deadlineMinutesFromNow * 20).coerceIn(800, 8_000),
+        corridorRadiusMeters = corridorRadiusMeters.takeIf { it > 0 }
+            ?: (criteria.deadlineMinutesFromNow * 20).coerceIn(800, 8_000),
         onCandidateClick = onCandidateClick,
     )
 }
@@ -3818,7 +4155,7 @@ private fun createRouteStopBitmap(context: Context, text: String): Bitmap {
     return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { bitmap ->
         val canvas = android.graphics.Canvas(bitmap)
         val background = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (text == "출발") 0xFF135BB5.toInt() else TteumRed.toArgb()
+            color = if (text.startsWith("출발")) 0xFFF0647B.toInt() else TteumRed.toArgb()
         }
         canvas.drawRoundRect(0f, 0f, width.toFloat(), height.toFloat(), height / 2f, height / 2f, background)
         val baseline = height / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
