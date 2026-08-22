@@ -4,6 +4,7 @@ import {
   badRequest,
   json,
   methodNotAllowed,
+  rateLimit,
   readJson,
   serverError
 } from "../lib/http.js";
@@ -11,7 +12,8 @@ import { fetchKakaoRoute, fetchKakaoRoutes } from "../lib/kakao-mobility.js";
 import {
   createPathBounds,
   createSearchBounds,
-  distanceToPathKm
+  distanceToPathKm,
+  estimateRoute
 } from "../lib/routing.js";
 import {
   recommendPlaces,
@@ -22,6 +24,8 @@ import { parseRecommendationRequest } from "../lib/validation.js";
 export default {
   async fetch(request) {
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const limited = rateLimit(request, "recommendations", 12);
+    if (limited) return limited;
 
     let criteria;
     try {
@@ -49,11 +53,29 @@ export default {
         if (!baseRoute) {
           throw new Error("Kakao Mobility could not calculate the base route");
         }
+      }
+      const baseRouteMinutes = baseRoute?.durationMinutes ??
+        (criteria.mode === "NEARBY"
+          ? 0
+          : estimateRoute(
+              criteria.start,
+              criteria.destination,
+              criteria.destination,
+              criteria.transport
+            ).directMinutes);
+      const effectiveDeadlineMinutes = criteria.extraTimeMinutes == null
+        ? criteria.deadlineMinutes
+        : baseRouteMinutes + criteria.extraTimeMinutes;
+      const effectiveCriteria = {
+        ...criteria,
+        deadlineMinutes: effectiveDeadlineMinutes
+      };
+      if (baseRoute) {
         corridorRadiusMeters = Math.min(
           8_000,
           Math.max(
             800,
-            (criteria.deadlineMinutes - baseRoute.durationMinutes) * 20
+            (effectiveDeadlineMinutes - baseRouteMinutes) * 20
           )
         );
         bounds = createPathBounds(
@@ -79,7 +101,7 @@ export default {
           20
         );
         const routeCandidates = selectRouteCandidates(
-          criteria,
+          effectiveCriteria,
           candidates,
           routeLimit
         );
@@ -93,7 +115,7 @@ export default {
         routeFailureCount = routeResult.failedCount;
         routeProvider = "KAKAO_MOBILITY";
         recommendations = recommendPlaces(
-          criteria,
+          effectiveCriteria,
           routeCandidates,
           (_start, _destination, place) =>
             routeResult.routes.get(String(place.content_id))
@@ -103,7 +125,7 @@ export default {
         routeCandidateCount = candidates.length;
         warning =
           "도보 이동시간은 직선거리 기반 예상값이에요. 실제 길과 신호에 따라 더 오래 걸릴 수 있으니 여유 있게 출발해 주세요.";
-        recommendations = recommendPlaces(criteria, candidates).slice(0, 20);
+        recommendations = recommendPlaces(effectiveCriteria, candidates).slice(0, 20);
       }
 
       return json({
@@ -116,6 +138,12 @@ export default {
           routeFailureCount,
           recommendationCount: recommendations.length,
           routeProvider,
+          baseRouteMinutes,
+          ...(criteria.extraTimeMinutes == null
+            ? {}
+            : { extraTimeMinutes: criteria.extraTimeMinutes }),
+          effectiveDeadlineMinutes,
+          safetyBufferMinutes: criteria.safetyBufferMinutes,
           ...(baseRoute ? { baseRoute } : {}),
           ...(corridorRadiusMeters ? { corridorRadiusMeters } : {}),
           ...(warning ? { warning } : {})

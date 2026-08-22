@@ -4,15 +4,17 @@
 
 ## 현재 기준선
 
-- 기준일: `2026-08-16`
-- Android 앱: `0.12.3` (`versionCode 24`)
+- 기준일: `2026-08-22`
+- Android 앱: `0.12.4` (`versionCode 25`)
 - Android 패키지: `com.tteumsae.app`
 - 제품 단계: 실제 API와 지도를 연결한 기능형 MVP
 - 출시 단계: 테스터용 디버그 APK 가능, Play Store 제출 준비 전
 - 운영 백엔드: <https://tteumsae-backend.vercel.app>
 - APK 페이지: <https://tteumsae-apk.vercel.app>
 
-현재 소스는 배포된 `v0.12.3` APK보다 최신입니다. 마지막 후보 핀 아이콘 변경은 기존 APK에 포함되지 않았으므로 새 담당자는 소스에서 APK를 다시 빌드해야 합니다.
+현재 Android 소스와 `v0.12.4` 확인용 APK는 같은 기능 기준선입니다. 확인용
+APK는 디버그 빌드이므로 Play Store 제출 전에는 릴리스 서명과 AAB 빌드, 실기기
+회귀 검증을 별도로 완료해야 합니다.
 
 ## 저장소 구성
 
@@ -37,6 +39,8 @@ docs/      제품·구현·운영 인수인계 문서
 9. [QA와 알려진 문제](docs/08_QA_AND_KNOWN_ISSUES.md)
 10. [다음 버전 계획](docs/09_NEXT_VERSION_PLAN.md)
 11. [결정 기록](docs/10_DECISION_LOG.md)
+12. [공모전 90초 데모와 실기기 QA](docs/11_CONTEST_DEMO_AND_DEVICE_QA.md)
+13. [공모전 사용자·알고리즘 검증 양식](docs/12_CONTEST_VALIDATION_TEMPLATES.md)
 
 ## 빠른 검증
 

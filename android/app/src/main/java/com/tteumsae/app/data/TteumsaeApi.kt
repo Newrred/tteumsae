@@ -70,7 +70,7 @@ class TteumsaeApi(
                 .put("mode", criteria.mode.name)
                 .put("start", start.toJson())
                 .put("destination", destination.toJson())
-                .put("deadlineMinutes", criteria.deadlineMinutesFromNow)
+                .put("extraTimeMinutes", criteria.deadlineMinutesFromNow)
                 .put("safetyBufferMinutes", criteria.safetyBufferMinutes)
                 .put("transport", criteria.transportMode.name)
                 .put("categories", categories)

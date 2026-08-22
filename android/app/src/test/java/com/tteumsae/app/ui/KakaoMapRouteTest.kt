@@ -28,6 +28,20 @@ class KakaoMapRouteTest {
     }
 
     @Test
+    fun `경유지가 없어도 출발지에서 최종 목적지까지 안내한다`() {
+        assertEquals(
+            "https://map.kakao.com/link/by/car/%EC%84%9C%EC%9A%B8%EC%97%AD,37.1,127.1/%EA%B0%95%EB%A6%89%EC%97%AD,37.4,127.4",
+            buildKakaoMapMultiRouteUrl(
+                "서울역",
+                Coordinates(37.1, 127.1),
+                emptyList(),
+                "강릉역",
+                Coordinates(37.4, 127.4),
+            ),
+        )
+    }
+
+    @Test
     fun `경유지는 출발지에서 목적지 방향으로 자동 정렬한다`() {
         assertEquals(
             listOf("near", "far"),
@@ -67,6 +81,50 @@ class KakaoMapRouteTest {
                 listOf(recommendation("a", 20, 10), recommendation("b", 25, 10)),
             ),
         )
+    }
+
+    @Test
+    fun `선택 경로는 기본 경로와 추가 여유시간 안에서만 허용한다`() {
+        assertEquals(
+            true,
+            isRouteWithinExtraTimeBudget(
+                baseDrivingMinutes = 120,
+                extraTimeMinutes = 60,
+                selectedDrivingMinutes = 135,
+                selectedStayMinutes = 30,
+                safetyBufferMinutes = 15,
+            ),
+        )
+        assertEquals(
+            false,
+            isRouteWithinExtraTimeBudget(
+                baseDrivingMinutes = 120,
+                extraTimeMinutes = 60,
+                selectedDrivingMinutes = 136,
+                selectedStayMinutes = 30,
+                safetyBufferMinutes = 15,
+            ),
+        )
+    }
+
+    @Test
+    fun `후보 카드의 추가 거리는 기본 경로와 두 구간 거리의 차이로 계산한다`() {
+        val place = PlaceCandidate(
+            id = "place",
+            name = "장소",
+            category = PlaceCategory.ATTRACTION,
+            stayMinutes = 40,
+            firstLegMinutes = 50,
+            secondLegMinutes = 64,
+            detourMinutes = 14,
+            firstLegDistanceMeters = 5_000,
+            secondLegDistanceMeters = 6_000,
+            reason = "",
+            tags = emptyList(),
+        )
+
+        assertEquals(2_000, additionalDetourDistanceMeters(place, baseDistanceMeters = 9_000))
+        assertEquals(null, additionalDetourDistanceMeters(place.copy(firstLegDistanceMeters = 0), 9_000))
     }
 
     @Test
@@ -150,12 +208,6 @@ class KakaoMapRouteTest {
             setOf(RecommendationIntent.ANY),
             toggleRecommendationIntent(selected, RecommendationIntent.ANY),
         )
-    }
-
-    @Test
-    fun `결과가 없으면 여유시간을 30분 늘리되 하루를 넘지 않는다`() {
-        assertEquals(120, extendedDeadlineMinutes(90))
-        assertEquals(1440, extendedDeadlineMinutes(1430))
     }
 
     @Test

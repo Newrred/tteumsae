@@ -27,6 +27,24 @@ test("유효한 추천 요청을 정규화한다", () => {
   );
 });
 
+test("순수 여유시간을 받고 기존 전체시간과 동시에 입력하면 거부한다", () => {
+  const { deadlineMinutes: _deadlineMinutes, ...withoutDeadline } = valid;
+  const extraTime = { ...withoutDeadline, extraTimeMinutes: 60 };
+  assert.deepEqual(parseRecommendationRequest(extraTime), extraTime);
+  assert.throws(
+    () => parseRecommendationRequest({ ...extraTime, deadlineMinutes: 90 }),
+    /중 하나만/
+  );
+  assert.throws(
+    () => parseRecommendationRequest(withoutDeadline),
+    /중 하나만/
+  );
+  assert.throws(
+    () => parseRecommendationRequest({ ...withoutDeadline, extraTimeMinutes: 1441 }),
+    /15~1440/
+  );
+});
+
 test("안전 여유가 전체 시간보다 길면 거부한다", () => {
   assert.throws(
     () =>

@@ -83,3 +83,32 @@ test("도착 예상 시각에 닫힌 장소는 제외하고 정보가 없으면 
     "UNKNOWN"
   );
 });
+
+test("도착 후 체류 중 문을 닫는 장소는 제외한다", () => {
+  const closingPlace = {
+    ...place,
+    default_stay_minutes: 40,
+    opening_hours: "09:00~18:00",
+    closed_days: "연중무휴"
+  };
+  const enoughTime = { ...criteria, deadlineMinutes: 90 };
+
+  assert.equal(
+    recommendPlaces(
+      enoughTime,
+      [closingPlace],
+      fixedRoute,
+      new Date("2026-08-11T08:40:00.000Z")
+    ).length,
+    0
+  );
+  assert.equal(
+    recommendPlaces(
+      enoughTime,
+      [closingPlace],
+      fixedRoute,
+      new Date("2026-08-11T08:10:00.000Z")
+    )[0].operationStatus,
+    "OPEN"
+  );
+});

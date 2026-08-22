@@ -57,6 +57,7 @@ Android에는 카카오 네이티브 지도 키만 주입합니다. TourAPI 서�
 | 경로 | 책임 |
 |---|---|
 | `backend/api/recommendations.js` | 추천 요청 오케스트레이션 |
+| `backend/api/route.js` | 선택 경유지 0~5개의 통합 차량 경로 재계산 |
 | `backend/api/geocode.js` | 카카오 키워드 장소 검색 |
 | `backend/api/region.js` | 좌표의 행정구역·강원도 판별 |
 | `backend/api/places/` | 장소 목록·상세 |
@@ -76,18 +77,18 @@ Vercel의 별도 `tteumsae-apk` 프로젝트에 배포하는 정적 HTML입니�
 ```mermaid
 stateDiagram-v2
     [*] --> HOME
-    HOME --> LOCATION: "남는 시간으로 장소 찾기"
+    HOME --> LOCATION: "목적지 검색"
     HOME --> SAVED: "장소 둘러보기 탭"
     HOME --> SETTINGS: "설정 탭"
-    LOCATION --> TIME: "유효한 위치 확인"
-    TIME --> CONDITIONS: "시간·여유 확정"
+    LOCATION --> CONDITIONS: "유효한 위치 확인"
+    CONDITIONS --> LOCATION: "뒤로"
     CONDITIONS --> LOADING: "추천 시작"
     LOADING --> RESULTS: "추천 성공"
     LOADING --> CONDITIONS: "오류 후 돌아가기"
+    RESULTS --> CONDITIONS: "뒤로"
     RESULTS --> DETAIL: "상세 보기"
     DETAIL --> RESULTS: "뒤로"
     RESULTS --> LOCATION: "다른 장소 검색"
-    RESULTS --> TIME: "시간 수정"
     LOCATION --> HOME: "시트 숨김 또는 뒤로"
     SAVED --> HOME
     SETTINGS --> HOME
@@ -107,14 +108,16 @@ sequenceDiagram
     participant D as "Supabase"
     participant K as "Kakao Mobility"
 
-    U->>A: "출발지·목적지·시간·조건 입력"
+    U->>A: "출발지·목적지·관심 조건 입력"
     A->>B: "POST /api/recommendations"
+    B->>K: "출발→목적 직행 baseRoute 계산"
+    K-->>B: "기본 시간·거리·통행료·path"
     B->>D: "경로 주변 후보 최대 500개 조회"
     D-->>B: "정규화된 TourAPI 장소"
     B->>B: "거리 기반 1차 필터"
     B->>K: "차량 후보 최대 20개 경로 계산"
     K-->>B: "두 구간 시간·거리·경로"
-    B->>B: "운영시간·안전 여유 필터"
+    B->>B: "우회+머무름+안전 여유 필터"
     B-->>A: "추천·예상시간·경로·경고"
     A-->>U: "지도 핀과 카드"
 ```
@@ -147,15 +150,20 @@ Vercel Cron 설정은 UTC `18:20`, `18:40`이며 한국시간으로 다음 날 �
 한 장소의 기본 판단:
 
 ```text
-totalMinutes = firstLegMinutes + stayMinutes + secondLegMinutes
-marginMinutes = deadlineMinutes - totalMinutes
-추천 조건 = marginMinutes >= safetyBufferMinutes
+effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
+detourMinutes = candidateRouteMinutes - baseRouteMinutes
+추천 조건 = detourMinutes + stayMinutes + safetyBufferMinutes <= extraTimeMinutes
 ```
 
 차량 모드:
 
-- 출발지→후보, 후보→목적지 두 구간은 Kakao Mobility 응답을 사용합니다.
-- 직행 비교시간은 현재 거리 기반 추정이 포함됩니다.
+- 출발→목적 직행 `baseRoute`와 출발→후보→목적 경로 모두 Kakao Mobility
+  응답을 사용합니다.
+- 활성 Android 흐름에는 시간 입력 화면이 없습니다. 추천 API 호환을 위해
+  `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`를 내부 고정값으로
+  전송합니다. 백엔드의 `deadlineMinutes`는 이전 클라이언트 호환용입니다.
+- 따라서 이 값은 사용자의 실제 도착 마감이나 남은 시간이 아니며 현재 앱을
+  `늦지 않음 보장`으로 설명하면 안 됩니다.
 
 도보 모드:
 
@@ -164,23 +172,27 @@ marginMinutes = deadlineMinutes - totalMinutes
 
 ## 7. 복수 경유지 선택
 
-백엔드는 후보 하나씩의 경로만 계산합니다. 사용자가 여러 장소를 선택하면 Android가 다음 방식으로 예상값을 만듭니다.
+추천 단계에서는 후보 하나씩의 경로를 평가합니다. 결과에서 사용자가 경유지를
+선택하면 다음 방식으로 전체 경로를 갱신합니다.
 
-1. 출발지→목적지 직선 벡터에 후보 좌표를 투영해 순서를 정렬합니다.
-2. 첫 추천에서 추정한 기본 이동시간을 구합니다.
-3. 선택한 각 장소의 단일 우회시간과 머무름을 더합니다.
-4. 안전 여유보다 적게 남는 추가 선택을 차단합니다.
-5. 최대 5개 경유지를 카카오맵 URL로 전달합니다.
+1. 선택 0개는 직행 `baseRoute`를 유지합니다.
+2. 1~5개는 사용자가 추가한 순서를 유지해 `POST /api/route`로 보냅니다.
+3. 백엔드는 출발지→선택 경유지→목적지 전체를 Kakao Mobility로 계산해
+   시간·거리·통행료·legs·path를 반환합니다.
+4. 요청 실패 시에만 Android가 단일 후보 우회값을 합친 예상 fallback을
+   표시합니다.
+5. 최대 5개 경유지와 최종 목적지를 같은 순서로 카카오맵 URL에 전달합니다.
 
-이는 실제 복수 경유 도로 경로가 아닙니다. 최종 경로는 카카오맵이 열린 후 다시 계산합니다.
+앱의 통합 경로와 별개로 최종 안내 경로는 카카오맵이 열린 후 다시 계산합니다.
 
 ## 8. 붉은 후보 영역
 
 결과 지도에서 붉은 영역은 실제 등시간선이 아닙니다.
 
-- 추천 중 우회시간이 가장 작은 후보의 경로를 기준선으로 사용합니다.
+- 직행 `baseRoute.path`를 기준선으로 사용합니다.
 - 경로상의 여러 원을 겹쳐 영역처럼 표시합니다.
-- 반경은 `deadlineMinutes × 20m`, 최소 800m, 최대 8km입니다.
+- 반경은 `extraTimeMinutes × 20m`, 최소 800m, 최대 8km입니다. 현재 내부값은
+  1,440분이므로 활성 흐름에서는 최대 8km가 됩니다.
 
 다음 버전에서 실제 corridor API나 서버의 경로 거리 조건으로 교체하기 전까지 `탐색 후보 범위` 수준으로만 설명해야 합니다.
 
@@ -208,6 +220,7 @@ marginMinutes = deadlineMinutes - totalMinutes
 
 다음 Android 코드는 현재 운영 흐름에 연결되지 않습니다.
 
+- `ui/TteumsaeApp.kt`의 `TimeScreen`, `TimeSliderThumb`, `ModeSelector`
 - `data/DataContracts.kt`의 저장소·경로 인터페이스와 샘플 구현
 - `data/SamplePlaces.kt`
 - `domain/TimeSafeEngine.kt`

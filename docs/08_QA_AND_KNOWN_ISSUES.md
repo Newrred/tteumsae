@@ -9,12 +9,14 @@
 |---|---|---|
 | Android `compileDebugKotlin` | 성공 | 최신 통합 소스 기준 |
 | Android `assembleDebug` | 성공 | 지역·찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 |
-| Android `testDebugUnitTest` | 실패 | 기존과 동일하게 테스트 클래스 로딩 단계에서 `ClassNotFoundException` |
+| Android `testDebugUnitTest` | 성공(영문 드라이브) | 원래 한글·공백 경로에서는 `ClassNotFoundException`; `subst Q:` 매핑에서 5개 테스트 클래스 전체 성공 |
 | Android instrumented/UI 테스트 | 없음 | `androidTest` 자동화 없음 |
-| 백엔드 Node 테스트 | 25/25 성공 | `2026-08-20`; `sigunguCode`, route/baseRoute/corridor/검증 테스트 포함 |
+| 백엔드 Node 테스트 | 28/28 성공 | `2026-08-20`; `extraTimeMinutes`, `sigunguCode`, route/baseRoute/corridor와 체류 종료 전 운영시간 검증 포함 |
+| 운영 백엔드 계약 | 배포 필요 | `2026-08-20` 운영 URL은 아직 `deadlineMinutes`만 허용함을 400 응답으로 확인; 새 백엔드를 먼저 배포해야 최신 APK 추천이 동작한다 |
 | 최신 APK 실기기 전체 회귀 | 필요 | 빌드 성공과 사용자 흐름 통과는 별개 |
 
-`assembleDebug` 성공만으로 단위 테스트나 실기기 QA가 통과했다고 보고하지 않는다.
+컴파일·단위 테스트·`assembleDebug` 성공만으로 실기기 QA가 통과했다고 보고하지
+않는다.
 
 ## 2. 인수 직후 자동 검증
 
@@ -25,16 +27,22 @@ cd android
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat compileDebugKotlin
 .\gradlew.bat compileDebugUnitTestKotlin
-.\gradlew.bat testDebugUnitTest
 .\gradlew.bat assembleDebug
+
+$repoRoot = (Resolve-Path ..).Path
+subst Q: $repoRoot
+Set-Location Q:\android
+.\gradlew.bat testDebugUnitTest
+Set-Location $repoRoot
+subst Q: /d
 ```
 
 기대 결과:
 
 - Kotlin 컴파일과 debug APK 빌드는 성공해야 한다.
-- `testDebugUnitTest`는 현재 기준선에서 `ClassNotFoundException`을 재현한다.
-- 새 clone의 영문·공백 없는 경로에서도 같은지 확인한 뒤 Gradle worker classpath와 test class output을 조사한다.
-- 해결 전까지 테스트 소스가 존재한다는 이유로 `테스트 통과`라고 기록하지 않는다.
+- 원래 한글·공백 경로에서는 `ClassNotFoundException` 이력을 재현할 수 있다.
+- `subst Q:` 영문 드라이브에서는 5개 테스트 클래스가 모두 통과해야 한다.
+- 두 경로의 결과를 구분해 기록하고 CI는 영문·무공백 checkout을 사용한다.
 
 ### 백엔드
 
@@ -79,7 +87,16 @@ pnpm run check
 - [ ] 목적지가 강원도 밖이면 진행을 차단하고 화면을 유지한다.
 - [ ] 두 좌표가 선택되기 전 `다음`이 비활성이다.
 - [ ] 키보드가 열려도 `다음`이 IME 위에 보이고, 누르면 키보드가 닫힌다.
-- [ ] 성공 후 TIME이 아니라 CONDITIONS로 이동한다.
+- [ ] 성공 후 CONDITIONS로 이동한다.
+
+### 내부 추천 시간 기준 — 사용자 화면 없음
+
+- [ ] 홈에서 새 탐색을 시작하면 내부 `extraTimeMinutes=1,440`,
+  `safetyBufferMinutes=15`로 초기화된다.
+- [ ] `AppScreen`에 `TIME`이 없고 `TimeScreen` 소스는 어떤 사용자 전이에서도
+  열리지 않는다.
+- [ ] 화면 문구가 이 내부값을 사용자가 입력한 도착 마감이나 시간 보장처럼
+  설명하지 않는다.
 
 ### CONDITIONS — 복수 관심
 
@@ -93,12 +110,16 @@ pnpm run check
 
 ### LOADING·추천 요청
 
-- [ ] 요청 body가 `ON_THE_WAY`, `CAR`, deadline 1440, buffer 15, 선택 카테고리를 보낸다.
+- [ ] 요청 body가 `ON_THE_WAY`, `CAR`, 내부 `extraTimeMinutes=1,440`,
+  `safetyBufferMinutes=15`와 선택 카테고리를 보낸다.
+- [ ] 응답 meta의 `effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes`다.
+- [ ] 추천이 `우회 주행시간+기본 머무름+안전여유≤extraTimeMinutes`를 만족한다.
 - [ ] 응답의 `baseRoute`와 `meta.corridorRadiusMeters`가 Android 상태에 저장된다.
 - [ ] 정상 네트워크에서 최소 500ms 로딩 후 결과로 이동한다.
 - [ ] 네트워크/서버 실패에 작업명, 원인, `다시 시도`, `조건으로 돌아가기`가 보인다.
 - [ ] 로딩 중 취소/시스템 뒤로가기의 실제 동작을 기기에서 확인한다.
-- [ ] 사용자 시간 입력이 없는 만큼 로딩 문구를 시간 보장으로 오해하지 않는지 사용성 테스트한다.
+- [ ] 로딩 문구가 `가는 길 주변` 탐색으로 표시되고 사용자 시간 입력을 암시하지
+  않는다.
 
 ### RESULTS — baseRoute/corridor
 
@@ -115,6 +136,7 @@ pnpm run check
 - [ ] 0곳일 때 baseRoute와 `0/5`, 직행 카카오맵 CTA가 동작한다.
 - [ ] 핀과 카드 모두 선택/해제를 일으킨다.
 - [ ] 선택 1~5곳 각각 `/api/route`가 호출되고 waypointCount, 시간, 거리, 통행료, path가 갱신된다.
+- [ ] 합산 `우회 주행시간+선택 장소 머무름+15분`이 내부 1,440분 호환 예산을 넘는 장소 추가는 거부되고 기존 선택이 유지된다.
 - [ ] 경유 순서가 사용자가 추가한 순서와 일치한다.
 - [ ] 5곳에서 새 장소를 추가하면 토스트 후 기존 선택을 유지한다.
 - [ ] 재계산 중 progress가 보이고 연속 탭으로 중복 상태가 생기지 않는다.
@@ -138,9 +160,11 @@ pnpm run check
 - [ ] 운영시간·휴무·주차·활동·반려동물과 정보 없음 fallback이 보인다.
 - [ ] 장소 소개와 긴 주소가 레이아웃을 깨지 않는다.
 - [ ] 저장/해제가 카탈로그 상태와 동기화된다.
-- [ ] 하단 CTA가 현재 상세 장소 한 곳과 최종 목적지를 카카오맵에 전달한다.
-- [ ] 결과에서 이미 여러 경유지를 골랐을 때 상세 CTA가 한 곳만 전달하는 현재 한계를 확인한다.
-- [ ] 고정된 15분 안내가 사용자 시간 보장처럼 읽히는지 검토한다.
+- [ ] 이동시간 지표가 `현재 위치` 고정 문구가 아니라 실제 출발지명을 표시한다.
+- [ ] 하단 CTA가 현재 상세 장소를 포함한 경로를 재계산하고 시간 예산 안일 때만 최대 5곳과 최종 목적지를 전달한다.
+- [ ] 이미 5곳을 선택한 상태의 미선택 상세 장소는 마지막 선택을 교체한다는 안내 후 진행하며, 시간 초과 시 교체와 외부 실행을 모두 취소한다.
+- [ ] 하단 15분 안내가 내부 고정값이며 사용자 선택이나 실제 도착 보장으로
+  오해되지 않는다.
 
 ### 틈새 발견·저장·설정
 
@@ -164,6 +188,9 @@ pnpm run check
 - [ ] `/api/places`의 `sigunguCode=0`, `19`, 비정수 입력은 Kakao/TourAPI 호출 없이 400을 반환한다.
 - [ ] `/api/places`, `/api/geocode`, `/api/region`의 나머지 정상/검증 오류가 계약과 일치한다.
 - [ ] `POST /api/recommendations` 차량 경로가 최상위 `baseRoute`를 반환한다.
+- [ ] `extraTimeMinutes` 15~1,440만 허용하고 안전여유가 입력 이상이면 Kakao 호출 전에 400이다.
+- [ ] `deadlineMinutes`와 `extraTimeMinutes`를 함께 보내거나 둘 다 생략하면 400이다.
+- [ ] `effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes`다.
 - [ ] `baseRoute.waypointCount=0`, legs 1개, path 2점 이상이다.
 - [ ] `meta.corridorRadiusMeters`가 800~8000이고 `corridorCandidateCount`가 있다.
 - [ ] corridor 밖 장소가 추천 후보에서 제외된다.
@@ -173,6 +200,7 @@ pnpm run check
 - [ ] route 응답의 `legs.size = waypoints.size + 1`, path≤200, 합계 필드가 일치한다.
 - [ ] 경유지 6개와 잘못된 좌표가 Kakao 호출 전에 400이다.
 - [ ] Kakao route가 null/비정상 sections/외부 실패일 때 공통 500과 requestId를 반환한다.
+- [ ] 같은 IP에서 추천 13번째 요청은 429, 경로 41번째 요청은 429와 `Retry-After`를 반환한다.
 - [ ] 공개 `/api/recommendations`와 `/api/route` 호출량/비용을 관찰한다.
 - [ ] Cron 인증과 `sync_state` 갱신을 확인한다.
 
@@ -180,36 +208,58 @@ pnpm run check
 
 ### P0 — 검증 기준선
 
-#### Android 단위 테스트 `ClassNotFoundException`
+#### 운영 백엔드 선배포 필요
 
-- 증상: `testDebugUnitTest`가 테스트 클래스 실행 전 `ClassNotFoundException`으로 실패한다.
-- 확인: 앱 Kotlin 컴파일과 `assembleDebug`는 성공하지만 이는 단위 테스트 통과가 아니다.
-- 조치: 영문·공백 없는 clone에서 재현하고 Gradle worker classpath, test class output, JDK/Gradle 조합을 확인한다.
+- 최신 Android는 추천 요청에 `extraTimeMinutes`를 보낸다.
+- `2026-08-20` 기준 운영 URL은 이전 `deadlineMinutes` 계약이므로 최신 APK를
+  먼저 배포하면 추천 요청이 400으로 실패한다.
+- 새 백엔드를 운영에 먼저 배포하고 `extraTimeMinutes` 스모크 테스트를 통과한 뒤
+  APK를 배포한다.
+
+#### Android 단위 테스트의 한글·공백 경로 의존
+
+- 원래 작업 경로에서는 `testDebugUnitTest`가 테스트 클래스 실행 전
+  `ClassNotFoundException`으로 실패한다.
+- 같은 소스를 `subst Q:` 영문 드라이브에서 실행하면 5개 테스트 클래스가 모두
+  통과하며, Kotlin compile과 `assembleDebug`도 성공한다.
+- CI와 새 clone은 영문·무공백 경로를 사용하고 원래 경로의 실패 이력과 우회
+  방법을 유지한다.
 
 #### 최신 실기기 회귀 미완료
 
 - 새 흐름과 route API가 포함된 APK는 빌드됐지만 GPS·Kakao 외부 앱·작은 화면·0~5 경유지 전체 조합을 실기기에서 통과했다는 기록이 없다.
 - 배포 전에 이 문서의 Android 체크리스트를 버전/기기와 함께 기록한다.
 
+#### 실제 사용자·경로 검증 미실행
+
+- 10~15명 사용자 테스트와 20~30개 실제 경로 알고리즘 비교는 아직 실행하지
+  않았다.
+- 완료 전에는 이해율, 추천 정확도, 시간 절감률 또는 거짓 안전 추천률을 실제
+  성과처럼 발표하지 않는다.
+- 기록 형식은 [공모전 사용자·알고리즘 검증 템플릿](12_CONTEST_VALIDATION_TEMPLATES.md)을
+  사용한다.
+
 ### P1 — 제품 의미와 핵심 UX
 
 #### 사용자 시간 입력이 활성 흐름에서 제거됨
 
-- `TimeScreen`은 남아 있지만 LOCATION이 바로 CONDITIONS로 이동한다.
-- 홈에서 24시간 상한과 15분 버퍼를 내부 설정해 추천한다.
-- 영향: 현재 추천은 경로 주변 후보 탐색이지 도착 마감·남는 시간 보장이 아니다.
-- 조치: “시간 안전” 제품을 유지하려면 실제 마감/여유 입력을 다시 연결하고, 아니라면 margin/safety/15분 보장 문구를 제거한다.
+- `TimeScreen` 소스는 남아 있지만 LOCATION이 바로 CONDITIONS로 이동한다.
+- 홈에서 1,440분 상한과 15분 버퍼를 내부 설정해 추천한다.
+- 현재 추천은 넓은 경로 주변 후보 탐색이며 사용자의 실제 도착 마감이나 남는
+  시간을 보장하지 않는다. 시간 안전 제품을 다시 제공하려면 입력 화면과 문구,
+  추천·결과 예산 계약을 함께 재설계해야 한다.
 
-#### 시간 보장처럼 보이는 남은 문구
+#### 내부 15분 안내의 오해 가능성
 
-- LOADING은 `남은 시간`, `도착 전 여유 시간`을 말한다.
-- DETAIL은 `목적지에 늦지 않도록 15분의 여유를 남겨요`를 고정 표시한다.
-- 사용자 입력이 없는 현재 계산과 맞지 않아 우선 문구 수정이 필요하다.
+- DETAIL은 내부 고정 15분을 도착 전 여유처럼 표시한다.
+- 사용자 입력이 없는 계산이므로 공모전·스토어 문구에서 `늦지 않음 보장`으로
+  확대해 설명하지 않는다.
 
 #### corridor는 등시간선이 아님
 
 - path까지의 로컬 평면 근사 거리로 자른 800m~8km 범위다.
-- 24시간 고정값 때문에 대부분 최대 8km가 된다.
+- 반경은 내부 `extraTimeMinutes×20m`를 800m~8km로 제한하며 현재 1,440분
+  값에서는 최대 8km다.
 - 영역 안 모든 장소가 실제 도로에서 쉽게 들를 수 있다는 뜻이 아니다.
 
 #### 선택 후 corridor 중심선 변경
@@ -229,17 +279,6 @@ pnpm run check
 - `orderWaypointIdsAlongRoute` 헬퍼가 남아 있지만 활성 결과 흐름에서는 사용하지 않는다.
 - 자동 최적화가 필요하면 제품 UI, 서버 계약, 순서 변경 UX를 함께 설계한다.
 
-#### 상세 CTA가 복수 선택을 보존하지 않음
-
-- 결과 CTA는 0~5개 전체를 전달한다.
-- 상세 CTA는 현재 상세 장소 한 곳만 경유지로 전달한다.
-- 상세 진입 전 선택 목록을 유지해 같은 전체 경로로 안내할지 제품 결정을 해야 한다.
-
-#### 직접 선택한 출발지에도 `현재 위치에서` 표시
-
-- 상세 핵심 지표가 출발지 종류와 무관하게 `현재 위치에서`라고 쓴다.
-- 실제 `criteria.startName` 또는 `출발지에서`로 바꿔야 한다.
-
 #### warning 노출 범위
 
 - 정상 RESULTS 본문에는 서버 warning을 별도 표시하지 않는다.
@@ -257,14 +296,17 @@ pnpm run check
 
 #### 공개 API 남용 위험
 
-- `/api/recommendations`와 `/api/route`에 사용자 인증/Rate Limit이 없다.
-- 추천 한 번은 baseRoute 1회와 후보 경로 최대 20회, 이후 선택마다 route 호출을 만들 수 있다.
+- `/api/recommendations` 분당 12회, `/api/route` 분당 40회의 IP 제한을 추가했지만
+  Vercel 인스턴스 메모리 기반이라 인스턴스 간 공유되지 않고 IP 헤더가 없으면
+  적용되지 않는다.
+- 추천 한 번은 baseRoute 1회와 후보 경로 최대 20회, 이후 선택마다 route 호출을
+  만들 수 있어 공유 저장소 또는 Vercel 경계 제한이 여전히 필요하다.
 
 ### P2 — 유지보수·스토어
 
 #### 레거시 화면과 단일 대형 파일
 
-- 도달 불가능한 TIME/NEARBY UI와 관련 헬퍼가 남아 있다.
+- 도달 불가능한 `TimeScreen`, NEARBY UI와 관련 헬퍼가 남아 있다.
 - `TteumsaeApp.kt` 한 파일에 화면·상태·지도·딥링크가 집중돼 충돌 위험이 크다.
 
 #### 프로세스 복원

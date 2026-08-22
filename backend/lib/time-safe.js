@@ -28,7 +28,7 @@ export function operationStatus(place, arrival = new Date()) {
   );
   const weekday = parts.weekday?.[0];
   const arrivalMinutes = Number(parts.hour) * 60 + Number(parts.minute);
-  const alwaysOpen = /연중무휴|24\s*시간/.test(`${closedDays} ${hours}`);
+  const alwaysOpen = /24\s*시간/.test(hours);
   const simpleWeeklyClosedDays = /^(?:매주\s*)?[월화수목금토일](?:요일)?(?:\s*[,·/]\s*(?:매주\s*)?[월화수목금토일](?:요일)?)*$/.test(closedDays)
     ? [...closedDays.matchAll(/[월화수목금토일](?=요일|\s*[,·/]|$)/g)].map((match) => match[0])
     : [];
@@ -100,10 +100,19 @@ export function recommendPlaces(
         criteria.transport
       );
       if (!route) return null;
-      const status = operationStatus(
-        place,
-        new Date(now.getTime() + route.firstLegMinutes * 60_000)
+      const arrival = new Date(now.getTime() + route.firstLegMinutes * 60_000);
+      const lastVisitMoment = new Date(
+        arrival.getTime() + Math.max(0, place.default_stay_minutes * 60_000 - 1)
       );
+      const visitStatuses = [
+        operationStatus(place, arrival),
+        operationStatus(place, lastVisitMoment)
+      ];
+      const status = visitStatuses.includes("CLOSED")
+        ? "CLOSED"
+        : visitStatuses.every((value) => value === "OPEN")
+          ? "OPEN"
+          : "UNKNOWN";
       if (status === "CLOSED") return null;
       const totalMinutes =
         route.firstLegMinutes + place.default_stay_minutes + route.secondLegMinutes;

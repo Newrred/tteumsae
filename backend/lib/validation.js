@@ -56,12 +56,23 @@ export function parseRecommendationRequest(value) {
   if (!isCoordinates(value.start) || !isCoordinates(value.destination)) {
     throw new Error("출발지와 도착지 좌표가 올바르지 않습니다.");
   }
+  const hasDeadline = Object.hasOwn(value, "deadlineMinutes");
+  const hasExtraTime = Object.hasOwn(value, "extraTimeMinutes");
+  if (hasDeadline === hasExtraTime) {
+    throw new Error(
+      "deadlineMinutes와 extraTimeMinutes 중 하나만 입력해야 합니다."
+    );
+  }
+  const timeBudgetMinutes = hasExtraTime
+    ? value.extraTimeMinutes
+    : value.deadlineMinutes;
   if (
-    !Number.isInteger(value.deadlineMinutes) ||
-    value.deadlineMinutes < 15 ||
-    value.deadlineMinutes > 1440
+    !Number.isInteger(timeBudgetMinutes) ||
+    timeBudgetMinutes < 15 ||
+    timeBudgetMinutes > 1440
   ) {
-    throw new Error("deadlineMinutes는 15~1440 사이의 정수여야 합니다.");
+    const field = hasExtraTime ? "extraTimeMinutes" : "deadlineMinutes";
+    throw new Error(`${field}는 15~1440 사이의 정수여야 합니다.`);
   }
   if (
     !Number.isInteger(value.safetyBufferMinutes) ||
@@ -70,8 +81,8 @@ export function parseRecommendationRequest(value) {
   ) {
     throw new Error("safetyBufferMinutes는 0~60 사이의 정수여야 합니다.");
   }
-  if (value.safetyBufferMinutes >= value.deadlineMinutes) {
-    throw new Error("안전 여유시간은 전체 남은 시간보다 짧아야 합니다.");
+  if (value.safetyBufferMinutes >= timeBudgetMinutes) {
+    throw new Error("안전 여유시간은 입력한 시간 예산보다 짧아야 합니다.");
   }
   if (!transportModes.has(value.transport)) {
     throw new Error("transport는 WALK 또는 CAR여야 합니다.");
@@ -86,7 +97,9 @@ export function parseRecommendationRequest(value) {
     mode: value.mode,
     start: value.start,
     destination: value.destination,
-    deadlineMinutes: value.deadlineMinutes,
+    ...(hasExtraTime
+      ? { extraTimeMinutes: value.extraTimeMinutes }
+      : { deadlineMinutes: value.deadlineMinutes }),
     safetyBufferMinutes: value.safetyBufferMinutes,
     transport: value.transport,
     categories

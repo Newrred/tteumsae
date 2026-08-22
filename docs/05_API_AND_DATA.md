@@ -40,9 +40,9 @@ Vercel Cron
 - 결과 화면에서 경유지를 추가·제거할 때 Android가 `POST /api/route`를 호출한다.
   선택 순서의 0~5개 경유지를 포함한 통합 시간·거리·통행료·path를 Kakao
   Mobility에서 다시 계산한다.
-- 새 Android 흐름은 시간 입력 화면을 건너뛰고 내부값 `deadlineMinutes=1440`,
-  `safetyBufferMinutes=15`를 보낸다. 이 값은 현재 후보 범위를 넓게 잡는 구현값이지
-  사용자가 지정한 도착 마감이 아니다.
+- Android는 TIME에서 사용자가 입력한 순수 경유 여유시간 `extraTimeMinutes`와
+  그보다 작은 `safetyBufferMinutes`를 보낸다. 서버는 직행 `baseRoute` 시간에
+  순수 여유시간을 더해 내부 `effectiveDeadlineMinutes`를 만든다.
 
 ## 2. 공통 HTTP 규칙
 
@@ -96,10 +96,12 @@ Android는 비정상 HTTP 응답의 `error.message`를 우선 표시하고, JSON
 
 ### 2.3 공개 범위
 
-`/api/health`, `/api/places`, `/api/geocode`, `/api/region`,
-`/api/recommendations`, `/api/route`에는 현재 사용자 인증이나 Rate Limit이 없다. Cron 두
-개만 `Authorization: Bearer {CRON_SECRET}`을 요구한다. 공개 출시 전 남용 방지
-정책을 추가해야 한다.
+공개 API에는 사용자 인증이 없다. 고비용 `/api/recommendations`는 IP별 분당 12회,
+`/api/route`는 IP별 분당 40회의 인스턴스 메모리 제한을 적용하고 초과 시
+`429 RATE_LIMITED`와 `Retry-After`를 반환한다. 이 제한은 Vercel 인스턴스별
+best-effort라 분산 요청이나 IP 헤더가 없는 요청을 완전히 막지 못한다. Cron 두 개만
+`Authorization: Bearer {CRON_SECRET}`을 요구한다. 공개 규모가 커지면 공유 저장소나
+Vercel 경계 정책으로 교체해야 한다.
 
 ## 3. 엔드포인트 요약
 
@@ -333,7 +335,7 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
   "mode": "ON_THE_WAY",
   "start": { "latitude": 37.7519, "longitude": 128.8761 },
   "destination": { "latitude": 37.7644, "longitude": 128.8996 },
-  "deadlineMinutes": 1440,
+  "extraTimeMinutes": 90,
   "safetyBufferMinutes": 15,
   "transport": "CAR",
   "categories": ["ATTRACTION", "CULTURE"]
@@ -345,15 +347,15 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
 | `mode` | `ON_THE_WAY` 또는 `NEARBY` |
 | `start` | 유효한 위도·경도 숫자 |
 | `destination` | 유효한 위도·경도 숫자. `NEARBY`도 현재 필수 |
-| `deadlineMinutes` | 15~1440분 정수 |
-| `safetyBufferMinutes` | 0~60분 정수이며 `deadlineMinutes`보다 작음 |
+| `extraTimeMinutes` | Android가 사용하는 순수 경유 여유시간. 15~1440분 정수 |
+| `deadlineMinutes` | 이전 클라이언트 호환용 전체 시간 예산. 15~1440분 정수 |
+| `safetyBufferMinutes` | 0~60분 정수이며 요청에 포함한 시간 필드보다 작음 |
 | `transport` | `CAR` 또는 `WALK` |
 | `categories` | 내부 카테고리 배열. 생략/빈 배열이면 전체 |
 
-현재 Android 활성 흐름은 이 API의 일반 범위를 모두 쓰지 않는다. 시간 입력
-화면을 건너뛰고 항상 `ON_THE_WAY`, `CAR`, `deadlineMinutes=1440`,
-`safetyBufferMinutes=15`를 보낸다. 따라서 아래 `marginMinutes`는 현재 사용자
-약속까지 실제 남은 시간이 아니다.
+`deadlineMinutes`와 `extraTimeMinutes`는 정확히 하나만 보내야 한다. 현재 Android
+활성 흐름은 `ON_THE_WAY`, `CAR`, 사용자가 입력한 `extraTimeMinutes`, 안전여유와
+선택 카테고리를 보낸다.
 
 응답 예시:
 
@@ -390,9 +392,9 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
       },
       "stayMinutes": 60,
       "totalMinutes": 100,
-      "marginMinutes": 80,
+      "marginMinutes": 15,
       "operationStatus": "OPEN",
-      "safetyLevel": "COMFORTABLE"
+      "safetyLevel": "AVAILABLE"
     }
   ],
   "meta": {
@@ -402,7 +404,11 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
     "routeFailureCount": 0,
     "recommendationCount": 20,
     "routeProvider": "KAKAO_MOBILITY",
-    "corridorRadiusMeters": 8000,
+    "baseRouteMinutes": 25,
+    "extraTimeMinutes": 90,
+    "effectiveDeadlineMinutes": 115,
+    "safetyBufferMinutes": 15,
+    "corridorRadiusMeters": 1800,
     "baseRoute": { "waypointCount": 0, "provider": "KAKAO_MOBILITY" }
   }
 }
@@ -421,8 +427,9 @@ totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한�
 `CAR + ON_THE_WAY`:
 
 1. Kakao Mobility에 경유지 없는 출발→목적 `baseRoute`를 요청한다.
-2. corridor 반경을 `(deadlineMinutes - baseRoute.durationMinutes) × 20m`로
-   계산하고 800~8000m로 제한한다.
+2. `effectiveDeadlineMinutes = baseRoute.durationMinutes + extraTimeMinutes`를
+   계산한다. corridor 반경은 `extraTimeMinutes × 20m`이며 800~8000m로
+   제한한다.
 3. `baseRoute.path`의 위·경도 bounds를 corridor만큼 넓혀 활성 장소를 최대
    500개 읽는다.
 4. 각 장소에서 path 선분까지의 로컬 평면 근사 거리가 corridor 이내인 것만
@@ -441,9 +448,11 @@ totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한�
 #### 시간 공식
 
 ```text
-총 소요 = 출발지→장소 + 기본 머무름 + 장소→목적지
-남는 시간 = deadlineMinutes - 총 소요
-추천 조건 = 남는 시간 >= safetyBufferMinutes
+effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
+우회 주행시간 = 후보 경유 주행시간 - baseRouteMinutes
+남는 순수 여유 = extraTimeMinutes - (우회 주행시간 + 기본 머무름)
+추천 조건 = 우회 주행시간 + 기본 머무름 + safetyBufferMinutes
+            <= extraTimeMinutes
 ```
 
 안전도:
@@ -454,14 +463,14 @@ totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한�
 | 10~19분 | `AVAILABLE` |
 | 0~9분 | `TIGHT` |
 
-운영시간은 장소 도착 예상시각을 기준으로 단순 파싱한다. 명확히 휴무/영업 종료로
-판정된 `CLOSED` 장소는 제외한다. 데이터가 없거나 복잡해서 해석하지 못하면
+운영시간은 장소 도착 예상시각부터 기본 머무름이 끝나는 시각까지를 기준으로
+단순 파싱한다. 그 사이 명확히 휴무/영업 종료로 판정된 `CLOSED` 장소는
+제외한다. 데이터가 없거나 복잡해서 해석하지 못하면
 `UNKNOWN`으로 추천에 남기며 앱이 `운영시간 확인 필요`를 표시한다.
 
-중요: 현재 Android가 24시간을 고정 전송하므로 이 공식은 후보 대부분을
-통과시키는 상한에 가깝다. 사용자의 도착 마감 입력을 받지 않은 상태에서
-`marginMinutes`, `safetyLevel`, 15분 버퍼를 “늦지 않음 보장”으로 설명하면 안
-된다. 현재 제품 의미는 **기본 자동차 경로 주변에서 들를 후보를 찾는 단계**다.
+`marginMinutes`는 위 식의 `남는 순수 여유`이며 사용자가 입력한 시간에서
+우회와 머무름을 제외하고 남은 값이다. 교통과 실제 체류시간이 바뀔 수 있으므로
+여전히 `100% 도착 보장`으로 표현하지 않는다.
 
 #### 자동차 경로의 현재 한계
 
@@ -708,20 +717,21 @@ numOfRows=100
 
 계약 변경에는 반드시 백엔드 Node 테스트와 Android JSON 파서 테스트를 함께
 추가한다. 현재 소스의 `sigunguCode` 검증과 route/baseRoute/corridor를 포함한
-백엔드 테스트는 `2026-08-20` 기준 25/25 통과했다.
+백엔드 테스트는 `2026-08-20` 기준 28/28 통과했다.
 
 ## 9. 알려진 데이터·API 부채
 
-- 추천 API의 공개 인증·Rate Limit·요청 추적이 없다.
+- 공개 API 사용자 인증과 구조화된 요청 추적은 없다. 추천/경로의 현재 IP 제한은
+  서버리스 인스턴스별 best-effort라 분산·병렬 남용 방어가 아니다.
 - 장소 목록은 총 개수를 제공하지 않는다.
 - Android의 지역 카탈로그는 서버 코드 필터를 사용하지만 로컬 찜 사본은 주소
   문자열로 판정해 주소 누락·행정구역 표기 차이에 취약하다.
-- `/api/route`는 인증·Rate Limit 없이 Kakao Mobility 호출을 발생시킨다.
+- `/api/route`는 인증 없이 Kakao Mobility 호출을 만들며 현재 IP 제한만 적용한다.
 - 경유지 순서는 사용자가 추가한 순서이며 서버 최적화가 없다.
 - Android의 `/api/route` 실패 fallback은 실제 통합 경로가 아닌 단일 후보
   우회값 합산이다.
-- 활성 Android 흐름이 24시간 상한을 고정 전송하여 시간 안전성 지표의 제품
-  의미가 약해졌다.
+- API는 이전 클라이언트를 위해 `deadlineMinutes`도 허용한다. 신규 Android는
+  `extraTimeMinutes`만 보내므로 계약 변경 시 두 경로의 호환 테스트가 필요하다.
 - corridor는 path까지의 평면 근사 거리이며 도로 등시간선이 아니다.
 - 도보는 실제 길찾기가 아닌 추정이다.
 - 영업시간 파서는 단순 요일·시간 범위만 안전하게 해석한다.

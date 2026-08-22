@@ -1,6 +1,6 @@
 # 빌드·테스트·배포 운영서
 
-작성 기준: 2026-08-16 통합 소스
+작성 기준: 2026-08-22 통합 소스
 
 이 문서는 새 Windows 개발 환경에서 저장소를 검증하고 Android, 백엔드, APK
 다운로드 페이지를 배포하는 순서를 정의한다. 명령은 저장소 루트를
@@ -10,20 +10,17 @@
 
 | 구성 | 소스 버전/상태 | 운영 위치 |
 |---|---|---|
-| Android | `0.12.3`, `versionCode 24` | `android/` |
+| Android | `0.12.4`, `versionCode 25` | `android/` |
 | Backend | npm package `0.2.0`, health `0.2.0` | `backend/` |
-| APK 다운로드 HTML | `tteumsae-v0.12.3-debug.apk`를 가리킴 | `download/` |
+| APK 다운로드 HTML | `tteumsae-v0.12.4-results-ui-20260821-debug.apk`를 가리킴 | `download/` |
 
-### 반드시 알고 시작할 불일치
+### 반드시 알고 시작할 배포 원칙
 
 - APK·AAB는 Git에서 제외하므로 이 저장소의 `download/`에는 HTML만 있고 APK
   바이너리는 없다.
-- 현재 운영 다운로드 주소의 `v0.12.3` APK는 같은 버전명의 최신 통합 소스보다
-  먼저 만들어졌다. 최근 경로 후보 핀 아이콘·정렬 등 후속 수정이 소스에는 있지만
-  그 APK에는 없을 수 있다.
-- 즉, **소스 `0.12.3`과 배포 APK `0.12.3`을 동일 빌드로 간주하면 안 된다.**
-- 다음 테스트 APK는 최소 `versionName 0.12.4`, `versionCode 25`처럼 버전을
-  올리고 새 파일명으로 배포한다. 기존 `v0.12.3` 파일을 덮어쓰지 않는다.
+- 현재 운영 다운로드 주소는 `v0.12.4` 결과 화면 확인용 디버그 APK를 제공한다.
+- 소스 변경 후 다시 배포할 때는 기존 APK를 덮어쓰지 말고 새 파일명과 더 높은
+  `versionCode`를 사용한다.
 - `backend/vercel.json`의 `v0.4.0` APK rewrite는 레거시이며 현재 APK 다운로드
   프로젝트의 최신 링크가 아니다.
 
@@ -134,7 +131,7 @@ $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-2026-08-16 통합 기준선에서는 최신 소스의 Kotlin 컴파일, 테스트 소스 컴파일과
+2026-08-20 통합 기준선에서는 최신 소스의 Kotlin 컴파일, 테스트 소스 컴파일과
 디버그 APK 생성이 성공했다. 이 로컬 산출물은 운영 다운로드 페이지에 배포하지
 않았고 실기기 전체 회귀도 아직 수행하지 않았다.
 
@@ -173,32 +170,39 @@ app/src/test/java/com/tteumsae/app/ui/KakaoMapRouteTest.kt
 app/src/test/java/com/tteumsae/app/ui/LocationStartTest.kt
 ```
 
-#### 알려진 JUnit 실행 문제
+#### 한글·공백 경로 JUnit 실행 우회
 
-현재 이력상 `compileDebugUnitTestKotlin`은 성공하지만 `testDebugUnitTest` 실행 시
-여러 테스트 클래스가 `ClassNotFoundException`으로 실패한다. 이는 테스트
-assertion 실패가 아니라 Gradle/JUnit 테스트 런타임이 컴파일된 클래스를 로드하지
-못하는 문제다.
+원래 작업 경로에서는 `compileDebugUnitTestKotlin`은 성공하지만
+`testDebugUnitTest`가 여러 테스트 클래스의 `ClassNotFoundException`으로
+실패했다. 같은 소스를 `subst Q:` 영문 드라이브로 매핑한 뒤 실행하면 위 5개
+테스트 클래스가 모두 통과한다. assertion 결함이 아니라 Windows 경로에 따른
+Gradle/JUnit 클래스 로딩 문제로 확인된 상태다.
 
-인수 후 우선 다음 순서로 재현·분리한다.
+현재 재현 가능한 검증 순서:
 
 ```powershell
-# 1. 영문·무공백 경로에서 새 clone
-Set-Location C:\dev\tteumsae\android
+# 1. 저장소 루트를 영문 드라이브로 매핑
+$repoRoot = (Resolve-Path ..).Path
+subst Q: $repoRoot
+Set-Location Q:\android
 
-# 2. 기존 출력 제거 후 테스트 재실행
+# 2. 테스트 재실행
 .\gradlew.bat clean testDebugUnitTest --rerun-tasks --info
 
 # 3. 컴파일 산출물 존재 확인
 Get-ChildItem app\build\tmp\kotlin-classes\debugUnitTest -Recurse -Filter *.class
 
-# 4. 특정 테스트만 실행
+# 4. 필요 시 특정 테스트만 실행
 .\gradlew.bat testDebugUnitTest --tests '*TteumsaeApiTest' --stacktrace
+
+# 5. 원래 위치로 돌아간 뒤 매핑 해제
+Set-Location $repoRoot
+subst Q: /d
 ```
 
-영문 경로의 깨끗한 clone에서도 재현되면 Gradle 8.9, AGP 8.7.3, Kotlin 2.0.21
-조합의 테스트 classpath와 생성된 test task 설정을 조사한다. 이 오류가 해결되기
-전까지 `assembleDebug` 성공만으로 단위 테스트 통과라고 보고하면 안 된다.
+CI는 영문·무공백 checkout을 사용한다. 원래 한글·공백 경로의 실패와 `Q:`에서의
+통과를 구분해 기록하며, `assembleDebug` 성공만으로 단위 테스트 통과라고
+보고하지 않는다.
 
 ### 4.5 릴리스 AAB
 
@@ -240,16 +244,17 @@ pnpm test
 pnpm run check
 ```
 
-2026-08-16 통합본 검증 결과:
+2026-08-20 통합본 검증 결과:
 
 ```text
-Node 테스트: 16개 통과, 0개 실패
-Project check: 31 files 통과
+Node 테스트: 27개 통과, 0개 실패
+Project check: 통과
 ```
 
 테스트 범위:
 
-- 추천 요청 좌표·시간·카테고리 검증
+- 추천 요청 좌표·`extraTimeMinutes`·시간·카테고리 검증
+- `effectiveDeadlineMinutes=baseRouteMinutes+extraTimeMinutes` 계약
 - 안전 여유와 안전도
 - 영업시간·휴무일 필터와 UNKNOWN 처리
 - TourAPI 기본 행 변환과 상세 이미지·태그 정규화
@@ -340,7 +345,7 @@ $body = @{
   mode = 'ON_THE_WAY'
   start = @{ latitude = 37.7519; longitude = 128.8761 }
   destination = @{ latitude = 37.7644; longitude = 128.8996 }
-  deadlineMinutes = 180
+  extraTimeMinutes = 90
   safetyBufferMinutes = 15
   transport = 'CAR'
   categories = @('ATTRACTION')
@@ -358,6 +363,7 @@ Invoke-RestMethod @request
 추가 확인:
 
 - `meta.routeProvider`가 자동차는 `KAKAO_MOBILITY`
+- `meta.effectiveDeadlineMinutes = meta.baseRouteMinutes + meta.extraTimeMinutes`
 - 일부 실패가 있으면 `routeFailureCount`가 증가
 - 도보는 `ESTIMATE`와 `meta.warning` 포함
 - 없는 장소는 404
@@ -402,8 +408,8 @@ versionCode = 이전 값보다 큰 정수
 versionName = "새 버전"
 ```
 
-현재 소스와 과거 APK가 같은 `0.12.3`을 사용하므로 다음 빌드는 최소
-`versionCode 25`, `versionName 0.12.4`를 사용한다.
+현재 확인용 APK가 `versionCode 25`, `versionName 0.12.4`이므로 다음 배포
+빌드는 최소 `versionCode 26`, `versionName 0.12.5`를 사용한다.
 
 ### 8.2 APK 생성과 복사
 
@@ -478,9 +484,10 @@ Invoke-WebRequest -Method Head -Uri $url
 
 - [ ] 출발지는 현재 위치 자동 선택, 검색으로 교체 가능
 - [ ] 목적지 검색과 선택
-- [ ] 남는 시간 15분~6시간 슬라이더
-- [ ] 직접 입력은 최대 1440분
-- [ ] 안전 여유 10/15/20/30분
+- [ ] 경유에 쓸 순수 여유시간 15분~6시간 슬라이더
+- [ ] 순수 여유시간 직접 입력은 최대 1440분
+- [ ] 안전 여유 10/15/20/30분 중 입력시간보다 작은 값만 선택
+- [ ] `우회 주행시간+기본 머무름+안전여유≤순수 여유시간`인 후보만 노출
 - [ ] 추천 의도 `아무거나/식사/카페/산책·관광/실내 활동/지금은 음식 제외`
 - [ ] 붉은 후보 영역과 카테고리 아이콘 핀
 - [ ] 경유지 최대 5개, 선택 순서 번호와 추가/제거
@@ -488,11 +495,13 @@ Invoke-WebRequest -Method Head -Uri $url
 - [ ] 카카오맵에 출발지·선택 경유지·최종 목적지가 모두 전달
 - [ ] 카카오맵 미설치 시 설치 안내
 
-앱 내부 복수 경유지 시간은 합산 예상이고 카카오맵이 최종 경로를 다시
-계산한다는 점을 확인한다.
+경유지 0개는 직행 baseRoute를 유지하고, 1~5개는 `/api/route`의 통합 Kakao
+경로로 다시 계산한다. route 실패 fallback만 예상값이며, 최종 안내 시간은
+카카오맵이 다시 계산한다.
 
-### 9.4 근처에서 갈 장소
+### 9.4 근처에서 갈 장소 — 현재 비활성 레거시
 
+- 현재 제출 흐름에서는 진입할 수 없다. 다시 활성화할 때 아래를 회귀한다.
 - [ ] 강원도 안에서 추천 가능
 - [ ] 강원도 밖에서는 안내 후 돌아가기
 - [ ] 남는 시간에 따라 반경 UI 변경
@@ -568,9 +577,10 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 
 - [ ] Git 작업 트리와 배포 커밋 식별 가능
 - [ ] 비밀값 검사 완료
-- [ ] 백엔드 16개 테스트 및 project check 통과
+- [ ] 백엔드 27개 테스트 및 project check 통과
 - [ ] Android 컴파일·APK 빌드 통과
-- [ ] JUnit ClassNotFoundException 해결 또는 미해결 사실을 릴리스 노트에 명시
+- [ ] `subst Q:` 영문 드라이브에서 Android 5개 테스트 클래스 전체 통과
+- [ ] 원래 한글·공백 경로의 JUnit 로딩 한계와 우회 방법을 릴리스 노트에 명시
 - [ ] Preview 스모크 테스트 통과
 - [ ] Production API 스모크 테스트 통과
 - [ ] 새 버전 APK 직접 링크 200 및 실기기 설치 통과

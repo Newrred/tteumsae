@@ -10,13 +10,17 @@ import android.net.Uri
 import android.provider.Settings
 import android.util.LruCache
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -39,6 +43,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -47,10 +52,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -113,14 +121,15 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -136,6 +145,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -149,13 +162,18 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
+import com.kakao.vectormap.GestureType
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
 import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraAnimation
 import com.kakao.vectormap.camera.CameraUpdateFactory
+import com.kakao.vectormap.label.CompetitionType
+import com.kakao.vectormap.label.CompetitionUnit
 import com.kakao.vectormap.label.Label
+import com.kakao.vectormap.label.LabelLayerOptions
 import com.kakao.vectormap.label.LabelOptions
+import com.kakao.vectormap.label.OrderingType
 import com.kakao.vectormap.route.RouteLineOptions
 import com.kakao.vectormap.route.RouteLineSegment
 import com.kakao.vectormap.route.RouteLineStyle
@@ -180,6 +198,7 @@ import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -190,6 +209,7 @@ import java.net.URL
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private enum class AppScreen {
@@ -197,7 +217,6 @@ private enum class AppScreen {
     SAVED,
     SETTINGS,
     LOCATION,
-    TIME,
     CONDITIONS,
     LOADING,
     RESULTS,
@@ -211,7 +230,7 @@ private enum class MainTab {
 }
 
 private enum class SavedSort {
-    RECENT,
+    DEFAULT,
     NAME,
 }
 
@@ -252,13 +271,16 @@ internal enum class RecommendationIntent(val label: String) {
 private const val MIN_DEADLINE_MINUTES = 15
 private const val SLIDER_MAX_DEADLINE_MINUTES = 360
 private const val MAX_DEADLINE_MINUTES = 1440
+private const val DEFAULT_EXTRA_TIME_MINUTES = MAX_DEADLINE_MINUTES
 private const val MAX_KAKAO_WAYPOINTS = 5
+private val RouteFocusBlue = Color(0xFF2F6FE4)
 
 private data class MapCandidate(
     val id: String,
     val coordinates: Coordinates,
     val category: PlaceCategory,
     val selectedOrder: Int?,
+    val isFocused: Boolean,
 )
 
 internal fun orderWaypointIdsAlongRoute(
@@ -290,8 +312,25 @@ internal fun selectedRouteEstimate(
     return totalMinutes to (deadlineMinutes - totalMinutes)
 }
 
-internal fun extendedDeadlineMinutes(current: Int): Int =
-    (current + 30).coerceAtMost(MAX_DEADLINE_MINUTES)
+internal fun isRouteWithinExtraTimeBudget(
+    baseDrivingMinutes: Int,
+    extraTimeMinutes: Int,
+    selectedDrivingMinutes: Int,
+    selectedStayMinutes: Int,
+    safetyBufferMinutes: Int,
+): Boolean = selectedDrivingMinutes + selectedStayMinutes + safetyBufferMinutes <=
+    baseDrivingMinutes + extraTimeMinutes
+
+internal fun additionalDetourDistanceMeters(
+    place: PlaceCandidate,
+    baseDistanceMeters: Int,
+): Int? {
+    if (baseDistanceMeters <= 0 || place.firstLegDistanceMeters <= 0 || place.secondLegDistanceMeters <= 0) {
+        return null
+    }
+    return (place.firstLegDistanceMeters + place.secondLegDistanceMeters - baseDistanceMeters)
+        .coerceAtLeast(0)
+}
 
 internal fun deniedLocationPermissionNeedsSettings(
     permissions: Map<String, Boolean>,
@@ -335,7 +374,7 @@ fun TteumsaeApp() {
     var endName by rememberSaveable { mutableStateOf("") }
     var startLocation by remember { mutableStateOf<LocationSearchResult?>(null) }
     var endLocation by remember { mutableStateOf<LocationSearchResult?>(null) }
-    var deadline by rememberSaveable { mutableStateOf(90) }
+    var deadline by rememberSaveable { mutableStateOf(DEFAULT_EXTRA_TIME_MINUTES) }
     var buffer by rememberSaveable { mutableStateOf(15) }
     var transport by rememberSaveable { mutableStateOf(TransportMode.CAR) }
     var categories by remember { mutableStateOf(emptySet<PlaceCategory>()) }
@@ -347,9 +386,12 @@ fun TteumsaeApp() {
     var corridorRadiusMeters by remember { mutableStateOf(1_600) }
     var selectedWaypointIds by remember { mutableStateOf(emptyList<String>()) }
     var selected by remember { mutableStateOf<SafeRecommendation?>(null) }
+    var detailRouteChecking by remember { mutableStateOf(false) }
     var activeCriteria by remember { mutableStateOf<SearchCriteria?>(null) }
     var locationChecking by remember { mutableStateOf(false) }
     var currentLocationTarget by remember { mutableStateOf<RequestedMapLocation?>(null) }
+    var routeSummaryExpanded by rememberSaveable { mutableStateOf(true) }
+    var focusedResultPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
     var savedPlaces by remember { mutableStateOf(loadSavedPlaces(context)) }
     var catalogPlaces by remember { mutableStateOf(emptyList<PlaceCandidate>()) }
     var catalogLoading by remember { mutableStateOf(false) }
@@ -361,6 +403,21 @@ fun TteumsaeApp() {
     var catalogLoadAttempt by rememberSaveable { mutableStateOf(0) }
     var showHomeIntro by rememberSaveable { mutableStateOf(shouldShowHomeIntro(context)) }
     val appScope = rememberCoroutineScope()
+
+    BackHandler(enabled = screen != AppScreen.HOME) {
+        screen = when (screen) {
+            AppScreen.SAVED,
+            AppScreen.SETTINGS,
+            AppScreen.LOCATION,
+            -> AppScreen.HOME
+            AppScreen.CONDITIONS -> AppScreen.LOCATION
+            AppScreen.LOADING,
+            AppScreen.RESULTS,
+            -> AppScreen.CONDITIONS
+            AppScreen.DETAIL -> AppScreen.RESULTS
+            AppScreen.HOME -> AppScreen.HOME
+        }
+    }
     val updateSavedPlaces: (List<SavedPlaceEntry>) -> Unit = { updated ->
         savedPlaces = updated
         storeSavedPlaces(context, updated)
@@ -394,6 +451,23 @@ fun TteumsaeApp() {
         startCoordinates = startLocation?.coordinates,
         endCoordinates = endLocation?.coordinates,
     )
+    val openRoute: (List<SafeRecommendation>) -> Unit = { routeRecommendations ->
+        val resolved = activeCriteria ?: criteria
+        openKakaoMapMultiRoute(
+            context = context,
+            start = resolved.startCoordinates,
+            startName = resolved.startName,
+            waypoints = routeRecommendations.mapNotNull { recommendation ->
+                recommendation.place.latitude?.let { latitude ->
+                    recommendation.place.longitude?.let { longitude ->
+                        recommendation.place.name to Coordinates(latitude, longitude)
+                    }
+                }
+            },
+            destination = resolved.endCoordinates,
+            destinationName = resolved.endName,
+        )
+    }
 
     when (screen) {
         AppScreen.HOME -> HomeScreen(
@@ -406,7 +480,7 @@ fun TteumsaeApp() {
             },
             onStart = { coordinates ->
                 mode = SearchMode.ON_THE_WAY
-                deadline = MAX_DEADLINE_MINUTES
+                deadline = DEFAULT_EXTRA_TIME_MINUTES
                 buffer = 15
                 selectedWaypointIds = emptyList()
                 startName = "현재 위치"
@@ -583,18 +657,6 @@ fun TteumsaeApp() {
             },
         )
 
-        AppScreen.TIME -> TimeScreen(
-            mode = mode,
-            deadline = deadline,
-            buffer = buffer,
-            transport = transport,
-            onDeadlineChange = { deadline = it },
-            onBufferChange = { buffer = it },
-            onTransportChange = { transport = it },
-            onBack = { screen = AppScreen.LOCATION },
-            onNext = { screen = AppScreen.CONDITIONS },
-        )
-
         AppScreen.CONDITIONS -> ConditionsScreen(
             selectedIntents = selectedIntents,
             onIntentSelected = { intent ->
@@ -630,9 +692,13 @@ fun TteumsaeApp() {
                 baseRoute = result.baseRoute
                 corridorRadiusMeters = result.corridorRadiusMeters
                 selectedWaypointIds = emptyList()
+                focusedResultPlaceId = result.recommendations.firstOrNull()?.place?.id
                 activeCriteria = resolvedCriteria
             },
-            onFinished = { screen = AppScreen.RESULTS },
+            onFinished = {
+                routeSummaryExpanded = true
+                screen = AppScreen.RESULTS
+            },
             onBack = { screen = AppScreen.CONDITIONS },
         )
 
@@ -642,6 +708,12 @@ fun TteumsaeApp() {
             warning = recommendationWarning,
             baseRoute = baseRoute,
             corridorRadiusMeters = corridorRadiusMeters,
+            currentLocationTarget = currentLocationTarget,
+            onCurrentLocationTargetChange = { currentLocationTarget = it },
+            summaryExpanded = routeSummaryExpanded,
+            onSummaryExpandedChange = { routeSummaryExpanded = it },
+            focusedPlaceId = focusedResultPlaceId,
+            onFocusedPlaceIdChange = { focusedResultPlaceId = it },
             selectedIds = selectedWaypointIds,
             onSelectedIdsChange = { selectedWaypointIds = it },
             calculateRoute = { waypoints ->
@@ -658,22 +730,7 @@ fun TteumsaeApp() {
                 screen = AppScreen.LOADING
             },
             onSearchOtherPlace = { screen = AppScreen.LOCATION },
-            onOpenRoute = { selectedRecommendations ->
-                openKakaoMapMultiRoute(
-                    context = context,
-                    start = (activeCriteria ?: criteria).startCoordinates,
-                    startName = (activeCriteria ?: criteria).startName,
-                    waypoints = selectedRecommendations.mapNotNull { recommendation ->
-                        recommendation.place.latitude?.let { latitude ->
-                            recommendation.place.longitude?.let { longitude ->
-                                recommendation.place.name to Coordinates(latitude, longitude)
-                            }
-                        }
-                    },
-                    destination = (activeCriteria ?: criteria).endCoordinates,
-                    destinationName = (activeCriteria ?: criteria).endName,
-                )
-            },
+            onOpenRoute = openRoute,
             onSelect = {
                 selected = it
                 screen = AppScreen.DETAIL
@@ -681,6 +738,16 @@ fun TteumsaeApp() {
         )
 
         AppScreen.DETAIL -> selected?.let {
+            val selectedRecommendations = selectedWaypointIds.mapNotNull { selectedId ->
+                recommendations.find { recommendation -> recommendation.place.id == selectedId }
+            }
+            val isReplacingLastWaypoint = it.place.id !in selectedWaypointIds &&
+                selectedRecommendations.size >= MAX_KAKAO_WAYPOINTS
+            val detailRoute = if (isReplacingLastWaypoint) {
+                selectedRecommendations.dropLast(1) + it
+            } else {
+                (selectedRecommendations + it).distinctBy { recommendation -> recommendation.place.id }
+            }
             DetailScreen(
                 criteria = activeCriteria ?: criteria,
                 recommendation = it,
@@ -692,6 +759,64 @@ fun TteumsaeApp() {
                     } else {
                         listOf(SavedPlaceEntry(it.place, System.currentTimeMillis())) + savedPlaces
                     })
+                },
+                isOpeningRoute = detailRouteChecking,
+                onOpenRoute = openDetailRoute@{
+                    if (detailRouteChecking) return@openDetailRoute
+                    detailRouteChecking = true
+                    appScope.launch {
+                        try {
+                            val resolved = activeCriteria ?: criteria
+                            val start = resolved.startCoordinates
+                            val destination = resolved.endCoordinates
+                            if (start == null || destination == null) {
+                                Toast.makeText(
+                                    context,
+                                    "경로 좌표를 확인할 수 없어요.",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                return@launch
+                            }
+                            val calculated = runCatching {
+                                api.route(start, destination, detailRoute.map { recommendation -> recommendation.place })
+                            }
+                            val detailRouteSummary = calculated.getOrElse {
+                                Toast.makeText(
+                                    context,
+                                    "실시간 경로를 확인하지 못해 예상 경로로 판단해요.",
+                                    Toast.LENGTH_SHORT,
+                                ).show()
+                                fallbackRouteSummary(resolved, detailRoute)
+                            }
+                            val directRoute = baseRoute ?: fallbackBaseRouteSummary(resolved, recommendations)
+                            val isWithinBudget = isRouteWithinExtraTimeBudget(
+                                baseDrivingMinutes = directRoute.totalDrivingMinutes,
+                                extraTimeMinutes = resolved.deadlineMinutesFromNow,
+                                selectedDrivingMinutes = detailRouteSummary.totalDrivingMinutes,
+                                selectedStayMinutes = detailRoute.sumOf { recommendation -> recommendation.place.stayMinutes },
+                                safetyBufferMinutes = resolved.safetyBufferMinutes,
+                            )
+                            if (!isWithinBudget) {
+                                Toast.makeText(
+                                    context,
+                                    "이 경로는 추천 가능한 범위를 초과해요. 다른 장소를 골라주세요.",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                                return@launch
+                            }
+                            if (isReplacingLastWaypoint) {
+                                Toast.makeText(
+                                    context,
+                                    "마지막으로 추가한 경유지를 이 장소로 바꿔 안내해요.",
+                                    Toast.LENGTH_LONG,
+                                ).show()
+                            }
+                            selectedWaypointIds = detailRoute.map { recommendation -> recommendation.place.id }
+                            openRoute(detailRoute)
+                        } finally {
+                            detailRouteChecking = false
+                        }
+                    }
                 },
                 onBack = { screen = AppScreen.RESULTS },
             )
@@ -819,6 +944,8 @@ private fun HomeScreen(
                         }
                     },
                     foreground = if (currentLocationTarget != null) TteumRed else TteumInk,
+                    contentDescription = "현재 위치 표시",
+                    selected = currentLocationTarget != null,
                     border = if (currentLocationTarget != null) {
                         BorderStroke(1.5.dp, TteumRed)
                     } else {
@@ -834,7 +961,7 @@ private fun HomeScreen(
                         } else {
                             Icon(
                                 Icons.Default.MyLocation,
-                                contentDescription = "현재 위치",
+                                contentDescription = null,
                             )
                         }
                     },
@@ -902,14 +1029,14 @@ private fun HomeIntroDialog(onDismiss: (Boolean) -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "강원도에서 남는 시간, 어디 갈까?",
+                    "강원도로 가는 길, 어디 들를까?",
                     fontSize = 21.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(16.dp))
                 Text(
-                    "이동 시간과 머무는 시간을 계산해\n남는 시간에 다녀올 장소를 찾아드려요.",
+                    "기본 경로와 추가 이동·머무는 시간을 계산해\n가는 길에 들를 장소를 찾아드려요.",
                     color = TteumMuted,
                     fontSize = 15.sp,
                     lineHeight = 25.sp,
@@ -964,7 +1091,7 @@ private fun BottomNavigation(
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding()
-                .height(92.dp),
+                .heightIn(min = 92.dp),
         ) {
             Row(
                 modifier = Modifier
@@ -993,7 +1120,11 @@ private fun BottomNavigation(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .size(58.dp)
-                    .clickable { onTabSelected(MainTab.EXPLORE) },
+                    .selectable(
+                        selected = mapSelected,
+                        role = Role.Tab,
+                        onClick = { onTabSelected(MainTab.EXPLORE) },
+                    ),
                 color = if (mapSelected) TteumRed else Color(0xFFF4F5F7),
                 contentColor = if (mapSelected) Color.White else Color(0xFF6F747D),
                 shape = CircleShape,
@@ -1023,9 +1154,13 @@ private fun BottomNavItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
-    val color = if (selected) TteumInk else Color(0xFFA0A4AC)
+    val color = if (selected) TteumInk else TteumMuted
     Column(
-        modifier = modifier.clickable(onClick = onClick),
+        modifier = modifier.selectable(
+            selected = selected,
+            role = Role.Tab,
+            onClick = onClick,
+        ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
@@ -1065,11 +1200,13 @@ private fun SavedPlacesScreen(
     var regionMenuExpanded by remember { mutableStateOf(false) }
     var savedOnly by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
-    var sort by rememberSaveable { mutableStateOf(SavedSort.RECENT) }
+    var sort by rememberSaveable { mutableStateOf(SavedSort.DEFAULT) }
     var selectedPlace by remember { mutableStateOf<PlaceCandidate?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
+
+    BackHandler(enabled = selectedPlace != null) { selectedPlace = null }
 
     selectedPlace?.let { place ->
         SavedPlaceDetailScreen(
@@ -1105,10 +1242,7 @@ private fun SavedPlacesScreen(
         }
         .let { entries ->
             when (sort) {
-                SavedSort.RECENT -> entries.sortedWith(
-                    compareByDescending<PlaceCardItem> { it.savedEntry?.savedAtMillis ?: Long.MIN_VALUE }
-                        .thenBy { it.place.name },
-                )
+                SavedSort.DEFAULT -> entries
                 SavedSort.NAME -> entries.sortedBy { it.place.name }
             }
         }
@@ -1150,7 +1284,7 @@ private fun SavedPlacesScreen(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("틈새 위치 검색", color = TteumMuted) },
+                    placeholder = { Text("탐색 위치 검색", color = TteumMuted) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     singleLine = true,
                     shape = RoundedCornerShape(18.dp),
@@ -1280,11 +1414,11 @@ private fun SavedPlacesScreen(
                 }
                 TextButton(
                     onClick = {
-                        sort = if (sort == SavedSort.RECENT) SavedSort.NAME else SavedSort.RECENT
+                        sort = if (sort == SavedSort.DEFAULT) SavedSort.NAME else SavedSort.DEFAULT
                     },
                 ) {
                     Text(
-                        if (sort == SavedSort.RECENT) "저장 우선순⌄" else "이름순⌄",
+                        if (sort == SavedSort.DEFAULT) "기본순⌄" else "이름순⌄",
                         color = TteumMuted,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1393,6 +1527,7 @@ private fun SettingsTabScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .statusBarsPadding()
                 .padding(horizontal = 24.dp),
         ) {
             item {
@@ -1630,7 +1765,8 @@ private fun SavedPlaceDetailScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
+                .padding(padding)
+                .statusBarsPadding(),
         ) {
             item {
                 Box {
@@ -1693,7 +1829,11 @@ private fun SavedFilterChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier.selectable(
+            selected = selected,
+            role = Role.Checkbox,
+            onClick = onClick,
+        ),
         color = if (selected) TteumInk else Color(0xFFF4F5F7),
         shape = RoundedCornerShape(50),
         border = if (selected) null else BorderStroke(1.dp, Color(0xFFE1E3E8)),
@@ -1751,7 +1891,7 @@ private fun SavedPlaceCard(
                     Icon(
                         if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                         contentDescription = if (isSaved) "저장 해제" else "저장",
-                        tint = if (isSaved) TteumRed else Color(0xFFB8BBC1),
+                        tint = if (isSaved) TteumRed else TteumMuted,
                     )
                 }
             }
@@ -1806,11 +1946,11 @@ private fun SavedPlaceImage(
     imageUrl: String,
     modifier: Modifier = Modifier,
 ) {
-    val bitmap by produceState<androidx.compose.ui.graphics.ImageBitmap?>(
-        initialValue = null,
-        imageUrl,
-    ) {
-        value = if (imageUrl.isBlank()) {
+    var bitmap by remember(imageUrl) {
+        mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
+    }
+    LaunchedEffect(imageUrl) {
+        val loadedBitmap = if (imageUrl.isBlank()) {
             null
         } else {
             withContext(Dispatchers.IO) {
@@ -1825,6 +1965,7 @@ private fun SavedPlaceImage(
                 }.getOrNull()
             }
         }
+        bitmap = loadedBitmap
     }
 
     if (bitmap == null) {
@@ -2244,7 +2385,7 @@ private fun LocationScreen(
                             onValueChange = onStartNameChange,
                             selected = startLocation,
                             label = "출발지",
-                            labelBackground = Color(0xFF9EA3AB),
+                            labelBackground = TteumMuted,
                             searchPlaces = searchPlaces,
                             gangwonOnly = false,
                             onSelected = onStartSelected,
@@ -2596,6 +2737,7 @@ private fun TimeScreen(
     val typedDeadline = deadlineText.toIntOrNull()
     val isDeadlineValid = typedDeadline != null &&
         typedDeadline in MIN_DEADLINE_MINUTES..MAX_DEADLINE_MINUTES
+    val isTimeValid = isDeadlineValid && buffer < (typedDeadline ?: 0)
 
     MapSheetScreen(
         onBack = onBack,
@@ -2612,19 +2754,28 @@ private fun TimeScreen(
                     Text("이전", fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.weight(0.68f)) {
-                    PrimaryButton(text = "다음", enabled = isDeadlineValid, onClick = onNext)
+                    PrimaryButton(text = "다음", enabled = isTimeValid, onClick = onNext)
                 }
             }
         },
     ) {
         Text(
             if (mode == SearchMode.ON_THE_WAY) {
-                "목적지 도착까지 얼마나 시간이 남았나요?"
+                "경유에 사용할 여유시간은 얼마나 되나요?"
             } else {
-                "돌아오기까지 얼마나 시간이 남았나요?"
+                "다녀오는 데 사용할 시간은 얼마나 되나요?"
             },
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            if (mode == SearchMode.ON_THE_WAY) {
+                "기본 경로 외에 추가로 사용할 수 있는 시간을 알려주세요."
+            } else {
+                "출발지로 돌아오기 전까지 사용할 시간을 알려주세요."
+            },
+            color = TteumMuted,
         )
         Spacer(Modifier.height(26.dp))
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -2679,7 +2830,7 @@ private fun TimeScreen(
                         ?.let(onDeadlineChange)
                 }
             },
-            label = { Text("남은 시간") },
+            label = { Text(if (mode == SearchMode.ON_THE_WAY) "추가 여유시간" else "사용할 시간") },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             suffix = { Text("분") },
             isError = deadlineText.isNotEmpty() && !isDeadlineValid,
@@ -2732,9 +2883,10 @@ private fun TimeScreen(
             choices = listOf(10 to "10분", 15 to "15분", 20 to "20분", 30 to "30분"),
             selected = buffer,
             onSelect = onBufferChange,
+            isEnabled = { it < deadline },
         )
         Text(
-            "추천 장소에서 사용할 수 있는 시간은 최대 ${(deadline - buffer).coerceAtLeast(0)}분이에요.",
+            "입력한 ${deadline}분 중 ${buffer}분은 도착 전 여유로 남기고, 나머지 시간 안에서 경유 이동과 머무름을 계산해요.",
             modifier = Modifier
                 .fillMaxWidth()
                 .background(TteumRedSoft, RoundedCornerShape(12.dp))
@@ -2850,7 +3002,7 @@ private fun ConditionsScreen(
                 )
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    "1개 이상 골라주시면 더 만족스러운 틈새 장소가 될거예요",
+                    "1개 이상 골라주시면 더 만족스러운 틈새 장소가 될 거예요",
                     color = TteumMuted,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
@@ -2863,7 +3015,11 @@ private fun ConditionsScreen(
                     RecommendationIntent.entries.forEach { intent ->
                         val selected = intent in selectedIntents
                         Surface(
-                            modifier = Modifier.clickable { onIntentSelected(intent) },
+                            modifier = Modifier.toggleable(
+                                value = selected,
+                                role = Role.Checkbox,
+                                onValueChange = { onIntentSelected(intent) },
+                            ),
                             color = if (selected) TteumRedSoft else Color(0xFFF5F6F8),
                             contentColor = if (selected) TteumRed else TteumMuted,
                             border = if (selected) BorderStroke(1.dp, TteumRed) else null,
@@ -2929,12 +3085,12 @@ private fun LoadingScreen(
                 Spacer(Modifier.height(18.dp))
                 if (errorMessage == null) {
                     Text(
-                        "남은 시간과 여유시간을 반영해\n방문할 장소를 찾고 있어요.",
+                        "가는 길 주변에서\n들를 장소를 찾고 있어요.",
                         fontSize = 21.sp,
                         fontWeight = FontWeight.Bold,
                     )
                     Spacer(Modifier.height(16.dp))
-                    listOf("출발지와 목적지 확인", "실시간 이동 시간 계산", "갈 만한 장소 확인", "도착 전 여유 시간 적용").forEach {
+                    listOf("기본 경로 확인", "실시간 경유 경로 비교", "머무름 시간 계산", "도착 전 여유 적용").forEach {
                         Text(
                             "✓  $it",
                             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -2960,6 +3116,7 @@ private fun LoadingScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ResultsScreen(
     criteria: SearchCriteria,
@@ -2967,6 +3124,12 @@ private fun ResultsScreen(
     warning: String,
     baseRoute: RouteSummary?,
     corridorRadiusMeters: Int,
+    currentLocationTarget: RequestedMapLocation?,
+    onCurrentLocationTargetChange: (RequestedMapLocation?) -> Unit,
+    summaryExpanded: Boolean,
+    onSummaryExpandedChange: (Boolean) -> Unit,
+    focusedPlaceId: String?,
+    onFocusedPlaceIdChange: (String?) -> Unit,
     selectedIds: List<String>,
     onSelectedIdsChange: (List<String>) -> Unit,
     calculateRoute: suspend (List<PlaceCandidate>) -> RouteSummary,
@@ -2978,57 +3141,115 @@ private fun ResultsScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val directRoute = baseRoute ?: fallbackBaseRouteSummary(criteria, recommendations)
     var currentRoute by remember(baseRoute, criteria.startName, criteria.endName) {
-        mutableStateOf(baseRoute ?: fallbackBaseRouteSummary(criteria, recommendations))
+        mutableStateOf(directRoute)
     }
     var isRecalculating by remember { mutableStateOf(false) }
+    var isLocating by remember { mutableStateOf(false) }
+    var shouldCenterCurrentLocation by remember { mutableStateOf(false) }
     var showRouteInfo by remember { mutableStateOf(false) }
-    var requestedLocation by remember { mutableStateOf<RequestedMapLocation?>(null) }
     val recommendationsById = recommendations.associateBy { it.place.id }
+    val initialFocusedIndex = recommendations
+        .indexOfFirst { it.place.id == focusedPlaceId }
+        .coerceAtLeast(0)
+    val cardListState = rememberLazyListState(initialFirstVisibleItemIndex = initialFocusedIndex)
+    val cardSnapBehavior = rememberSnapFlingBehavior(cardListState)
+    val focusedCardIndex by remember {
+        derivedStateOf {
+            val layout = cardListState.layoutInfo
+            val viewportCenter = (layout.viewportStartOffset + layout.viewportEndOffset) / 2
+            layout.visibleItemsInfo.minByOrNull { item ->
+                abs(item.offset + item.size / 2 - viewportCenter)
+            }?.index
+        }
+    }
+    var hasObservedInitialCard by remember { mutableStateOf(false) }
     val selectedRecommendations = selectedIds.mapNotNull(recommendationsById::get)
     val totalMinutes = currentRoute.totalDrivingMinutes + selectedRecommendations.sumOf { it.place.stayMinutes }
+    val isCurrentRouteWithinBudget = isRouteWithinExtraTimeBudget(
+        baseDrivingMinutes = directRoute.totalDrivingMinutes,
+        extraTimeMinutes = criteria.deadlineMinutesFromNow,
+        selectedDrivingMinutes = currentRoute.totalDrivingMinutes,
+        selectedStayMinutes = selectedRecommendations.sumOf { it.place.stayMinutes },
+        safetyBufferMinutes = criteria.safetyBufferMinutes,
+    )
+
+    LaunchedEffect(recommendations, focusedPlaceId) {
+        if (focusedPlaceId !in recommendationsById) {
+            onFocusedPlaceIdChange(recommendations.firstOrNull()?.place?.id)
+        }
+    }
+
+    LaunchedEffect(focusedCardIndex) {
+        val index = focusedCardIndex ?: return@LaunchedEffect
+        val nextFocusedPlaceId = recommendations.getOrNull(index)?.place?.id ?: return@LaunchedEffect
+        if (nextFocusedPlaceId != focusedPlaceId) onFocusedPlaceIdChange(nextFocusedPlaceId)
+        if (hasObservedInitialCard) {
+            onSummaryExpandedChange(false)
+        } else {
+            hasObservedInitialCard = true
+        }
+    }
 
     LaunchedEffect(selectedIds, baseRoute) {
         if (selectedIds.isEmpty()) {
-            currentRoute = baseRoute ?: fallbackBaseRouteSummary(criteria, recommendations)
+            currentRoute = directRoute
         } else if (currentRoute.waypointCount != selectedIds.size) {
             isRecalculating = true
-            currentRoute = runCatching {
+            currentRoute = try {
                 calculateRoute(selectedRecommendations.map { it.place })
-            }.getOrElse {
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
                 fallbackRouteSummary(criteria, selectedRecommendations)
             }
             isRecalculating = false
         }
     }
 
+    val locateCurrentPosition: () -> Unit = {
+        isLocating = true
+        requestCurrentLocation(
+            context,
+            onSuccess = {
+                shouldCenterCurrentLocation = true
+                onCurrentLocationTargetChange(
+                    RequestedMapLocation(it.latitude, it.longitude, System.nanoTime()),
+                )
+                isLocating = false
+            },
+            onLocationDisabled = {
+                shouldCenterCurrentLocation = false
+                isLocating = false
+                Toast.makeText(context, "휴대폰 위치 서비스를 켜 주세요.", Toast.LENGTH_SHORT).show()
+            },
+            onUnavailable = {
+                shouldCenterCurrentLocation = false
+                isLocating = false
+                Toast.makeText(context, "현재 위치를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
+            },
+        )
+    }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
         if (permissions.values.any { it }) {
-            requestCurrentLocation(
-                context,
-                onSuccess = {
-                    requestedLocation = RequestedMapLocation(it.latitude, it.longitude, System.nanoTime())
-                },
-                onLocationDisabled = {
-                    Toast.makeText(context, "휴대폰 위치 서비스를 켜 주세요.", Toast.LENGTH_SHORT).show()
-                },
-                onUnavailable = {
-                    Toast.makeText(context, "현재 위치를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
-                },
-            )
+            locateCurrentPosition()
         } else {
+            shouldCenterCurrentLocation = false
             Toast.makeText(context, "현재 위치를 보려면 위치 권한을 허용해 주세요.", Toast.LENGTH_LONG).show()
         }
     }
 
     val toggleSelection: (SafeRecommendation) -> Unit = { recommendation ->
+        onSummaryExpandedChange(false)
         if (isRecalculating) {
             Unit
         } else if (recommendation.place.id !in selectedIds && selectedIds.size >= MAX_KAKAO_WAYPOINTS) {
             Toast.makeText(context, "경유지는 최대 5곳까지 선택할 수 있어요.", Toast.LENGTH_SHORT).show()
         } else {
+            val isRemoving = recommendation.place.id in selectedIds
             val nextIds = if (recommendation.place.id in selectedIds) {
                 selectedIds - recommendation.place.id
             } else {
@@ -3037,8 +3258,11 @@ private fun ResultsScreen(
             val nextPlaces = nextIds.mapNotNull { recommendationsById[it]?.place }
             isRecalculating = true
             scope.launch {
-                val calculated = runCatching { calculateRoute(nextPlaces) }
-                currentRoute = calculated.getOrElse {
+                val nextRoute = try {
+                    calculateRoute(nextPlaces)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
                     Toast.makeText(
                         context,
                         "실시간 경로를 다시 계산하지 못해 예상 경로를 보여드려요.",
@@ -3046,10 +3270,34 @@ private fun ResultsScreen(
                     ).show()
                     fallbackRouteSummary(criteria, nextIds.mapNotNull(recommendationsById::get))
                 }
-                onSelectedIdsChange(nextIds)
+                val nextStayMinutes = nextPlaces.sumOf { it.stayMinutes }
+                if (!isRemoving && !isRouteWithinExtraTimeBudget(
+                        baseDrivingMinutes = directRoute.totalDrivingMinutes,
+                        extraTimeMinutes = criteria.deadlineMinutesFromNow,
+                        selectedDrivingMinutes = nextRoute.totalDrivingMinutes,
+                        selectedStayMinutes = nextStayMinutes,
+                        safetyBufferMinutes = criteria.safetyBufferMinutes,
+                    )
+                ) {
+                    Toast.makeText(
+                        context,
+                        "이 장소를 추가하면 추천 가능한 범위를 초과해요. 다른 장소를 골라주세요.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } else {
+                    currentRoute = nextRoute
+                    onSelectedIdsChange(nextIds)
+                }
                 isRecalculating = false
             }
         }
+    }
+    val focusCandidate: (String) -> Unit = focus@{ id ->
+        val index = recommendations.indexOfFirst { it.place.id == id }
+        if (index < 0) return@focus
+        onFocusedPlaceIdChange(id)
+        onSummaryExpandedChange(false)
+        scope.launch { cardListState.scrollToItem(index) }
     }
 
     Scaffold(
@@ -3057,6 +3305,7 @@ private fun ResultsScreen(
             Surface(color = Color.White, shadowElevation = 8.dp) {
                 Button(
                     onClick = { onOpenRoute(selectedRecommendations) },
+                    enabled = !isRecalculating && isCurrentRouteWithinBudget,
                     modifier = Modifier
                         .navigationBarsPadding()
                         .fillMaxWidth()
@@ -3074,6 +3323,8 @@ private fun ResultsScreen(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            val resultCardWidth = maxWidth * 0.84f
+            val cardSidePadding = (maxWidth - resultCardWidth) / 2
             RouteMap(
                 modifier = Modifier.fillMaxSize(),
                 criteria = criteria,
@@ -3081,84 +3332,109 @@ private fun ResultsScreen(
                 routeSummary = currentRoute,
                 candidates = recommendations,
                 selectedIds = selectedIds,
+                focusedPlaceId = focusedPlaceId,
                 corridorRadiusMeters = corridorRadiusMeters,
-                requestedLocation = requestedLocation,
-                onCandidateClick = { id -> recommendationsById[id]?.let(toggleSelection) },
+                requestedLocation = currentLocationTarget,
+                centerRequestedLocation = shouldCenterCurrentLocation,
+                onMapInteraction = { onSummaryExpandedChange(false) },
+                onCandidateClick = focusCandidate,
             )
 
             RouteSummaryCard(
                 totalMinutes = totalMinutes,
                 distanceMeters = currentRoute.totalDistanceMeters,
                 tollFareWon = currentRoute.tollFareWon,
+                isEstimate = currentRoute.provider == "ESTIMATE",
                 waypointCount = selectedIds.size,
                 isLoading = isRecalculating,
+                isExpanded = summaryExpanded,
                 onBack = onBack,
                 onInfo = { showRouteInfo = true },
+                onToggleExpanded = { onSummaryExpandedChange(!summaryExpanded) },
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 14.dp),
             )
 
-            RoundMapButton(
-                onClick = {
-                    if (hasLocationPermission(context)) {
-                        requestCurrentLocation(
-                            context,
-                            onSuccess = {
-                                requestedLocation = RequestedMapLocation(it.latitude, it.longitude, System.nanoTime())
-                            },
-                            onLocationDisabled = {
-                                Toast.makeText(context, "휴대폰 위치 서비스를 켜 주세요.", Toast.LENGTH_SHORT).show()
-                            },
-                            onUnavailable = {
-                                Toast.makeText(context, "현재 위치를 확인하지 못했어요.", Toast.LENGTH_SHORT).show()
-                            },
-                        )
-                    } else {
-                        locationPermissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                            ),
-                        )
-                    }
-                },
-                icon = { Icon(Icons.Default.MyLocation, contentDescription = "현재 위치") },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = if (recommendations.isEmpty()) 170.dp else 350.dp),
-            )
-
-            if (recommendations.isEmpty()) {
-                EmptyRouteResults(
-                    warning = warning,
-                    onClearConditions = onClearConditions,
-                    onSearchOtherPlace = onSearchOtherPlace,
+            Column(modifier = Modifier.align(Alignment.BottomCenter)) {
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(20.dp),
-                )
-            } else {
-                LazyRow(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    contentAlignment = Alignment.CenterEnd,
                 ) {
-                    itemsIndexed(recommendations, key = { _, item -> item.place.id }) { index, recommendation ->
-                        RecommendationCard(
-                            recommendation = recommendation,
-                            position = index + 1,
-                            total = recommendations.size,
-                            selectedOrder = selectedIds.indexOf(recommendation.place.id)
-                                .takeIf { it >= 0 }
-                                ?.plus(1),
-                            modifier = Modifier.width(maxWidth - 40.dp),
-                            onToggle = { toggleSelection(recommendation) },
-                            onClick = { onSelect(recommendation) },
-                        )
+                    RoundMapButton(
+                        onClick = if (isLocating) null else {
+                            {
+                                onSummaryExpandedChange(false)
+                                if (currentLocationTarget != null) {
+                                    shouldCenterCurrentLocation = false
+                                    onCurrentLocationTargetChange(null)
+                                } else if (hasLocationPermission(context)) {
+                                    locateCurrentPosition()
+                                } else {
+                                    locationPermissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                                        ),
+                                    )
+                                }
+                            }
+                        },
+                        foreground = if (currentLocationTarget != null) TteumRed else TteumInk,
+                        contentDescription = "현재 위치 표시",
+                        selected = currentLocationTarget != null,
+                        border = if (currentLocationTarget != null) {
+                            BorderStroke(1.5.dp, TteumRed)
+                        } else {
+                            null
+                        },
+                        icon = {
+                            if (isLocating) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp,
+                                    color = TteumRed,
+                                )
+                            } else {
+                                Icon(Icons.Default.MyLocation, contentDescription = null)
+                            }
+                        },
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                if (recommendations.isEmpty()) {
+                    EmptyRouteResults(
+                        warning = warning,
+                        onClearConditions = onClearConditions,
+                        onSearchOtherPlace = onSearchOtherPlace,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                    )
+                } else {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        state = cardListState,
+                        flingBehavior = cardSnapBehavior,
+                        contentPadding = PaddingValues(horizontal = cardSidePadding, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        itemsIndexed(recommendations, key = { _, item -> item.place.id }) { index, recommendation ->
+                            RecommendationCard(
+                                recommendation = recommendation,
+                                position = index + 1,
+                                total = recommendations.size,
+                                isFocused = focusedPlaceId == recommendation.place.id,
+                                selectedOrder = selectedIds.indexOf(recommendation.place.id)
+                                    .takeIf { it >= 0 }
+                                    ?.plus(1),
+                                baseDistanceMeters = directRoute.totalDistanceMeters,
+                                modifier = Modifier.width(resultCardWidth),
+                                onToggle = { toggleSelection(recommendation) },
+                                onClick = { onSelect(recommendation) },
+                            )
+                        }
                     }
                 }
             }
@@ -3169,7 +3445,7 @@ private fun ResultsScreen(
         AlertDialog(
             onDismissRequest = { showRouteInfo = false },
             title = { Text("경유지 안내") },
-            text = { Text("장소는 최대 5곳까지 추가할 수 있어요. 추가하거나 빼면 카카오 실시간 경로로 시간·거리·통행료를 다시 계산해요.") },
+            text = { Text("파란 핀을 누르면 해당 장소 카드를 볼 수 있어요. 카드의 ‘추가하기’로 최대 5곳을 고르면 시간·거리·통행료를 다시 계산해요.") },
             confirmButton = {
                 TextButton(onClick = { showRouteInfo = false }) { Text("확인") }
             },
@@ -3182,24 +3458,29 @@ private fun RecommendationCard(
     recommendation: SafeRecommendation,
     position: Int,
     total: Int,
+    isFocused: Boolean,
     selectedOrder: Int?,
+    baseDistanceMeters: Int,
     modifier: Modifier = Modifier,
     onToggle: () -> Unit,
     onClick: () -> Unit,
 ) {
+    val additionalDistance = additionalDetourDistanceMeters(recommendation.place, baseDistanceMeters)
+    val (visibleTags, hiddenTagCount) = compactTags(recommendation.place.tags, characterBudget = 22)
     Card(
         modifier = modifier,
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
-        elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
+        border = if (isFocused) BorderStroke(2.dp, RouteFocusBlue) else null,
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isFocused) 7.dp else 4.dp),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(14.dp)) {
             Box {
                 SavedPlaceImage(
                     imageUrl = recommendation.place.imageUrl,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(142.dp)
+                        .height(128.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(TteumRedSoft),
                 )
@@ -3208,14 +3489,27 @@ private fun RecommendationCard(
                     selected = false,
                     modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
                 )
-                RouteCardBadge(
-                    text = selectedOrder?.let { "추가됨" } ?: "추가하기",
-                    selected = selectedOrder != null,
+                Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .padding(10.dp)
-                        .clickable(onClick = onToggle),
-                )
+                        .padding(2.dp)
+                        .sizeIn(minWidth = 56.dp, minHeight = 56.dp)
+                        .semantics {
+                            contentDescription = "${recommendation.place.name} 경유지"
+                            stateDescription = selectedOrder?.let { "${it}번째로 추가됨" } ?: "추가되지 않음"
+                        }
+                        .toggleable(
+                            value = selectedOrder != null,
+                            role = Role.Checkbox,
+                            onValueChange = { onToggle() },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    RouteCardBadge(
+                        text = selectedOrder?.let { "추가됨" } ?: "추가하기",
+                        selected = selectedOrder != null,
+                    )
+                }
             }
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -3224,7 +3518,7 @@ private fun RecommendationCard(
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    fontSize = 23.sp,
+                    fontSize = 21.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 TextButton(onClick = onClick) {
@@ -3233,21 +3527,36 @@ private fun RecommendationCard(
                 }
             }
             Text(
-                listOfNotNull(
-                    recommendation.place.firstLegDistanceMeters.takeIf { it > 0 }?.let(::formatDistance),
-                    "약 ${recommendation.place.firstLegMinutes}분",
-                    recommendation.place.category.label,
-                ).joinToString(" | "),
+                buildList {
+                    additionalDistance?.let {
+                        add("기본 경로보다 +${if (it == 0) "0m" else formatDistance(it)}")
+                    }
+                    add("추가 이동 약 ${recommendation.place.detourMinutes}분")
+                    add(recommendation.place.category.label)
+                }.joinToString(" · "),
                 color = TteumMuted,
                 fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.height(7.dp))
-            Text("평균 머무름 [${formatMinutes(recommendation.place.stayMinutes)}]", fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "평균 머무름 ${formatMinutes(recommendation.place.stayMinutes)} · 경로 총 +${formatMinutes(recommendation.place.detourMinutes + recommendation.place.stayMinutes)}",
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(recommendation.place.tags.take(4)) { tag ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                visibleTags.forEach { tag ->
                     Surface(color = Color(0xFFF1F2F5), shape = RoundedCornerShape(50)) {
                         Text(tag, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontSize = 12.sp)
+                    }
+                }
+                if (hiddenTagCount > 0) {
+                    Surface(color = Color(0xFFF1F2F5), shape = RoundedCornerShape(50)) {
+                        Text("+$hiddenTagCount", modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), fontSize = 12.sp)
                     }
                 }
             }
@@ -3260,8 +3569,8 @@ private fun RouteCardBadge(text: String, selected: Boolean, modifier: Modifier =
     Surface(
         modifier = modifier,
         color = if (selected) TteumRed else Color.White,
-        contentColor = if (selected) Color.White else TteumRed,
-        border = if (selected) null else BorderStroke(1.5.dp, TteumRed),
+        contentColor = if (selected) Color.White else RouteFocusBlue,
+        border = if (selected) null else BorderStroke(1.5.dp, RouteFocusBlue),
         shape = RoundedCornerShape(50),
     ) {
         Text(
@@ -3278,42 +3587,97 @@ private fun RouteSummaryCard(
     totalMinutes: Int,
     distanceMeters: Int,
     tollFareWon: Int,
+    isEstimate: Boolean,
     waypointCount: Int,
     isLoading: Boolean,
+    isExpanded: Boolean,
     onBack: () -> Unit,
     onInfo: () -> Unit,
+    onToggleExpanded: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().animateContentSize(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 5.dp),
     ) {
-        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.Top) {
-            IconButton(onClick = onBack, modifier = Modifier.size(40.dp)) {
-                Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
-            }
-            Column(Modifier.weight(1f)) {
-                Text("총 소요시간", fontWeight = FontWeight.Bold)
-                if (isLoading) {
-                    CircularProgressIndicator(Modifier.padding(top = 8.dp).size(28.dp), strokeWidth = 3.dp)
-                } else {
-                    Text(formatMinutes(totalMinutes), color = TteumRed, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+        if (isExpanded) {
+            Column {
+                Row(
+                    modifier = Modifier.padding(start = 8.dp, end = 4.dp, top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
+                    }
+                    Text("총 소요시간", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("경유지 $waypointCount/$MAX_KAKAO_WAYPOINTS", color = TteumMuted, fontSize = 13.sp)
+                    IconButton(onClick = onInfo) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "경유지 안내",
+                            tint = TteumMuted,
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                    IconButton(onClick = onToggleExpanded) {
+                        Icon(
+                            Icons.Default.ExpandMore,
+                            contentDescription = "경로 요약 접기",
+                            modifier = Modifier.rotate(180f),
+                        )
+                    }
                 }
-                Text(
-                    "${formatDistance(distanceMeters)} | 통행료 ${"%,d".format(tollFareWon)}원",
-                    color = TteumRed,
-                    fontSize = 13.sp,
-                )
+                Column(Modifier.padding(start = 56.dp, end = 16.dp, bottom = 14.dp)) {
+                    if (isLoading) {
+                        CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 3.dp)
+                    } else {
+                        Text(
+                            if (isEstimate) "예상 ${formatMinutes(totalMinutes)}" else formatMinutes(totalMinutes),
+                            color = TteumRed,
+                            fontSize = 28.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                        )
+                        Text(
+                            if (isEstimate) {
+                                "거리·통행료는 연결 후 확인"
+                            } else {
+                                "${formatDistance(distanceMeters)} · ${if (tollFareWon > 0) "통행료 ${"%,d".format(tollFareWon)}원" else "통행료 없음"}"
+                            },
+                            color = TteumMuted,
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
+        } else {
             Row(
-                modifier = Modifier.clickable(onClick = onInfo),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("경유지 $waypointCount/$MAX_KAKAO_WAYPOINTS 추가됨", color = TteumMuted, fontSize = 13.sp)
-                Spacer(Modifier.width(4.dp))
-                Icon(Icons.Default.Info, contentDescription = "경유지 안내", tint = TteumMuted, modifier = Modifier.size(18.dp))
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
+                }
+                if (isLoading) {
+                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 3.dp)
+                    Spacer(Modifier.weight(1f))
+                } else {
+                    Text(
+                        "${if (isEstimate) "예상 " else ""}${formatMinutes(totalMinutes)} · 경유지 $waypointCount/$MAX_KAKAO_WAYPOINTS",
+                        modifier = Modifier.weight(1f),
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                IconButton(onClick = onToggleExpanded) {
+                    Icon(Icons.Default.ExpandMore, contentDescription = "경로 요약 펼치기")
+                }
             }
         }
     }
@@ -3343,6 +3707,8 @@ private fun DetailScreen(
     warning: String,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
+    isOpeningRoute: Boolean,
+    onOpenRoute: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -3392,7 +3758,7 @@ private fun DetailScreen(
                         shape = RoundedCornerShape(12.dp),
                     ) {
                         Text(
-                            "목적지에 늦지 않도록 15분의 여유를 남겨요",
+                            "이 장소를 들르면 목적지까지 약 ${recommendation.place.detourMinutes}분 더 걸려요",
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             textAlign = TextAlign.Center,
                             fontSize = 13.sp,
@@ -3400,27 +3766,18 @@ private fun DetailScreen(
                     }
                     Spacer(Modifier.height(8.dp))
                     Button(
-                        onClick = {
-                            openKakaoMapRoute(
-                                context = context,
-                                start = criteria.startCoordinates,
-                                startName = criteria.startName,
-                                waypoint = recommendation.place.latitude?.let { latitude ->
-                                    recommendation.place.longitude?.let { longitude ->
-                                        Coordinates(latitude, longitude)
-                                    }
-                                },
-                                destination = criteria.endCoordinates,
-                                destinationName = criteria.endName,
-                                transport = TransportMode.CAR,
-                            )
-                        },
+                        onClick = onOpenRoute,
+                        enabled = !isOpeningRoute,
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(12.dp),
                     ) {
                         Icon(Icons.Default.Place, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text("카카오맵에서 경유지로 안내", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            if (isOpeningRoute) "경로 확인 중..." else "카카오맵에서 경유지로 안내",
+                            fontSize = 17.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }
@@ -3454,7 +3811,7 @@ private fun DetailScreen(
                         )
                         DetailMetric(
                             icon = Icons.Default.DirectionsCar,
-                            text = "현재 위치에서 ${recommendation.place.firstLegMinutes}분  |  목적지까지 +${recommendation.place.detourMinutes}분",
+                            text = "${criteria.startName.ifBlank { "출발지" }}에서 ${recommendation.place.firstLegMinutes}분  |  목적지까지 +${recommendation.place.detourMinutes}분",
                             modifier = Modifier.weight(1.4f),
                         )
                     }
@@ -3526,7 +3883,13 @@ private fun DetailMetric(
         Row(Modifier.padding(horizontal = 12.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(icon, contentDescription = null, tint = TteumRed, modifier = Modifier.size(21.dp))
             Spacer(Modifier.width(8.dp))
-            Text(text, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+            )
         }
     }
 }
@@ -3740,6 +4103,8 @@ private fun SearchBar(
 private fun RoundMapButton(
     onClick: (() -> Unit)?,
     icon: @Composable () -> Unit,
+    contentDescription: String,
+    selected: Boolean,
     modifier: Modifier = Modifier,
     background: Color = Color.White,
     foreground: Color = TteumInk,
@@ -3748,7 +4113,20 @@ private fun RoundMapButton(
     Surface(
         modifier = modifier
             .size(52.dp)
-            .clickable(enabled = onClick != null) { onClick?.invoke() },
+            .semantics {
+                this.contentDescription = contentDescription
+                stateDescription = when {
+                    onClick == null -> "위치 확인 중"
+                    selected -> "활성화"
+                    else -> "비활성화"
+                }
+            }
+            .toggleable(
+                value = selected,
+                enabled = onClick != null,
+                role = Role.Switch,
+                onValueChange = { onClick?.invoke() },
+            ),
         color = background,
         contentColor = foreground,
         shape = CircleShape,
@@ -3774,12 +4152,14 @@ private fun <T> ChoiceRow(
     choices: List<Pair<T, String>>,
     selected: T,
     onSelect: (T) -> Unit,
+    isEnabled: (T) -> Boolean = { true },
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         items(choices) { (value, label) ->
             FilterChip(
                 selected = value == selected,
                 onClick = { onSelect(value) },
+                enabled = isEnabled(value),
                 label = { Text(label) },
             )
         }
@@ -3877,8 +4257,11 @@ private fun RouteMap(
     routeSummary: RouteSummary? = null,
     candidates: List<SafeRecommendation> = emptyList(),
     selectedIds: List<String> = emptyList(),
+    focusedPlaceId: String? = null,
     corridorRadiusMeters: Int = 0,
     requestedLocation: RequestedMapLocation? = null,
+    centerRequestedLocation: Boolean = false,
+    onMapInteraction: () -> Unit = {},
     onCandidateClick: (String) -> Unit = {},
 ) {
     val waypoint = recommendation?.place?.latitude?.let { latitude ->
@@ -3903,6 +4286,7 @@ private fun RouteMap(
                     coordinates = Coordinates(latitude, longitude),
                     category = candidate.place.category,
                     selectedOrder = selectedIds.indexOf(candidate.place.id).takeIf { it >= 0 }?.plus(1),
+                    isFocused = candidate.place.id == focusedPlaceId,
                 )
             }
         }
@@ -3916,12 +4300,14 @@ private fun RouteMap(
         longitude = waypoint?.longitude ?: criteria.endCoordinates?.longitude ?: 128.8996,
         zoomLevel = 15,
         requestedLocation = requestedLocation,
+        centerRequestedLocation = centerRequestedLocation,
         routePoints = routePoints,
         routeStops = routeStops,
         candidateMarkers = mapCandidates,
         corridorPoints = routePoints,
         corridorRadiusMeters = corridorRadiusMeters.takeIf { it > 0 }
             ?: (criteria.deadlineMinutesFromNow * 20).coerceIn(800, 8_000),
+        onMapInteraction = onMapInteraction,
         onCandidateClick = onCandidateClick,
     )
 }
@@ -3933,11 +4319,13 @@ private fun KakaoMapSurface(
     longitude: Double,
     zoomLevel: Int,
     requestedLocation: RequestedMapLocation? = null,
+    centerRequestedLocation: Boolean = true,
     routePoints: List<Coordinates> = emptyList(),
     routeStops: List<Pair<String, Coordinates>> = emptyList(),
     candidateMarkers: List<MapCandidate> = emptyList(),
     corridorPoints: List<Coordinates> = emptyList(),
     corridorRadiusMeters: Int = 0,
+    onMapInteraction: () -> Unit = {},
     onCandidateClick: (String) -> Unit = {},
 ) {
     if (BuildConfig.KAKAO_MAP_NATIVE_APP_KEY.isBlank()) {
@@ -3968,6 +4356,14 @@ private fun KakaoMapSurface(
     var mapError by remember { mutableStateOf<String?>(null) }
     var kakaoMap by remember { mutableStateOf<KakaoMap?>(null) }
     var currentLocationLabel by remember { mutableStateOf<Label?>(null) }
+    val currentOnMapInteraction by rememberUpdatedState(onMapInteraction)
+    val currentOnCandidateClick by rememberUpdatedState(onCandidateClick)
+    val normalCandidateMarkers = candidateMarkers
+        .filter { it.selectedOrder == null }
+        .map { it.copy(isFocused = false) }
+    val highlightedCandidateMarkers = candidateMarkers.filter {
+        it.isFocused || it.selectedOrder != null
+    }
 
     DisposableEffect(mapView, lifecycleOwner) {
         mapView.start(
@@ -4011,7 +4407,7 @@ private fun KakaoMapSurface(
         }
     }
 
-    LaunchedEffect(kakaoMap, requestedLocation?.requestId) {
+    LaunchedEffect(kakaoMap, requestedLocation?.requestId, centerRequestedLocation) {
         val map = kakaoMap ?: return@LaunchedEffect
         val target = requestedLocation
         if (target == null) {
@@ -4021,10 +4417,12 @@ private fun KakaoMapSurface(
         }
         val position = LatLng.from(target.latitude, target.longitude)
 
-        map.moveCamera(
-            CameraUpdateFactory.newCenterPosition(position, 16),
-            CameraAnimation.from(500),
-        )
+        if (centerRequestedLocation) {
+            map.moveCamera(
+                CameraUpdateFactory.newCenterPosition(position, 16),
+                CameraAnimation.from(500),
+            )
+        }
 
         val existingLabel = currentLocationLabel
         if (existingLabel == null) {
@@ -4037,7 +4435,34 @@ private fun KakaoMapSurface(
         }
     }
 
-    DisposableEffect(kakaoMap, routePoints, routeStops, candidateMarkers, corridorPoints, corridorRadiusMeters) {
+    DisposableEffect(kakaoMap) {
+        val map = kakaoMap
+        if (map == null) {
+            onDispose { }
+        } else {
+            map.setOnMapClickListener { _, _, _, _ -> currentOnMapInteraction() }
+            map.setOnCameraMoveStartListener { _, gesture ->
+                if (gesture != GestureType.Unknown) currentOnMapInteraction()
+            }
+            map.setOnLabelClickListener { _, _, label ->
+                (label.tag as? String)?.let(currentOnCandidateClick)
+                label.tag is String
+            }
+            onDispose {
+                map.setOnMapClickListener(null)
+                map.setOnCameraMoveStartListener(null)
+                map.setOnLabelClickListener(null)
+            }
+        }
+    }
+
+    DisposableEffect(
+        kakaoMap,
+        routePoints,
+        routeStops,
+        corridorPoints,
+        corridorRadiusMeters,
+    ) {
         val map = kakaoMap
         if (map == null || routePoints.size < 2) {
             onDispose { }
@@ -4047,7 +4472,7 @@ private fun KakaoMapSurface(
                 RouteLineOptions.from(
                     RouteLineSegment.from(
                         points,
-                        RouteLineStyle.from(12f, TteumRed.toArgb(), 3f, Color.White.toArgb()),
+                        RouteLineStyle.from(8f, TteumRed.copy(alpha = 0.80f).toArgb(), 2f, Color.White.toArgb()),
                     ),
                 ),
             )
@@ -4058,21 +4483,6 @@ private fun KakaoMapSurface(
                         LatLng.from(coordinates.latitude, coordinates.longitude),
                     ).setStyles(createRouteStopBitmap(context, name)),
                 )
-            }
-            val candidateLabels = candidateMarkers.mapNotNull { candidate ->
-                map.labelManager?.layer?.addLabel(
-                    LabelOptions.from(
-                        "candidate-${candidate.id}",
-                        LatLng.from(candidate.coordinates.latitude, candidate.coordinates.longitude),
-                    ).setStyles(createCandidateMarkerBitmap(context, candidate.category, candidate.selectedOrder)),
-                )?.apply {
-                    setTag(candidate.id)
-                    setClickable(true)
-                }
-            }
-            map.setOnLabelClickListener { _, _, label ->
-                (label.tag as? String)?.let(onCandidateClick)
-                label.tag is String
             }
             val corridorPolygons = if (corridorRadiusMeters > 0) {
                 val step = (corridorPoints.size / 10).coerceAtLeast(1)
@@ -4087,7 +4497,7 @@ private fun KakaoMapSurface(
                             ),
                         ).setStylesSet(
                             PolygonStylesSet.from(
-                                PolygonStyles.from(TteumRed.copy(alpha = 0.12f).toArgb()),
+                                PolygonStyles.from(TteumRed.copy(alpha = 0.08f).toArgb()),
                             ),
                         ),
                     )
@@ -4095,18 +4505,109 @@ private fun KakaoMapSurface(
             } else {
                 emptyList()
             }
-            map.moveCamera(
-                CameraUpdateFactory.fitMapPoints(points.toTypedArray(), 80),
-                CameraAnimation.from(500),
-            )
 
             onDispose {
                 routeLine?.remove()
                 labels.forEach(Label::remove)
-                candidateLabels.forEach(Label::remove)
                 corridorPolygons.forEach { it.remove() }
-                map.setOnLabelClickListener(null)
             }
+        }
+    }
+
+    DisposableEffect(kakaoMap, normalCandidateMarkers) {
+        val map = kakaoMap
+        val labelManager = map?.labelManager
+        if (map == null || labelManager == null) {
+            onDispose { }
+        } else {
+            val normalLayer = labelManager.addLayer(
+                LabelLayerOptions.from("tteumsae-route-candidates")
+                    .setCompetitionType(CompetitionType.Same)
+                    .setCompetitionUnit(CompetitionUnit.IconAndText)
+                    .setOrderingType(OrderingType.Rank)
+                    .setZOrder(5_000)
+                    .setClickable(true),
+            )
+            val candidateLabels = normalCandidateMarkers.mapIndexedNotNull { index, candidate ->
+                normalLayer?.addLabel(
+                    LabelOptions.from(
+                        "candidate-${candidate.id}",
+                        LatLng.from(candidate.coordinates.latitude, candidate.coordinates.longitude),
+                    )
+                        .setStyles(
+                            createCandidateMarkerBitmap(
+                                context,
+                                candidate.category,
+                                selectedOrder = null,
+                                isFocused = false,
+                            ),
+                        )
+                        .setRank((normalCandidateMarkers.size - index).toLong())
+                        .setTag(candidate.id)
+                        .setClickable(true),
+                )
+            }
+
+            onDispose {
+                candidateLabels.forEach(Label::remove)
+                normalLayer?.let(labelManager::remove)
+            }
+        }
+    }
+
+    DisposableEffect(kakaoMap, highlightedCandidateMarkers) {
+        val map = kakaoMap
+        val labelManager = map?.labelManager
+        if (map == null || labelManager == null) {
+            onDispose { }
+        } else {
+            val highlightedLayer = labelManager.addLayer(
+                LabelLayerOptions.from("tteumsae-route-highlights")
+                    .setCompetitionType(CompetitionType.None)
+                    .setOrderingType(OrderingType.Rank)
+                    .setZOrder(5_100)
+                    .setClickable(true),
+            )
+            val candidateLabels = highlightedCandidateMarkers.mapNotNull { candidate ->
+                val rank = if (candidate.isFocused) {
+                    30_000L
+                } else {
+                    20_000L - (candidate.selectedOrder ?: 0)
+                }
+                highlightedLayer?.addLabel(
+                    LabelOptions.from(
+                        "highlight-${candidate.id}",
+                        LatLng.from(candidate.coordinates.latitude, candidate.coordinates.longitude),
+                    )
+                        .setStyles(
+                            createCandidateMarkerBitmap(
+                                context,
+                                candidate.category,
+                                candidate.selectedOrder,
+                                candidate.isFocused,
+                            ),
+                        )
+                        .setRank(rank)
+                        .setTag(candidate.id)
+                        .setClickable(true),
+                )
+            }
+
+            onDispose {
+                candidateLabels.forEach(Label::remove)
+                highlightedLayer?.let(labelManager::remove)
+            }
+        }
+    }
+
+    LaunchedEffect(kakaoMap, routePoints, requestedLocation?.requestId, centerRequestedLocation) {
+        val map = kakaoMap ?: return@LaunchedEffect
+        if ((!centerRequestedLocation || requestedLocation == null) && routePoints.size >= 2) {
+            val points = routePoints.map { LatLng.from(it.latitude, it.longitude) }
+            map.moveCamera(
+                CameraUpdateFactory.fitMapPoints(points.toTypedArray(), 80),
+                CameraAnimation.from(500),
+            )
         }
     }
 
@@ -4167,28 +4668,41 @@ private fun createCandidateMarkerBitmap(
     context: Context,
     category: PlaceCategory,
     selectedOrder: Int?,
+    isFocused: Boolean,
 ): Bitmap {
     val density = context.resources.displayMetrics.density
     val size = 48f * density
     return Bitmap.createBitmap(size.roundToInt(), size.roundToInt(), Bitmap.Config.ARGB_8888).also { bitmap ->
         val canvas = android.graphics.Canvas(bitmap)
+        val center = size / 2f
+        val isSelected = selectedOrder != null
+        val markerColor = if (isSelected) TteumRed else RouteFocusBlue
+        if (isFocused) {
+            val halo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+                color = RouteFocusBlue.copy(alpha = 0.18f).toArgb()
+            }
+            canvas.drawCircle(center, center, 22f * density, halo)
+        }
         val background = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.WHITE
         }
         val border = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (selectedOrder == null) 0xFFD4D7DC.toInt() else TteumRed.toArgb()
+            color = when {
+                isSelected -> TteumRed.toArgb()
+                isFocused -> RouteFocusBlue.toArgb()
+                else -> 0xFFD4D7DC.toInt()
+            }
             style = android.graphics.Paint.Style.STROKE
-            strokeWidth = (if (selectedOrder == null) 1.5f else 2.5f) * density
+            strokeWidth = (if (isFocused || isSelected) 2.5f else 1.25f) * density
         }
-        val center = size / 2f
-        val outerRadius = 19f * density
+        val outerRadius = (if (isFocused || isSelected) 19f else 15f) * density
         canvas.drawCircle(center, center, outerRadius, background)
         canvas.drawCircle(center, center, outerRadius, border)
 
         val iconBackground = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-            color = if (selectedOrder == null) 0xFF3D73D9.toInt() else TteumRed.toArgb()
+            color = markerColor.toArgb()
         }
-        canvas.drawCircle(center, center, 13f * density, iconBackground)
+        canvas.drawCircle(center, center, (if (isFocused || isSelected) 13f else 10.5f) * density, iconBackground)
         drawCategoryMarkerIcon(canvas, category, center, center, density)
 
         selectedOrder?.let { order ->
@@ -4456,7 +4970,7 @@ private fun openKakaoMapMultiRoute(
     destination: Coordinates?,
     destinationName: String,
 ) {
-    if (start == null || destination == null || waypoints.isEmpty()) {
+    if (start == null || destination == null) {
         Toast.makeText(context, "경로 좌표를 확인할 수 없어요.", Toast.LENGTH_SHORT).show()
         return
     }

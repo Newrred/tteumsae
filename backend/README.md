@@ -1,7 +1,7 @@
 # 틈새(Tteumsae) Backend
 
-강원도 TourAPI 장소를 정기 동기화하고, 사용자의 마감 시간과 안전
-여유시간 안에 방문할 수 있는 장소를 추천하는 Vercel Functions
+강원도 TourAPI 장소를 정기 동기화하고, 사용자가 경유에 쓸 순수 여유시간과
+안전여유 안에 방문할 수 있는 장소를 추천하는 Vercel Functions
 백엔드입니다.
 
 ## 구성
@@ -23,7 +23,9 @@
 | GET | `/api/places` | 장소 목록 |
 | GET | `/api/places/{contentId}` | 장소 상세 |
 | GET | `/api/geocode?q={검색어}` | 카카오 키워드 장소 검색 |
+| GET | `/api/region?latitude={위도}&longitude={경도}` | 행정구역·강원도 여부 확인 |
 | POST | `/api/recommendations` | 타임 세이프 추천 |
+| POST | `/api/route` | 출발지·경유지 0~5개·목적지 통합 차량 경로 |
 | GET | `/api/cron/tour-sync` | TourAPI 동기화, Bearer 인증 필요 |
 | GET | `/api/cron/tour-detail-sync` | 이미지·편의 태그 상세 동기화, Bearer 인증 필요 |
 
@@ -40,7 +42,7 @@
     "latitude": 37.7644,
     "longitude": 128.8996
   },
-  "deadlineMinutes": 90,
+  "extraTimeMinutes": 90,
   "safetyBufferMinutes": 15,
   "transport": "CAR",
   "categories": ["CAFE", "ATTRACTION"]
@@ -49,6 +51,17 @@
 
 차량 추천 응답의 `meta.routeProvider`는 `KAKAO_MOBILITY`이며 각 추천의
 `route`에는 출발지→장소, 장소→목적지의 이동시간과 거리가 포함됩니다.
+서버는 직행 `baseRoute`를 먼저 계산하고
+`effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes`로 전체 예산을
+만듭니다. 추천 조건은 다음과 같습니다.
+
+```text
+우회 주행시간 + 기본 머무름 + 안전여유 <= extraTimeMinutes
+```
+
+`deadlineMinutes`는 이전 클라이언트의 전체 시간 예산 호환용입니다.
+`deadlineMinutes`와 `extraTimeMinutes`는 정확히 하나만 보내야 하며 신규
+Android는 `extraTimeMinutes`를 사용합니다.
 
 ## 환경변수
 
@@ -83,4 +96,7 @@ npm run check
 - 카카오 REST API 키는 Android 앱이나 API 응답에 포함하지 않습니다.
 - Supabase 테이블은 RLS를 활성화하고 클라이언트 공개 정책을 만들지 않습니다.
 - Cron은 `CRON_SECRET` Bearer 헤더를 검증합니다.
+- 추천은 IP별 분당 12회, 경로는 분당 40회의 인스턴스 메모리 제한을 적용합니다.
+  이는 서버리스 best-effort이므로 공개 규모가 커지면 공유 저장소나 Vercel 경계
+  제한으로 교체해야 합니다.
 - 외부 API 또는 DB 오류 본문은 사용자 응답에 노출하지 않습니다.

@@ -3,6 +3,8 @@ const baseHeaders = {
   "cache-control": "no-store"
 };
 
+const rateWindows = new Map();
+
 export function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -15,6 +17,38 @@ export function methodNotAllowed(allowed) {
     { error: { code: "METHOD_NOT_ALLOWED", message: "지원하지 않는 요청 방식입니다." } },
     405,
     { allow: allowed.join(", ") }
+  );
+}
+
+export function rateLimit(request, bucket, limit, windowMs = 60_000) {
+  const address = request.headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+    request.headers.get("x-real-ip")?.trim();
+  if (!address) return null;
+
+  const now = Date.now();
+  const key = `${bucket}:${address}`;
+  const current = rateWindows.get(key);
+  if (!current || current.resetAt <= now) {
+    rateWindows.set(key, { count: 1, resetAt: now + windowMs });
+    // ponytail: per-instance memory is a best-effort serverless guard; use a shared store if abuse becomes distributed.
+    if (rateWindows.size > 1_000) rateWindows.delete(rateWindows.keys().next().value);
+    return null;
+  }
+  if (current.count < limit) {
+    current.count += 1;
+    return null;
+  }
+
+  const retryAfterSeconds = Math.max(1, Math.ceil((current.resetAt - now) / 1_000));
+  return json(
+    {
+      error: {
+        code: "RATE_LIMITED",
+        message: "요청이 너무 많습니다. 잠시 후 다시 시도해 주세요."
+      }
+    },
+    429,
+    { "retry-after": String(retryAfterSeconds) }
   );
 }
 
@@ -56,4 +90,3 @@ export async function readJson(request) {
   }
   return request.json();
 }
-

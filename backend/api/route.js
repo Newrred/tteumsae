@@ -2,6 +2,7 @@ import {
   badRequest,
   json,
   methodNotAllowed,
+  rateLimit,
   readJson,
   serverError
 } from "../lib/http.js";
@@ -11,6 +12,8 @@ import { parseRouteRequest } from "../lib/validation.js";
 export default {
   async fetch(request) {
     if (request.method !== "POST") return methodNotAllowed(["POST"]);
+    const limited = rateLimit(request, "route", 40);
+    if (limited) return limited;
 
     let routeRequest;
     try {

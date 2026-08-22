@@ -306,6 +306,7 @@ TourAPI, Kakao REST, Supabase service role, Cron 키는 서버 환경변수 교�
 - 릴리스 키스토어와 Gradle `signingConfig`가 없다.
 - Play App Signing용 키 해시 등록 완료 여부를 저장소만으로 확인할 수 없다.
 - APK 다운로드 프로젝트의 `.vercel` 연결 정보는 보안·로컬 파일이라 Git에 없다.
-- 백엔드 공개 API 인증·Rate Limit이 없다.
+- 백엔드 공개 API 사용자 인증은 없고, 추천·경로의 IP별 제한은 Vercel 인스턴스
+  메모리 기반 best-effort라 공유 저장소 수준의 남용 방어가 남아 있다.
 - 운영 서비스의 실제 소유자·복구 담당·2단계 인증 상태는 Git으로 확인할 수
   없으므로 인수 회의에서 별도 확인해야 한다.
