@@ -31,6 +31,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -57,11 +59,14 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -150,6 +155,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
@@ -918,7 +924,7 @@ private fun HomeScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(20.dp),
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
             )
 
             Box(
@@ -1179,7 +1185,7 @@ private fun BottomNavItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun SavedPlacesScreen(
     catalogPlaces: List<PlaceCandidate>,
@@ -1196,6 +1202,9 @@ private fun SavedPlacesScreen(
     onRestore: (SavedPlaceEntry) -> Unit,
     onTabSelected: (MainTab) -> Unit,
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val isImeVisible = WindowInsets.isImeVisible
     var selectedCategory by rememberSaveable { mutableStateOf<PlaceCategory?>(null) }
     var regionMenuExpanded by remember { mutableStateOf(false) }
     var savedOnly by rememberSaveable { mutableStateOf(false) }
@@ -1206,6 +1215,10 @@ private fun SavedPlacesScreen(
     val coroutineScope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
 
+    BackHandler(enabled = isImeVisible && selectedPlace == null) {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
     BackHandler(enabled = selectedPlace != null) { selectedPlace = null }
 
     selectedPlace?.let { place ->
@@ -1263,10 +1276,12 @@ private fun SavedPlacesScreen(
         containerColor = Color(0xFFF7F8FA),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            BottomNavigation(
-                selectedTab = MainTab.SAVED,
-                onTabSelected = onTabSelected,
-            )
+            if (!isImeVisible) {
+                BottomNavigation(
+                    selectedTab = MainTab.SAVED,
+                    onTabSelected = onTabSelected,
+                )
+            }
         },
     ) { padding ->
         Column(
@@ -1279,13 +1294,20 @@ private fun SavedPlacesScreen(
                     .fillMaxWidth()
                     .background(Color.White)
                     .statusBarsPadding()
-                    .padding(top = 24.dp, bottom = 16.dp),
+                    .padding(top = 12.dp, bottom = 16.dp),
             ) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     placeholder = { Text("탐색 위치 검색", color = TteumMuted) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
+                        },
+                    ),
                     singleLine = true,
                     shape = RoundedCornerShape(18.dp),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1299,7 +1321,7 @@ private fun SavedPlacesScreen(
                         .padding(horizontal = 20.dp)
                         .shadow(8.dp, RoundedCornerShape(18.dp)),
                 )
-                Spacer(Modifier.height(26.dp))
+                Spacer(Modifier.height(20.dp))
                 Box(modifier = Modifier.padding(horizontal = 20.dp)) {
                     Row(
                         modifier = Modifier
@@ -1452,7 +1474,9 @@ private fun SavedPlacesScreen(
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(2),
                     state = gridState,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .imePadding(),
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(
                         start = 16.dp,
                         end = 16.dp,
@@ -1531,7 +1555,7 @@ private fun SettingsTabScreen(
                 .padding(horizontal = 24.dp),
         ) {
             item {
-                Spacer(Modifier.height(24.dp))
+                Spacer(Modifier.height(12.dp))
                 Text("설정", fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(24.dp))
 
@@ -2216,6 +2240,7 @@ private fun storeSavedPlaces(
         .apply()
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun LocationScreen(
     startName: String,
@@ -2235,6 +2260,7 @@ private fun LocationScreen(
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val isImeVisible = WindowInsets.isImeVisible
     var isLocating by remember { mutableStateOf(false) }
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     var showPermissionSettingsDialog by remember { mutableStateOf(false) }
@@ -2322,30 +2348,35 @@ private fun LocationScreen(
     }
 
     val canContinue = startLocation != null && endLocation != null && !isChecking && !isLocating
+    BackHandler(enabled = isImeVisible) {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+    }
     Scaffold(
         containerColor = Color.White,
         bottomBar = {
-            Surface(color = Color.White) {
-                Button(
-                    onClick = {
-                        focusManager.clearFocus(force = true)
-                        keyboardController?.hide()
-                        onNext()
-                    },
-                    enabled = canContinue,
-                    modifier = Modifier
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(12.dp),
-                ) {
-                    Text(
-                        if (isChecking) "위치 확인 중..." else "다음",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
+            if (!isImeVisible) {
+                Surface(color = Color.White) {
+                    Button(
+                        onClick = {
+                            focusManager.clearFocus(force = true)
+                            keyboardController?.hide()
+                            onNext()
+                        },
+                        enabled = canContinue,
+                        modifier = Modifier
+                            .navigationBarsPadding()
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 16.dp)
+                            .height(56.dp),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Text(
+                            if (isChecking) "위치 확인 중..." else "다음",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
         },
@@ -2354,14 +2385,15 @@ private fun LocationScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .statusBarsPadding(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+                .statusBarsPadding()
+                .imePadding(),
+            contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 16.dp),
         ) {
             item {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", modifier = Modifier.size(30.dp))
                 }
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(16.dp))
                 Text(
                     "지금 어디로 가는 길인가요?",
                     fontSize = 31.sp,
@@ -2468,6 +2500,7 @@ private fun LocationPermissionSettingsDialog(
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun LocationSearchField(
     value: String,
@@ -2482,6 +2515,8 @@ private fun LocationSearchField(
     isLocating: Boolean = false,
     autoFocus: Boolean = false,
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     var results by remember { mutableStateOf(emptyList<LocationSearchResult>()) }
     var isLoading by remember { mutableStateOf(false) }
     var searchMessage by remember { mutableStateOf<String?>(null) }
@@ -2489,6 +2524,7 @@ private fun LocationSearchField(
     var searchAttempt by remember { mutableStateOf(0) }
     var focusAfterClear by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
+    val firstResultRequester = remember { BringIntoViewRequester() }
     val isCurrentLocation = selected?.id == "current-location"
 
     LaunchedEffect(autoFocus, selected?.id) {
@@ -2522,6 +2558,13 @@ private fun LocationSearchField(
             searchMessage = networkFailureMessage("장소 검색", error.message)
         } finally {
             isLoading = false
+        }
+    }
+
+    LaunchedEffect(results.firstOrNull()?.id) {
+        if (results.isNotEmpty()) {
+            delay(50)
+            firstResultRequester.bringIntoView()
         }
     }
 
@@ -2573,6 +2616,13 @@ private fun LocationSearchField(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = {
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
+                            },
+                        ),
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             color = TteumInk,
@@ -2622,11 +2672,22 @@ private fun LocationSearchField(
                     .fillMaxWidth()
                     .background(Color.White),
             ) {
-                results.take(5).forEach { result ->
+                results.take(5).forEachIndexed { index, result ->
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSelected(result) }
+                            .then(
+                                if (index == 0) {
+                                    Modifier.bringIntoViewRequester(firstResultRequester)
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable {
+                                onSelected(result)
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
+                            }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
                         Text(result.name, fontWeight = FontWeight.Bold)
@@ -2987,13 +3048,13 @@ private fun ConditionsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .statusBarsPadding(),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp),
+            contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 16.dp),
         ) {
             item {
                 IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", modifier = Modifier.size(30.dp))
                 }
-                Spacer(Modifier.height(32.dp))
+                Spacer(Modifier.height(16.dp))
                 Text(
                     "좀 더 끌리는 장소가 있나요?",
                     fontSize = 31.sp,
@@ -3354,7 +3415,7 @@ private fun ResultsScreen(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(horizontal = 20.dp, vertical = 14.dp),
+                    .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 14.dp),
             )
 
             Column(modifier = Modifier.align(Alignment.BottomCenter)) {
