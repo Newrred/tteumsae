@@ -12,6 +12,7 @@
 
 ## Global Constraints
 
+- 실행 순서상 이 계획을 먼저 완료한 뒤 `2026-08-26-deadline-aware-route-core.md`를 실행하고, Supabase Auth 계획의 도구체인 업그레이드는 그 다음에 수행한다.
 - Supabase와 로그인은 이 계획에서 추가하지 않는다.
 - 기존 HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL 전이와 Back 의미를 유지한다.
 - 지도 SDK 생명주기와 마커 렌더링은 이동하지 않는다.

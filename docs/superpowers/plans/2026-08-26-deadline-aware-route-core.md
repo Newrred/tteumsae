@@ -12,6 +12,8 @@
 
 ## Global Constraints
 
+- Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`를 먼저 완료한다. Task 8~9를 시작할 때는 이미 분리된 저장·설정 화면을 유지하고 현재 `TteumsaeApp.kt` 기준으로 대상 위치를 다시 확인한다.
+- 이 계획은 문서에 고정된 Kotlin 2.0.21/AGP 8.7.3 기준으로 먼저 완료하고, Supabase Auth 계획의 Kotlin 2.2.21/AGP 8.10.1 업그레이드는 이후에 수행한다.
 - 제품 상 경유지는 최대 2곳이지만 서버 `/api/route`의 0–5개 호환성은 유지한다.
 - 사용자는 체류시간과 안전 여유를 입력하지 않는다. `SAFETY_BUFFER_MINUTES=10`, `MINIMUM_STAY_MINUTES=15`, `DEPARTURE_REMINDER_LEAD_MINUTES=5`를 단일 도메인 상수로 사용한다.
 - 지도 핀에는 추가 이동시간만 표시한다. 최대 체류 가능 시간과 출발 마감은 장소 선택 뒤 표시한다.

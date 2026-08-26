@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Prerequisite: docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md is complete.
+- Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`와 `docs/superpowers/plans/2026-08-26-deadline-aware-route-core.md`가 모두 완료되어야 한다. 이 계획의 Task 1부터 Kotlin 2.2.21/AGP 8.10.1로 올린다.
 - 로그인은 선택 기능이며 Auth 설정 누락·장애가 추천·경로·게스트 저장을 막지 않는다.
 - Android에는 Supabase URL과 publishable key만 포함한다.
 - service role은 Vercel 환경변수에만 둔다.
