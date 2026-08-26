@@ -85,7 +85,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 상단·대표 이미지 | `구현, QA 필요` | 고정 top bar의 뒤로/`장소 상세`/저장 하트와 대표 이미지를 표시한다 | 이미지 없음·실패는 브랜드 기본 이미지 | `DetailScreen`, `SavedPlaceImage` |
 | 핵심 지표 | `구현, QA 필요` | 평균 머무름, 실제 `startName`→장소 시간, 목적지까지 추가 우회시간을 카드로 표시한다 | 긴 출발지명과 큰 글자에서 레이아웃 QA가 필요하다 | `DetailMetric`, `DetailScreen` |
 | 방문 정보 | `부분 구현/추정` | 운영시간·휴무·주차·활동·반려동물, 장소 소개, 주소를 표시한다. 값이 없으면 `정보 확인 필요` | 이용요금은 항상 미확인. 활동/편의는 카테고리·태그 단순 판정이며 TourAPI 원문 정확도에 의존 | `VisitInfo`, `DetailScreen` |
-| 저장 | `구현 및 코드 검증` | 하트로 SharedPreferences 저장/해제한다 | 계정 동기화 없음. 저장 직렬화에 운영시간·휴무가 포함되지 않아 재실행 후 저장 사본에서 유실 | `loadSavedPlaces`, `storeSavedPlaces` |
+| 저장 | `구현 및 코드 검증, 업그레이드 QA 필요` | 하트 동작을 Room `GUEST` 범위에 저장·해제하고 lifecycle-aware Flow로 화면에 반영한다 | 계정 동기화는 아직 없으며 기존 SharedPreferences JSON의 1회 이전은 업데이트 설치 실기기 QA가 필요 | `SavedPlacesRepository`, `SavedPlacePreferencesMigration`, `TteumsaeApp` |
 | 상세 CTA | `구현, QA 필요` | 내부 고정 15분 안내와 `카카오맵에서 경유지로 안내`; 현재 상세 장소를 중복 없이 포함해 `/api/route`와 내부 호환 예산을 다시 확인한 뒤 연다. 이미 5곳이면 마지막 선택을 현재 장소로 바꾼다고 안내한다 | 15분은 사용자가 선택한 값이나 실제 도착 보장이 아니다. 실시간 경로 실패 시 예상 경로 판정 토스트를 표시한다 | `TteumsaeApp`의 DETAIL 분기, `DetailScreen`, `isRouteWithinExtraTimeBudget`, `openRoute` |
 
 ## 8. 틈새 발견·저장
@@ -96,7 +96,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 카탈로그 | `구현, QA 필요` | 진입 시 선택 지역(기본 강릉)의 `/api/places?page=1&pageSize=100&sigunguCode=...`, 끝 6개 전 같은 지역의 다음 페이지 자동 로드, ID 중복 제거 | 검색·카테고리는 현재까지 받은 선택 지역 페이지에만 적용 | `SavedPlacesScreen`, `TteumsaeApi.places` |
 | 검색·필터·개수 | `구현 및 코드 검증` | `틈새 위치 검색`, 전체/찜/7개 카테고리 칩, `스팟 (N)`을 표시한다. 찜과 카테고리는 함께 적용 가능하고 `전체`는 둘 다 해제한다 | N은 서버 전체 수가 아니라 현재 받은 장소+해당 지역의 로컬 찜 중 검색/필터를 통과한 수. tooltip으로 추가 로드를 안내 | `SavedPlacesScreen`, `SavedFilterChip` |
 | 카드 | `구현, QA 필요` | 2열 이미지 카드, 155dp 한 줄 말줄임, 평균 머무름, 태그 문자 예산 18과 `+N`, 저장 하트 | 외부 이미지 직접 다운로드, 메모리 캐시만 사용 | `SavedPlaceCard`, `compactTags`, `SavedPlaceImage` |
-| 저장·되돌리기 | `구현 및 코드 검증` | 카드 하트 저장 토글, `찜`만 보기, 해제 Snackbar 되돌리기, 저장 우선/이름순 | 로컬 기기에만 저장. `저장 우선순`은 서버 인기순이 아님 | `SavedPlacesScreen` |
+| 저장·되돌리기 | `구현 및 코드 검증, 실기기 QA 필요` | 카드 하트 저장 토글, `찜`만 보기, 해제 Snackbar 되돌리기, 저장 우선/이름순을 Room Flow와 연결한다 | 로컬 기기에만 저장. `저장 우선순`은 서버 인기순이 아님 | `SavedPlacesScreen`, `SavedPlacesRepository` |
 | 카탈로그 상세 | `부분 구현/추정` | 이미지·분류·이름·주소·추천 머무름·태그와 카카오맵 장소명 검색 CTA | 추천 상세과 UI/정보 범위가 다르고 좌표 경로 안내가 아니다 | `SavedPlaceDetailScreen`, `openKakaoMap` |
 
 ## 9. 설정·정책·지원
@@ -105,7 +105,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 |---|---|---|---|---|
 | 위치 권한 | `구현, QA 필요` | 권한 상태를 표시하고 앱 설정으로 이동; `ON_RESUME`에 갱신 | 위치 서비스 자체 상태는 별도 표시하지 않음 | `SettingsTabScreen` |
 | 카카오맵 상태 | `구현, QA 필요` | 설치 여부 확인, 앱 실행 또는 Play Store/웹 설치 경로 | 기기별 intent 처리 QA 필요 | `isKakaoMapAvailable`, `openKakaoMapHome`, `openKakaoMapInstallPage` |
-| 캐시·저장 삭제 | `구현, QA 필요` | 확인 후 이미지 캐시/cacheDir 삭제 또는 저장 목록 전체 삭제 | 지도 SDK 내부 캐시까지 지운다는 보장은 없음 | `SettingsTabScreen`, `clearAppCache` |
+| 캐시·저장 삭제 | `구현, QA 필요` | 확인 후 이미지 캐시/cacheDir 삭제 또는 Room의 게스트 저장 목록 전체 해제 | 지도 SDK 내부 캐시까지 지운다는 보장은 없음 | `SettingsScreen`, `SavedPlacesRepository.clearGuest`, `clearAppCache` |
 | 문의하기 | `구현, QA 필요` | `minjaeimnyda@gmail.com`으로 앱 버전을 포함한 메일 작성 화면 | 출시 전 운영 메일로 교체 | `CONTACT_EMAIL`, `openContactEmail` |
 | 개인정보처리방침 | `미구현` | 설정 행은 있으나 URL이 비어 있고 `준비 중` | Play 제출 전 공개 HTTPS 문서 필수 | `PRIVACY_POLICY_URL` |
 | 위치기반서비스 약관 | `미구현` | 설정 행은 있으나 URL이 비어 있고 `준비 중` | 법률 검토·공개 문서·동의 정책 필요 | `LOCATION_TERMS_URL` |
@@ -117,11 +117,11 @@ Android 버전: `0.12.4` (`versionCode 25`)
 |---|---|---|---|
 | Kotlin 컴파일 | `구현 및 코드 검증` | 최신 통합 소스 `compileDebugKotlin` 성공 | CI로 고정 |
 | Debug APK | `구현 및 코드 검증` | 지역/찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 `assembleDebug` 성공 (`2026-08-20`) | 새 버전 번호, 실기기 회귀 후 배포 |
-| Android 단위 테스트 | `구현 및 코드 검증` | 원래 한글·공백 경로에서 `ClassNotFoundException`이 발생했으나 `subst Q:` 영문 드라이브에서 5개 테스트 클래스 전체 통과 | 경로 의존 우회이므로 CI나 영문·무공백 clone에서도 재현 고정 필요 |
+| Android 단위 테스트 | `구현 및 코드 검증` | 현재 작업공간에서 저장 이전·Repository·설정 문구를 포함한 40/40 통과 (`2026-08-26`) | Room 계측 테스트는 연결 기기에서 별도 실행 필요 |
 | 백엔드 테스트 | `구현 및 코드 검증` | `extraTimeMinutes`, route/baseRoute/corridor, 체류 종료 전 운영시간 검증을 포함한 Node 테스트 28/28 통과 (`2026-08-20`) | 계약 변경 시 같은 테스트를 다시 실행 |
 | Release 서명·AAB | `미구현` | signingConfig/키 전달/CI 없음 | 업로드 키, Play App Signing, `bundleRelease` |
 | 정책·스토어 자료 | `미구현` | 정책 URL·런처 아이콘·스토어 제출 체인 미완성 | 정책, 아이콘/스플래시, 데이터 안전, 스크린샷, AAB 준비 |
-| 실기기 회귀 | `구현, QA 필요` | 새 결과·상세·복수 경유지 흐름은 코드/빌드 기준 | GPS, Kakao Map SDK, 0~5 경유지, 실패 fallback, 작은 화면·키보드 검증 |
+| 실기기 회귀 | `구현, QA 필요` | 새 결과·상세·복수 경유지와 Room 저장 흐름은 코드/빌드 기준 | GPS, Kakao Map SDK, 0~5 경유지, 기존 JSON 업데이트 이전, 저장 복원·전체 해제 검증 |
 
 ## 11. 변경 시 함께 확인할 파일
 
@@ -131,5 +131,5 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 추천 후보·corridor | `backend/api/recommendations.js`, `backend/lib/routing.js`, `data/TteumsaeApi.kt`, `05_API_AND_DATA.md` |
 | 복수 경유 경로 | `backend/api/route.js`, `backend/lib/kakao-mobility.js`, `domain/Models.kt`, `data/TteumsaeApi.kt` |
 | 관심 매핑 | `RecommendationIntent`, `toggleRecommendationIntent`, `recommendationIntentFilters`, 관련 Android 테스트 |
-| 상세·저장 필드 | `domain/Models.kt`, Android JSON 파서, SharedPreferences 직렬화, TourAPI 동기화 |
+| 상세·저장 필드 | `domain/Models.kt`, `SavedPlaceSnapshotCodec`, Room schema·migration, TourAPI 동기화 |
 | 릴리스 | `app/build.gradle.kts`, 정책 URL, APK/AAB, QA 기록 |

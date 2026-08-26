@@ -43,7 +43,7 @@ class SharedPreferencesSavedPlaceMigrationPreferences(
     context: Context,
 ) : SavedPlaceMigrationPreferences {
     private val savedPlaces = context.getSharedPreferences(
-        SAVED_PLACES_PREFERENCES,
+        LEGACY_SAVED_STORAGE,
         Context.MODE_PRIVATE,
     )
     private val migration = context.getSharedPreferences(
@@ -169,7 +169,7 @@ private fun decodeLegacyEntry(item: JSONObject): LegacySavedPlace {
     )
 }
 
-private const val SAVED_PLACES_PREFERENCES = "saved_places"
+private const val LEGACY_SAVED_STORAGE = "saved_places"
 private const val SAVED_PLACES_KEY = "entries"
 private const val SAVED_PLACES_MIGRATION_PREFERENCES = "saved_places_room_migration"
 private const val SAVED_PLACES_MIGRATION_COMPLETE_KEY = "complete"

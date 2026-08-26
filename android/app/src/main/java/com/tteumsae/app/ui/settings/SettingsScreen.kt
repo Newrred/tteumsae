@@ -94,7 +94,7 @@ internal fun SettingsScreen(
                     SettingsDivider()
                     SettingsRow(
                         title = "저장한 장소 비우기",
-                        description = "현재 ${savedCount}개 저장됨",
+                        description = guestSavedStorageDescription(savedCount),
                         titleColor = if (savedCount > 0) TteumRed else TteumMuted,
                         onClick = if (savedCount > 0) {
                             { showSavedClearDialog = true }
@@ -193,3 +193,6 @@ internal fun SettingsScreen(
         )
     }
 }
+
+internal fun guestSavedStorageDescription(count: Int): String =
+    "이 기기에 ${count}개 저장됨"

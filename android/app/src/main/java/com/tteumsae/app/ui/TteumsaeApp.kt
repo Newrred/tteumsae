@@ -149,6 +149,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.GestureType
@@ -171,6 +172,7 @@ import com.kakao.vectormap.shape.PolygonOptions
 import com.kakao.vectormap.shape.PolygonStyles
 import com.kakao.vectormap.shape.PolygonStylesSet
 import com.tteumsae.app.BuildConfig
+import com.tteumsae.app.TteumsaeApplication
 import com.tteumsae.app.data.TteumsaeApi
 import com.tteumsae.app.domain.Coordinates
 import com.tteumsae.app.domain.LocationSearchResult
@@ -193,8 +195,6 @@ import com.tteumsae.app.domain.route.additionalDetourDistanceMeters
 import com.tteumsae.app.domain.route.isRouteWithinExtraTimeBudget
 import com.tteumsae.app.domain.route.orderWaypointIdsAlongRoute
 import com.tteumsae.app.domain.route.selectedRouteEstimate
-import com.tteumsae.app.domain.saved.SavedPlace
-import com.tteumsae.app.domain.saved.latestFirst
 import com.tteumsae.app.platform.CONTACT_EMAIL
 import com.tteumsae.app.platform.LOCATION_TERMS_URL
 import com.tteumsae.app.platform.MAX_KAKAO_WAYPOINTS
@@ -225,8 +225,6 @@ import com.tteumsae.app.ui.theme.TteumRedSoft
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -286,6 +284,14 @@ private const val HOME_INTRO_HIDDEN_DATE = "hidden_date"
 fun TteumsaeApp() {
     val context = LocalContext.current
     val api = remember { TteumsaeApi() }
+    val application = context.applicationContext as TteumsaeApplication
+    val savedPlacesRepository = remember(application) {
+        application.container.savedPlacesRepository
+    }
+    val savedPlacesFlow = remember(savedPlacesRepository) {
+        savedPlacesRepository.observeSaved()
+    }
+    val savedPlaces by savedPlacesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     var screen by rememberSaveable { mutableStateOf(AppDestination.HOME) }
     var mode by rememberSaveable { mutableStateOf(SearchMode.ON_THE_WAY) }
     var startName by rememberSaveable { mutableStateOf("현재 위치") }
@@ -310,7 +316,6 @@ fun TteumsaeApp() {
     var currentLocationTarget by remember { mutableStateOf<RequestedMapLocation?>(null) }
     var routeSummaryExpanded by rememberSaveable { mutableStateOf(true) }
     var focusedResultPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
-    var savedPlaces by remember { mutableStateOf(loadSavedPlaces(context)) }
     var catalogPlaces by remember { mutableStateOf(emptyList<PlaceCandidate>()) }
     var catalogLoading by remember { mutableStateOf(false) }
     var catalogLoadingMore by remember { mutableStateOf(false) }
@@ -325,11 +330,6 @@ fun TteumsaeApp() {
     BackHandler(enabled = screen != AppDestination.HOME) {
         screen = previousDestination(screen)
     }
-    val updateSavedPlaces: (List<SavedPlace>) -> Unit = { updated ->
-        savedPlaces = updated
-        storeSavedPlaces(context, updated)
-    }
-
     LaunchedEffect(screen, catalogLoadAttempt, catalogRegion) {
         if (screen == AppDestination.SAVED) {
             catalogLoading = true
@@ -450,18 +450,12 @@ fun TteumsaeApp() {
                 }
             },
             onToggleSave = { place ->
-                val existing = savedPlaces.find { it.place.id == place.id }
-                if (existing == null) {
-                    updateSavedPlaces(listOf(SavedPlace(place, System.currentTimeMillis())) + savedPlaces)
-                } else {
-                    updateSavedPlaces(savedPlaces.filterNot { it.place.id == place.id })
+                appScope.launch {
+                    savedPlacesRepository.toggleGuest(place, System.currentTimeMillis())
                 }
             },
             onRestore = { entry ->
-                updateSavedPlaces(
-                    (savedPlaces.filterNot { it.place.id == entry.place.id } + entry)
-                        .latestFirst(),
-                )
+                appScope.launch { savedPlacesRepository.restoreGuest(entry) }
             },
             onOpenMap = { place -> openKakaoMap(context, place.name) },
             onTabSelected = { tab ->
@@ -510,7 +504,9 @@ fun TteumsaeApp() {
                     }
                 },
                 onClearCache = { clearAppCache(context) },
-                onClearSaved = { updateSavedPlaces(emptyList()) },
+                onClearSaved = {
+                    appScope.launch { savedPlacesRepository.clearGuest() }
+                },
                 onOpenPrivacyPolicy = { openPolicy(context, PRIVACY_POLICY_URL) },
                 onOpenLocationTerms = { openPolicy(context, LOCATION_TERMS_URL) },
                 onContact = { openContactEmail(context) },
@@ -705,11 +701,9 @@ fun TteumsaeApp() {
                 warning = recommendationWarning,
                 isSaved = savedPlaces.any { entry -> entry.place.id == it.place.id },
                 onToggleSave = {
-                    updateSavedPlaces(if (savedPlaces.any { entry -> entry.place.id == it.place.id }) {
-                        savedPlaces.filterNot { entry -> entry.place.id == it.place.id }
-                    } else {
-                        listOf(SavedPlace(it.place, System.currentTimeMillis())) + savedPlaces
-                    })
+                    appScope.launch {
+                        savedPlacesRepository.toggleGuest(it.place, System.currentTimeMillis())
+                    }
                 },
                 isOpeningRoute = detailRouteChecking,
                 onOpenRoute = openDetailRoute@{
@@ -1191,85 +1185,6 @@ private fun recommendationConditionSummary(categories: Set<PlaceCategory>): Stri
     categories.size == PlaceCategory.entries.size - 1 &&
         PlaceCategory.RESTAURANT !in categories -> "음식점 제외"
     else -> categories.joinToString(" · ") { it.activityLabel() }
-}
-
-private const val SAVED_PLACES_PREFERENCES = "saved_places"
-private const val SAVED_PLACES_KEY = "entries"
-
-private fun loadSavedPlaces(context: Context): List<SavedPlace> {
-    val json = context
-        .getSharedPreferences(SAVED_PLACES_PREFERENCES, Context.MODE_PRIVATE)
-        .getString(SAVED_PLACES_KEY, null)
-        ?: return emptyList()
-
-    return runCatching {
-        val entries = JSONArray(json)
-        buildList {
-            for (index in 0 until entries.length()) {
-                val item = entries.getJSONObject(index)
-                val tags = item.getJSONArray("tags")
-                add(
-                    SavedPlace(
-                        place = PlaceCandidate(
-                            id = item.getString("id"),
-                            name = item.getString("name"),
-                            category = PlaceCategory.valueOf(item.getString("category")),
-                            stayMinutes = item.getInt("stayMinutes"),
-                            firstLegMinutes = item.getInt("firstLegMinutes"),
-                            secondLegMinutes = item.getInt("secondLegMinutes"),
-                            detourMinutes = item.getInt("detourMinutes"),
-                            reason = item.optString("reason"),
-                            tags = buildList {
-                                for (tagIndex in 0 until tags.length()) {
-                                    add(tags.getString(tagIndex))
-                                }
-                            },
-                            address = item.optString("address"),
-                            imageUrl = item.optString("imageUrl"),
-                            latitude = item.optDouble("latitude").takeUnless { it.isNaN() },
-                            longitude = item.optDouble("longitude").takeUnless { it.isNaN() },
-                            isOpen = item.optBoolean("isOpen", true),
-                        ),
-                        savedAtMillis = item.getLong("savedAtMillis"),
-                    ),
-                )
-            }
-        }.latestFirst()
-    }.getOrDefault(emptyList())
-}
-
-private fun storeSavedPlaces(
-    context: Context,
-    entries: List<SavedPlace>,
-) {
-    val json = JSONArray().apply {
-        entries.forEach { entry ->
-            put(
-                JSONObject()
-                    .put("id", entry.place.id)
-                    .put("name", entry.place.name)
-                    .put("category", entry.place.category.name)
-                    .put("stayMinutes", entry.place.stayMinutes)
-                    .put("firstLegMinutes", entry.place.firstLegMinutes)
-                    .put("secondLegMinutes", entry.place.secondLegMinutes)
-                    .put("detourMinutes", entry.place.detourMinutes)
-                    .put("reason", entry.place.reason)
-                    .put("tags", JSONArray(entry.place.tags))
-                    .put("address", entry.place.address)
-                    .put("imageUrl", entry.place.imageUrl)
-                    .put("latitude", entry.place.latitude ?: JSONObject.NULL)
-                    .put("longitude", entry.place.longitude ?: JSONObject.NULL)
-                    .put("isOpen", entry.place.isOpen)
-                    .put("savedAtMillis", entry.savedAtMillis),
-            )
-        }
-    }
-
-    context
-        .getSharedPreferences(SAVED_PLACES_PREFERENCES, Context.MODE_PRIVATE)
-        .edit()
-        .putString(SAVED_PLACES_KEY, json.toString())
-        .apply()
 }
 
 @OptIn(ExperimentalLayoutApi::class)

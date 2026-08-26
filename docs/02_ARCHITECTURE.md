@@ -22,25 +22,31 @@ Android에는 카카오 네이티브 지도 키만 주입합니다. TourAPI 서�
 
 - Single Activity Android 앱
 - Jetpack Compose UI
-- `AppScreen` enum 기반 수동 화면 전환
+- `AppDestination` enum 기반 수동 화면 전환
 - `HttpURLConnection`과 `JSONObject` 기반 API 클라이언트
 - Kakao Map Android SDK 지도
 - Android `LocationManager` 기반 위치
-- SharedPreferences JSON 기반 저장 장소
+- Room·Flow 기반 기기 로컬 저장 장소
+- SharedPreferences는 홈 안내 날짜 같은 단순 기기 설정과 1회성 저장 데이터 이전에만 사용
 
 주요 파일:
 
 | 경로 | 책임 |
 |---|---|
 | `android/app/src/main/java/com/tteumsae/app/MainActivity.kt` | Compose 진입점 |
-| `android/app/src/main/java/com/tteumsae/app/TteumsaeApplication.kt` | Kakao 지도 SDK 초기화 |
-| `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt` | 화면, 상태, 지도, 딥링크 대부분 |
+| `android/app/src/main/java/com/tteumsae/app/TteumsaeApplication.kt` | Kakao 지도 SDK·앱 데이터 컨테이너 초기화 |
+| `android/app/src/main/java/com/tteumsae/app/AppContainer.kt` | Room DB와 저장 Repository 단일 생성 |
+| `android/app/src/main/java/com/tteumsae/app/data/local/` | 저장 장소 Room 엔티티·DAO·스냅샷·기존 JSON 이전 |
+| `android/app/src/main/java/com/tteumsae/app/data/saved/SavedPlacesRepository.kt` | 게스트 저장·해제·복원·전체 비우기 진입점 |
+| `android/app/src/main/java/com/tteumsae/app/ui/saved/` | 틈새 발견·저장 목록과 카탈로그 상세 UI |
+| `android/app/src/main/java/com/tteumsae/app/ui/settings/` | 설정 UI와 기기 로컬 저장 안내 |
+| `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt` | 루트 화면 조립, 추천 상태, 지도 흐름 |
 | `android/app/src/main/java/com/tteumsae/app/ui/CurrentLocation.kt` | 위치 권한 이후 좌표 취득 |
 | `android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt` | 백엔드 HTTP 호출과 JSON 파싱 |
 | `android/app/src/main/java/com/tteumsae/app/domain/Models.kt` | 앱 도메인 모델 |
 | `android/app/src/main/java/com/tteumsae/app/ui/theme/Theme.kt` | 브랜드 색상과 Compose 테마 |
 
-현재 `TteumsaeApp.kt`가 약 4,179줄이며 앱 전체 상태와 대부분의 화면을 함께 관리합니다. 기능형 MVP에는 동작하지만 다음 버전에서 화면·상태를 계속 추가하기에는 위험합니다.
+현재 `TteumsaeApp.kt`는 3,843줄이며 저장·설정 화면과 저장 계층은 분리됐지만 추천 상태와 지도 화면 대부분은 여전히 함께 관리합니다. 다음 단계에서도 기능을 크게 갈아엎지 않고 상태 소유권을 순차적으로 분리해야 합니다.
 
 ### `backend/`
 
@@ -198,9 +204,12 @@ detourMinutes = candidateRouteMinutes - baseRouteMinutes
 
 ## 9. 장소 저장과 이미지
 
-- 저장 장소는 Android SharedPreferences에 JSON으로 저장합니다.
-- 계정이나 서버와 동기화하지 않습니다.
-- 저장 데이터에는 장소명, 주소, 좌표, 이미지 URL과 태그가 포함됩니다.
+- 저장 장소의 단일 원본은 Android Room의 `saved_places` 테이블이며 UI는 lifecycle-aware Flow로 관찰합니다.
+- 현재 활성 범위는 `GUEST`뿐이고 계정이나 서버와 동기화하지 않습니다. 게스트 행은 네트워크 작업을 만들지 않습니다.
+- 저장 해제와 전체 비우기는 행을 즉시 삭제하지 않고 `desired_saved=false` tombstone으로 남깁니다.
+- 저장 스냅샷에는 장소명, 분류, 평균 머무름, 주소, 좌표, 이미지 URL, 태그, 운영시간과 휴무일을 포함하고 추천 시점의 경로 시간·거리는 저장하지 않습니다.
+- 앱 업데이트 시 기존 `saved_places/entries` JSON은 Room 트랜잭션 성공 후 한 번만 이전·제거합니다.
+- SharedPreferences는 홈 안내 날짜 등 단순 기기 설정에만 계속 사용합니다.
 - 이미지는 앱에서 직접 내려받아 메모리 `LruCache`에 보관합니다.
 - 이미지가 없거나 실패하면 앱이 그린 기본 장소 이미지를 표시합니다.
 

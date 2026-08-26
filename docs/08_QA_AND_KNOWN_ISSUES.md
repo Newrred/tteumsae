@@ -1,22 +1,38 @@
 # QA와 알려진 문제
 
-기준일: `2026-08-20`
+기준일: `2026-08-26`
 대상 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
 
 ## 1. 현재 검증 기준선
 
 | 대상 | 상태 | 근거·주의 |
 |---|---|---|
-| Android `compileDebugKotlin` | 성공 | 최신 통합 소스 기준 |
-| Android `assembleDebug` | 성공 | 지역·찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 |
-| Android `testDebugUnitTest` | 성공(영문 드라이브) | 원래 한글·공백 경로에서는 `ClassNotFoundException`; `subst Q:` 매핑에서 5개 테스트 클래스 전체 성공 |
-| Android instrumented/UI 테스트 | 없음 | `androidTest` 자동화 없음 |
+| Android `compileDebugKotlin` | 성공 | Room Flow UI 연결과 레거시 UI 저장 코드 제거 기준 |
+| Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `3BECCB01D6F1F486D06D40CF7B45C9EC14C55C3B7CC0ED47C3F09B668A36C7D1` |
+| Android `testDebugUnitTest` | 40/40 성공 | 저장 JSON 이전, 게스트 Repository, 설정 로컬 저장 문구 포함 |
+| Android `lintDebug` | 성공 | Lifecycle Compose 2.8.7 사용. 2.10.0은 현재 Kotlin 2.0.21/AGP 8.7.3 Lint 분석기와 충돌하므로 사용하지 않음 |
+| Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
 | 백엔드 Node 테스트 | 28/28 성공 | `2026-08-20`; `extraTimeMinutes`, `sigunguCode`, route/baseRoute/corridor와 체류 종료 전 운영시간 검증 포함 |
 | 운영 백엔드 계약 | 배포 필요 | `2026-08-20` 운영 URL은 아직 `deadlineMinutes`만 허용함을 400 응답으로 확인; 새 백엔드를 먼저 배포해야 최신 APK 추천이 동작한다 |
 | 최신 APK 실기기 전체 회귀 | 필요 | 빌드 성공과 사용자 흐름 통과는 별개 |
 
 컴파일·단위 테스트·`assembleDebug` 성공만으로 실기기 QA가 통과했다고 보고하지
 않는다.
+
+### Room 저장소 전환 검증 기록
+
+| 항목 | 2026-08-26 결과 |
+|---|---|
+| 기존 SharedPreferences 파서 제거 검색 | UI 소스에서 `loadSavedPlaces`, `storeSavedPlaces`, `SAVED_PLACES_PREFERENCES` 없음 |
+| 기존 JSON 이전 단위 테스트 | 빈 원본, 정상, 일부 손상, DB 실패, 재실행, 취소 전파 통과 |
+| 게스트 저장 단위 테스트 | 저장→tombstone, 원래 시각 복원, 전체 해제, 최신순 Flow 통과 |
+| 설정 문구 단위 테스트 | 0개·양수 모두 `이 기기에 N개 저장됨` 통과 |
+| 업데이트 설치 QA | **미실행** — 현재 빌드가 설치된 연결 기기나 에뮬레이터 없음 |
+| 강제 종료·재실행/카카오맵 | **미실행** — 실기기 필요 |
+
+업데이트 설치 QA에서는 이전 버전에서 장소 두 곳을 저장한 뒤 새 APK를 덮어 설치해
+순서와 카드 정보가 유지되는지 확인한다. 이어서 저장·해제, Snackbar 되돌리기, 전체
+비우기, 강제 종료 후 재실행, 추천 상세 하트, 카카오맵 실행을 같은 기기에서 검증한다.
 
 ## 2. 인수 직후 자동 검증
 
@@ -26,23 +42,17 @@
 cd android
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat compileDebugKotlin
-.\gradlew.bat compileDebugUnitTestKotlin
-.\gradlew.bat assembleDebug
-
-$repoRoot = (Resolve-Path ..).Path
-subst Q: $repoRoot
-Set-Location Q:\android
 .\gradlew.bat testDebugUnitTest
-Set-Location $repoRoot
-subst Q: /d
+.\gradlew.bat lintDebug
+.\gradlew.bat assembleDebug
+.\gradlew.bat connectedDebugAndroidTest
 ```
 
 기대 결과:
 
-- Kotlin 컴파일과 debug APK 빌드는 성공해야 한다.
-- 원래 한글·공백 경로에서는 `ClassNotFoundException` 이력을 재현할 수 있다.
-- `subst Q:` 영문 드라이브에서는 5개 테스트 클래스가 모두 통과해야 한다.
-- 두 경로의 결과를 구분해 기록하고 CI는 영문·무공백 checkout을 사용한다.
+- Kotlin 컴파일, 전체 단위 테스트, Lint와 debug APK 빌드는 성공해야 한다.
+- `connectedDebugAndroidTest`는 연결된 기기에서 Room DAO 계측 테스트를 실행해야 한다.
+- CI와 새 clone은 영문·무공백 checkout을 유지한다.
 
 ### 백엔드
 
@@ -178,6 +188,11 @@ pnpm run check
 - [ ] 2열 카드의 긴 장소명, `평균 머무름`, `+N` 태그, 저장 하트와 저장 해제 되돌리기가 동작한다.
 - [ ] 다른 지역에서 저장한 로컬 장소가 주소 기준으로 올바른 지역에만 나타나고, 빈 주소·행정구역 표기 차이에서도 앱이 멈추지 않는다.
 - [ ] 저장한 장소가 앱 재실행 후 남는다.
+- [ ] 이전 버전에서 두 장소를 SharedPreferences에 저장한 뒤 새 APK를 덮어 설치하면 Room으로 한 번만 이전되고 저장 순서·카드 정보가 유지된다.
+- [ ] 이전 중 DB 쓰기 실패를 재현했을 때 기존 JSON이 남고 다음 실행에서 재시도된다.
+- [ ] 저장 해제 후 Snackbar `되돌리기`가 원래 저장 시각을 유지해 복원한다.
+- [ ] 설정에 `이 기기에 N개 저장됨`이 표시되고 전체 비우기 후 0개와 빈 찜 목록이 함께 반영된다.
+- [ ] 저장·해제·복원·전체 비우기 후 강제 종료와 재실행에도 Room 상태가 유지된다.
 - [ ] 위치 권한·카카오맵 설치 상태, 캐시 지우기, 저장 전체 삭제, 문의 메일을 확인한다.
 - [ ] 정책 두 항목은 URL 연결 전까지 `준비 중`임을 확인한다.
 
@@ -216,14 +231,11 @@ pnpm run check
 - 새 백엔드를 운영에 먼저 배포하고 `extraTimeMinutes` 스모크 테스트를 통과한 뒤
   APK를 배포한다.
 
-#### Android 단위 테스트의 한글·공백 경로 의존
+#### Android 단위 테스트의 과거 한글·공백 경로 이력
 
-- 원래 작업 경로에서는 `testDebugUnitTest`가 테스트 클래스 실행 전
-  `ClassNotFoundException`으로 실패한다.
-- 같은 소스를 `subst Q:` 영문 드라이브에서 실행하면 5개 테스트 클래스가 모두
-  통과하며, Kotlin compile과 `assembleDebug`도 성공한다.
-- CI와 새 clone은 영문·무공백 경로를 사용하고 원래 경로의 실패 이력과 우회
-  방법을 유지한다.
+- 과거 한글·공백 작업 경로에서 `ClassNotFoundException` 이력이 있었다.
+- 현재 `C:\app\tteumsae`에서는 40개 단위 테스트가 모두 통과했다.
+- CI와 새 clone은 계속 영문·무공백 경로를 사용한다.
 
 #### 최신 실기기 회귀 미완료
 
@@ -319,9 +331,11 @@ pnpm run check
 - release signing, 업로드 키, AAB, Play App Signing, CI 배포 체인이 없다.
 - 정책/아이콘/스플래시/데이터 안전/스토어 이미지가 제출 전 필요하다.
 
-#### 저장 직렬화
+#### Room 업데이트 설치 QA 미완료
 
-- 저장 장소 JSON에 `openingHours`, `closedDays`가 없어 앱 재실행 후 저장 사본에서 운영정보가 사라진다.
+- 새 Room 스냅샷은 `openingHours`, `closedDays`를 포함하고 추천 경로 시간은 제외한다.
+- 기존 JSON에서 Room으로의 변환과 원본 보존 규칙은 단위 테스트로 검증했지만,
+  실제 이전 버전 APK 위에 덮어 설치하는 QA는 연결 기기가 없어 아직 실행하지 못했다.
 
 #### TourAPI 운영 부채
 

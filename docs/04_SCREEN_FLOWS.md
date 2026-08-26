@@ -46,9 +46,9 @@ flowchart LR
 | 추천, warning, `baseRoute`, corridor | `remember` | RESULTS/DETAIL | 프로세스 종료 시 소실 |
 | 선택 경유 ID/현재 상세 | `remember` | RESULTS/DETAIL | 프로세스 종료 시 소실 |
 | 홈 GPS 대상 | 루트 `remember` | HOME | 루트가 살아 있으면 다른 탭을 다녀와도 유지 |
-| 저장 장소 | SharedPreferences JSON | 둘러보기/상세/설정 | 로컬 영속; 계정 동기화 없음 |
+| 저장 장소 | Room `GUEST` + lifecycle-aware Flow | 둘러보기/상세/설정 | 로컬 영속; 계정 동기화 없음 |
 
-앱은 `NavHost`나 `BackHandler`를 사용하지 않는다. 아래의 “뒤로”는 화면 안에 명시된 버튼 동작만 뜻하며 시스템 뒤로가기가 같은 흐름을 보장하지 않는다.
+앱은 `NavHost` 없이 `AppDestination` 상태와 루트 `BackHandler`로 전환한다. 화면 안의 뒤로 버튼과 시스템 뒤로는 같은 `previousDestination` 정책을 사용하며, 저장 화면의 키보드·상세 닫기는 화면 내부 `BackHandler`가 먼저 처리한다.
 
 ## 3. HOME — 지도 홈
 
@@ -340,7 +340,7 @@ flowchart TD
 
 ### 액션과 한계
 
-- 하트: 현재 장소 로컬 저장/해제.
+- 하트: 현재 장소를 Room `GUEST` 범위에 로컬 저장/해제하고 Flow로 다른 화면에도 반영.
 - 주소 행: 카카오맵 장소명 검색.
 - 하단 CTA: 현재 상세 장소를 중복 없이 포함한 경로를 `/api/route`로 다시
   계산하고 같은 시간 예산을 통과한 경우에만 최대 5곳과 최종 목적지를 연다.
@@ -367,7 +367,7 @@ flowchart TD
 16 홍천, 17 화천, 18 횡성
 ```
 
-서버에서 받은 카탈로그는 코드 기준이다. 다른 지역에서 저장한 로컬 장소도 목록 후보에 합치며, Android `PlaceCandidate`에 `sigungu_code`가 없으므로 이 로컬 사본은 주소가 선택 지역명을 포함하는지로 보완 필터한다. `강원도 전체`에서는 모든 로컬 찜을 포함한다.
+서버에서 받은 카탈로그는 코드 기준이다. Room에 저장된 다른 지역 장소도 목록 후보에 합치며, Android `PlaceCandidate`에 `sigungu_code`가 없으므로 이 로컬 사본은 주소가 선택 지역명을 포함하는지로 보완 필터한다. `강원도 전체`에서는 모든 로컬 찜을 포함한다.
 
 | 상태 | UI |
 |---|---|
@@ -394,7 +394,7 @@ flowchart TD
 | 위치 권한 | Android 앱 상세 설정 열기; 복귀 시 상태 갱신 |
 | 카카오맵 | 설치 시 실행, 미설치 시 Play Store/웹 |
 | 캐시 지우기 | 확인 후 이미지 LRU와 `cacheDir` 삭제 |
-| 저장 장소 비우기 | 확인 후 SharedPreferences 목록 삭제 |
+| 저장 장소 비우기 | `이 기기에 N개 저장됨` 표시 후 확인하면 Room의 `GUEST` 저장을 모두 해제 |
 | 개인정보처리방침 | URL 빈 값, 준비 중 |
 | 위치기반서비스 약관 | URL 빈 값, 준비 중 |
 | 문의하기 | `minjaeimnyda@gmail.com` mailto |
@@ -423,6 +423,6 @@ flowchart TD
 | CONDITIONS | 로컬 상태 | 별도 오류 없음 |
 | LOADING | `/api/recommendations`, Kakao Mobility, Supabase | 전체 오류 카드·재시도 |
 | RESULTS | Kakao Map SDK, `/api/route`, Kakao 외부 URL | 지도 재시도, route 실패 시 estimate+토스트, 최대 5곳 토스트 |
-| DETAIL | 이미지 URL, Kakao 외부 앱/웹, SharedPreferences | 이미지 fallback, 좌표/외부 앱 실패 토스트 |
+| DETAIL | 이미지 URL, Kakao 외부 앱/웹, Room | 이미지 fallback, 좌표/외부 앱 실패 토스트 |
 | 둘러보기 | `/api/places`, 이미지 URL | 첫 로드 재시도, 추가 로드 토스트, 이미지 fallback |
 | 설정 | Android Settings, package manager, mail/browser | 기능별 토스트; 정책은 준비 중 |
