@@ -1,14 +1,12 @@
 package com.tteumsae.app.ui
 
 import android.Manifest
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
-import android.util.LruCache
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -200,6 +198,34 @@ import com.tteumsae.app.domain.SafetyLevel
 import com.tteumsae.app.domain.SearchCriteria
 import com.tteumsae.app.domain.SearchMode
 import com.tteumsae.app.domain.TransportMode
+import com.tteumsae.app.domain.recommendation.RecommendationIntent
+import com.tteumsae.app.domain.recommendation.matchesGangwonRegion
+import com.tteumsae.app.domain.recommendation.recommendationCategories
+import com.tteumsae.app.domain.recommendation.recommendationIntentFilters
+import com.tteumsae.app.domain.recommendation.selectedRecommendationIntent
+import com.tteumsae.app.domain.recommendation.toggleRecommendationIntent
+import com.tteumsae.app.domain.route.additionalDetourDistanceMeters
+import com.tteumsae.app.domain.route.isRouteWithinExtraTimeBudget
+import com.tteumsae.app.domain.route.orderWaypointIdsAlongRoute
+import com.tteumsae.app.domain.route.selectedRouteEstimate
+import com.tteumsae.app.platform.CONTACT_EMAIL
+import com.tteumsae.app.platform.LOCATION_TERMS_URL
+import com.tteumsae.app.platform.MAX_KAKAO_WAYPOINTS
+import com.tteumsae.app.platform.PRIVACY_POLICY_URL
+import com.tteumsae.app.platform.clearAppCache
+import com.tteumsae.app.platform.isKakaoMapAvailable
+import com.tteumsae.app.platform.openAppSettings
+import com.tteumsae.app.platform.openContactEmail
+import com.tteumsae.app.platform.openKakaoMap
+import com.tteumsae.app.platform.openKakaoMapHome
+import com.tteumsae.app.platform.openKakaoMapInstallPage
+import com.tteumsae.app.platform.openKakaoMapMultiRoute
+import com.tteumsae.app.platform.openKakaoMapRoute
+import com.tteumsae.app.platform.openPolicy
+import com.tteumsae.app.platform.savedImageCache
+import com.tteumsae.app.ui.common.compactTags
+import com.tteumsae.app.ui.common.formatDistance
+import com.tteumsae.app.ui.common.formatMinutes
 import com.tteumsae.app.ui.navigation.AppDestination
 import com.tteumsae.app.ui.navigation.MainTab
 import com.tteumsae.app.ui.navigation.previousDestination
@@ -215,8 +241,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URL
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -248,23 +272,10 @@ private val gangwonRegionCodes = linkedMapOf(
     "횡성" to 18,
 )
 
-internal fun matchesGangwonRegion(address: String, region: String): Boolean =
-    region == "강원도 전체" || address.contains(region)
-
-internal enum class RecommendationIntent(val label: String) {
-    ANY("아무거나"),
-    MEAL("식사"),
-    CAFE("카페"),
-    WALK_TOUR("산책·관광"),
-    INDOOR("실내 활동"),
-    NO_FOOD("지금은 음식 제외"),
-}
-
 private const val MIN_DEADLINE_MINUTES = 15
 private const val SLIDER_MAX_DEADLINE_MINUTES = 360
 private const val MAX_DEADLINE_MINUTES = 1440
 private const val DEFAULT_EXTRA_TIME_MINUTES = MAX_DEADLINE_MINUTES
-private const val MAX_KAKAO_WAYPOINTS = 5
 private val RouteFocusBlue = Color(0xFF2F6FE4)
 
 private data class MapCandidate(
@@ -274,55 +285,6 @@ private data class MapCandidate(
     val selectedOrder: Int?,
     val isFocused: Boolean,
 )
-
-internal fun orderWaypointIdsAlongRoute(
-    start: Coordinates,
-    destination: Coordinates,
-    waypoints: List<Pair<String, Coordinates>>,
-): List<String> {
-    val latitudeDelta = destination.latitude - start.latitude
-    val longitudeDelta = destination.longitude - start.longitude
-    val denominator = latitudeDelta * latitudeDelta + longitudeDelta * longitudeDelta
-    if (denominator == 0.0) return waypoints.map { it.first }
-    return waypoints.sortedBy { (_, point) ->
-        ((point.latitude - start.latitude) * latitudeDelta +
-            (point.longitude - start.longitude) * longitudeDelta) / denominator
-    }.map(Pair<String, Coordinates>::first)
-}
-
-internal fun selectedRouteEstimate(
-    deadlineMinutes: Int,
-    recommendations: List<SafeRecommendation>,
-): Pair<Int, Int> {
-    if (recommendations.isEmpty()) return 0 to deadlineMinutes
-    val first = recommendations.first().place
-    val directMinutes = (first.firstLegMinutes + first.secondLegMinutes - first.detourMinutes)
-        .coerceAtLeast(0)
-    val totalMinutes = directMinutes + recommendations.sumOf {
-        it.place.detourMinutes + it.place.stayMinutes
-    }
-    return totalMinutes to (deadlineMinutes - totalMinutes)
-}
-
-internal fun isRouteWithinExtraTimeBudget(
-    baseDrivingMinutes: Int,
-    extraTimeMinutes: Int,
-    selectedDrivingMinutes: Int,
-    selectedStayMinutes: Int,
-    safetyBufferMinutes: Int,
-): Boolean = selectedDrivingMinutes + selectedStayMinutes + safetyBufferMinutes <=
-    baseDrivingMinutes + extraTimeMinutes
-
-internal fun additionalDetourDistanceMeters(
-    place: PlaceCandidate,
-    baseDistanceMeters: Int,
-): Int? {
-    if (baseDistanceMeters <= 0 || place.firstLegDistanceMeters <= 0 || place.secondLegDistanceMeters <= 0) {
-        return null
-    }
-    return (place.firstLegDistanceMeters + place.secondLegDistanceMeters - baseDistanceMeters)
-        .coerceAtLeast(0)
-}
 
 internal fun deniedLocationPermissionNeedsSettings(
     permissions: Map<String, Boolean>,
@@ -336,9 +298,6 @@ internal fun networkFailureMessage(operation: String, detail: String?): String =
 
 internal fun shouldAutoLocateStart(startName: String, hasLocation: Boolean): Boolean =
     startName == "현재 위치" && !hasLocation
-private const val CONTACT_EMAIL = "minjaeimnyda@gmail.com"
-private const val PRIVACY_POLICY_URL = ""
-private const val LOCATION_TERMS_URL = ""
 private const val HOME_INTRO_PREFERENCES = "home_intro"
 private const val HOME_INTRO_HIDDEN_DATE = "hidden_date"
 
@@ -351,10 +310,6 @@ private data class PlaceCardItem(
     val place: PlaceCandidate,
     val savedEntry: SavedPlaceEntry?,
 )
-
-private val savedImageCache = object : LruCache<String, Bitmap>(16 * 1024) {
-    override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount / 1024
-}
 
 @Composable
 fun TteumsaeApp() {
@@ -1991,86 +1946,6 @@ private fun SavedPlaceImage(
             modifier = modifier,
         )
     }
-}
-
-internal fun compactTags(
-    tags: List<String>,
-    characterBudget: Int = 18,
-): Pair<List<String>, Int> {
-    var used = 0
-    val visible = tags.takeWhile { tag ->
-        val fits = used + tag.length + 1 <= characterBudget
-        if (fits) used += tag.length + 1
-        fits
-    }
-    return visible to (tags.size - visible.size)
-}
-
-internal fun recommendationCategories(
-    selected: Set<PlaceCategory>,
-    excludeRestaurants: Boolean,
-): Set<PlaceCategory> {
-    if (!excludeRestaurants) return selected
-    return (selected.ifEmpty { PlaceCategory.entries.toSet() } - PlaceCategory.RESTAURANT)
-        .ifEmpty { PlaceCategory.entries.toSet() - PlaceCategory.RESTAURANT }
-}
-
-internal fun recommendationIntentFilters(
-    intent: RecommendationIntent,
-): Pair<Set<PlaceCategory>, Boolean> = when (intent) {
-    RecommendationIntent.ANY -> emptySet<PlaceCategory>() to false
-    RecommendationIntent.MEAL -> setOf(PlaceCategory.RESTAURANT) to false
-    RecommendationIntent.CAFE -> setOf(PlaceCategory.CAFE) to false
-    RecommendationIntent.WALK_TOUR -> setOf(PlaceCategory.ATTRACTION, PlaceCategory.LEISURE) to false
-    RecommendationIntent.INDOOR -> setOf(PlaceCategory.CULTURE, PlaceCategory.SHOPPING) to false
-    RecommendationIntent.NO_FOOD -> emptySet<PlaceCategory>() to true
-}
-
-internal fun toggleRecommendationIntent(
-    current: Set<RecommendationIntent>,
-    intent: RecommendationIntent,
-): Set<RecommendationIntent> {
-    if (intent == RecommendationIntent.ANY) return setOf(RecommendationIntent.ANY)
-    val updated = (current - RecommendationIntent.ANY).toMutableSet()
-    if (!updated.add(intent)) updated.remove(intent)
-    if (intent == RecommendationIntent.NO_FOOD) updated.remove(RecommendationIntent.MEAL)
-    if (intent == RecommendationIntent.MEAL) updated.remove(RecommendationIntent.NO_FOOD)
-    return updated.ifEmpty { setOf(RecommendationIntent.ANY) }
-}
-
-internal fun recommendationIntentFilters(
-    intents: Set<RecommendationIntent>,
-): Pair<Set<PlaceCategory>, Boolean> {
-    if (RecommendationIntent.ANY in intents) return emptySet<PlaceCategory>() to false
-    val categories = buildSet {
-        intents.forEach { intent -> addAll(recommendationIntentFilters(intent).first) }
-    }
-    return categories to (RecommendationIntent.NO_FOOD in intents)
-}
-
-internal fun selectedRecommendationIntent(
-    categories: Set<PlaceCategory>,
-    excludeRestaurants: Boolean,
-): RecommendationIntent = when {
-    excludeRestaurants -> RecommendationIntent.NO_FOOD
-    categories == setOf(PlaceCategory.RESTAURANT) -> RecommendationIntent.MEAL
-    categories == setOf(PlaceCategory.CAFE) -> RecommendationIntent.CAFE
-    categories == setOf(PlaceCategory.ATTRACTION, PlaceCategory.LEISURE) -> RecommendationIntent.WALK_TOUR
-    categories == setOf(PlaceCategory.CULTURE, PlaceCategory.SHOPPING) -> RecommendationIntent.INDOOR
-    else -> RecommendationIntent.ANY
-}
-
-private fun formatMinutes(minutes: Int): String =
-    when {
-        minutes < 60 -> "${minutes}분"
-        minutes % 60 == 0 -> "${minutes / 60}시간"
-        else -> "${minutes / 60}시간 ${minutes % 60}분"
-    }
-
-private fun formatDistance(meters: Int): String = when {
-    meters <= 0 -> "거리 계산 중"
-    meters < 1_000 -> "${meters}m"
-    else -> "${"%.1f".format(meters / 1_000.0)}km"
 }
 
 private fun fallbackRouteSummary(
@@ -4869,198 +4744,3 @@ private fun hideHomeIntroForToday(context: Context) {
         .putString(HOME_INTRO_HIDDEN_DATE, LocalDate.now().toString())
         .apply()
 }
-
-private fun isKakaoMapAvailable(context: Context): Boolean =
-    context.packageManager.resolveActivity(
-        Intent(Intent.ACTION_VIEW, Uri.parse("kakaomap://open")),
-        android.content.pm.PackageManager.MATCH_DEFAULT_ONLY,
-    ) != null
-
-private fun openKakaoMapHome(context: Context) {
-    try {
-        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("kakaomap://open")))
-    } catch (_: ActivityNotFoundException) {
-        openKakaoMapInstallPage(context)
-    }
-}
-
-private fun openKakaoMapInstallPage(context: Context) {
-    val query = Uri.encode("카카오맵")
-    val intents = listOf(
-        Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$query")),
-        Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=$query&c=apps")),
-    )
-    if (intents.none { runCatching { context.startActivity(it) }.isSuccess }) {
-        Toast.makeText(context, "앱 스토어를 열 수 없습니다.", Toast.LENGTH_SHORT).show()
-    }
-}
-
-private fun clearAppCache(context: Context): Boolean = runCatching {
-    savedImageCache.evictAll()
-    context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
-}.isSuccess
-
-private fun openAppSettings(context: Context) {
-    context.startActivity(
-        Intent(
-            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-            Uri.parse("package:${context.packageName}"),
-        ),
-    )
-}
-
-private fun openPolicy(context: Context, url: String) {
-    if (url.isBlank()) {
-        Toast.makeText(context, "공개 문서를 준비 중이에요.", Toast.LENGTH_SHORT).show()
-        return
-    }
-    if (runCatching {
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        }.isFailure
-    ) {
-        Toast.makeText(context, "문서를 열 수 없습니다.", Toast.LENGTH_SHORT).show()
-    }
-}
-
-private fun openContactEmail(context: Context) {
-    val subject = Uri.encode("[틈새] 앱 문의")
-    val body = Uri.encode("앱 버전: ${BuildConfig.VERSION_NAME}\n\n문의 내용을 작성해 주세요.")
-    val intent = Intent(
-        Intent.ACTION_SENDTO,
-        Uri.parse("mailto:$CONTACT_EMAIL?subject=$subject&body=$body"),
-    )
-    if (runCatching { context.startActivity(intent) }.isFailure) {
-        Toast.makeText(context, "메일 앱을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
-    }
-}
-
-private fun openKakaoMap(context: Context, placeName: String) {
-    val encoded = Uri.encode(placeName)
-    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("kakaomap://search?q=$encoded"))
-    try {
-        context.startActivity(appIntent)
-    } catch (_: ActivityNotFoundException) {
-        val webIntent = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("https://map.kakao.com/link/search/$encoded"),
-        )
-        try {
-            context.startActivity(webIntent)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "지도를 열 수 없습니다.", Toast.LENGTH_SHORT).show()
-        }
-    }
-}
-
-private fun openKakaoMapRoute(
-    context: Context,
-    start: Coordinates?,
-    startName: String?,
-    waypoint: Coordinates?,
-    destination: Coordinates?,
-    destinationName: String?,
-    transport: TransportMode,
-) {
-    if (start == null || destination == null) {
-        Toast.makeText(
-            context,
-            "경로 좌표를 확인할 수 없어 카카오맵을 열지 못했어요.",
-            Toast.LENGTH_SHORT,
-        ).show()
-        return
-    }
-
-    val routeQuery = buildKakaoMapRouteQuery(
-        start = start,
-        destination = destination,
-        transport = transport,
-        waypoint = waypoint,
-        startName = startName,
-        destinationName = destinationName,
-    )
-    val appIntent = Intent(
-        Intent.ACTION_VIEW,
-        Uri.parse("kakaomap://route?$routeQuery"),
-    )
-
-    try {
-        context.startActivity(appIntent)
-    } catch (_: ActivityNotFoundException) {
-        val webIntent = Intent(
-            Intent.ACTION_VIEW,
-            Uri.parse("https://m.map.kakao.com/scheme/route?$routeQuery"),
-        )
-        try {
-            context.startActivity(webIntent)
-        } catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "지도를 열 수 없습니다.", Toast.LENGTH_SHORT).show()
-        }
-    }
-}
-
-private fun openKakaoMapMultiRoute(
-    context: Context,
-    start: Coordinates?,
-    startName: String,
-    waypoints: List<Pair<String, Coordinates>>,
-    destination: Coordinates?,
-    destinationName: String,
-) {
-    if (start == null || destination == null) {
-        Toast.makeText(context, "경로 좌표를 확인할 수 없어요.", Toast.LENGTH_SHORT).show()
-        return
-    }
-    val url = buildKakaoMapMultiRouteUrl(
-        startName,
-        start,
-        waypoints.take(MAX_KAKAO_WAYPOINTS),
-        destinationName,
-        destination,
-    )
-    if (runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.isFailure) {
-        Toast.makeText(context, "카카오맵을 열 수 없습니다.", Toast.LENGTH_SHORT).show()
-    }
-}
-
-internal fun buildKakaoMapMultiRouteUrl(
-    startName: String,
-    start: Coordinates,
-    waypoints: List<Pair<String, Coordinates>>,
-    destinationName: String,
-    destination: Coordinates,
-): String {
-    fun stop(name: String, coordinates: Coordinates): String =
-        "${URLEncoder.encode(name, StandardCharsets.UTF_8.name()).replace("+", "%20")}," +
-            "${coordinates.latitude},${coordinates.longitude}"
-    return buildString {
-        append("https://map.kakao.com/link/by/car/")
-        append(stop(startName, start))
-        waypoints.take(MAX_KAKAO_WAYPOINTS).forEach { (name, coordinates) ->
-            append("/")
-            append(stop(name, coordinates))
-        }
-        append("/")
-        append(stop(destinationName, destination))
-    }
-}
-
-internal fun buildKakaoMapRouteQuery(
-    start: Coordinates,
-    destination: Coordinates,
-    transport: TransportMode,
-    waypoint: Coordinates? = null,
-    startName: String? = null,
-    destinationName: String? = null,
-): String =
-    buildString {
-        append("sp=${start.latitude},${start.longitude}")
-        startName?.takeIf(String::isNotBlank)?.let {
-            append("&sn=${URLEncoder.encode(it, StandardCharsets.UTF_8.name())}")
-        }
-        waypoint?.let { append("&vp=${it.latitude},${it.longitude}") }
-        append("&ep=${destination.latitude},${destination.longitude}")
-        destinationName?.takeIf(String::isNotBlank)?.let {
-            append("&en=${URLEncoder.encode(it, StandardCharsets.UTF_8.name())}")
-        }
-        append("&by=${if (transport == TransportMode.CAR) "car" else "foot"}")
-    }

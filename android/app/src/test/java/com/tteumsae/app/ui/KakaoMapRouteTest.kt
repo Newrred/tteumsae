@@ -6,6 +6,18 @@ import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SafetyLevel
 import com.tteumsae.app.domain.TransportMode
+import com.tteumsae.app.domain.recommendation.RecommendationIntent
+import com.tteumsae.app.domain.recommendation.matchesGangwonRegion
+import com.tteumsae.app.domain.recommendation.recommendationCategories
+import com.tteumsae.app.domain.recommendation.recommendationIntentFilters
+import com.tteumsae.app.domain.recommendation.toggleRecommendationIntent
+import com.tteumsae.app.domain.route.additionalDetourDistanceMeters
+import com.tteumsae.app.domain.route.isRouteWithinExtraTimeBudget
+import com.tteumsae.app.domain.route.orderWaypointIdsAlongRoute
+import com.tteumsae.app.domain.route.selectedRouteEstimate
+import com.tteumsae.app.platform.buildKakaoMapMultiRouteUrl
+import com.tteumsae.app.platform.buildKakaoMapRouteQuery
+import com.tteumsae.app.ui.common.compactTags
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
