@@ -200,6 +200,9 @@ import com.tteumsae.app.domain.SafetyLevel
 import com.tteumsae.app.domain.SearchCriteria
 import com.tteumsae.app.domain.SearchMode
 import com.tteumsae.app.domain.TransportMode
+import com.tteumsae.app.ui.navigation.AppDestination
+import com.tteumsae.app.ui.navigation.MainTab
+import com.tteumsae.app.ui.navigation.previousDestination
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
@@ -217,23 +220,6 @@ import java.nio.charset.StandardCharsets
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
-private enum class AppScreen {
-    HOME,
-    SAVED,
-    SETTINGS,
-    LOCATION,
-    CONDITIONS,
-    LOADING,
-    RESULTS,
-    DETAIL,
-}
-
-private enum class MainTab {
-    EXPLORE,
-    SAVED,
-    SETTINGS,
-}
 
 private enum class SavedSort {
     DEFAULT,
@@ -374,7 +360,7 @@ private val savedImageCache = object : LruCache<String, Bitmap>(16 * 1024) {
 fun TteumsaeApp() {
     val context = LocalContext.current
     val api = remember { TteumsaeApi() }
-    var screen by rememberSaveable { mutableStateOf(AppScreen.HOME) }
+    var screen by rememberSaveable { mutableStateOf(AppDestination.HOME) }
     var mode by rememberSaveable { mutableStateOf(SearchMode.ON_THE_WAY) }
     var startName by rememberSaveable { mutableStateOf("현재 위치") }
     var endName by rememberSaveable { mutableStateOf("") }
@@ -410,19 +396,8 @@ fun TteumsaeApp() {
     var showHomeIntro by rememberSaveable { mutableStateOf(shouldShowHomeIntro(context)) }
     val appScope = rememberCoroutineScope()
 
-    BackHandler(enabled = screen != AppScreen.HOME) {
-        screen = when (screen) {
-            AppScreen.SAVED,
-            AppScreen.SETTINGS,
-            AppScreen.LOCATION,
-            -> AppScreen.HOME
-            AppScreen.CONDITIONS -> AppScreen.LOCATION
-            AppScreen.LOADING,
-            AppScreen.RESULTS,
-            -> AppScreen.CONDITIONS
-            AppScreen.DETAIL -> AppScreen.RESULTS
-            AppScreen.HOME -> AppScreen.HOME
-        }
+    BackHandler(enabled = screen != AppDestination.HOME) {
+        screen = previousDestination(screen)
     }
     val updateSavedPlaces: (List<SavedPlaceEntry>) -> Unit = { updated ->
         savedPlaces = updated
@@ -430,7 +405,7 @@ fun TteumsaeApp() {
     }
 
     LaunchedEffect(screen, catalogLoadAttempt, catalogRegion) {
-        if (screen == AppScreen.SAVED) {
+        if (screen == AppDestination.SAVED) {
             catalogLoading = true
             catalogError = null
             try {
@@ -476,7 +451,7 @@ fun TteumsaeApp() {
     }
 
     when (screen) {
-        AppScreen.HOME -> HomeScreen(
+        AppDestination.HOME -> HomeScreen(
             showIntro = showHomeIntro,
             currentLocationTarget = currentLocationTarget,
             onCurrentLocationTargetChange = { currentLocationTarget = it },
@@ -501,18 +476,18 @@ fun TteumsaeApp() {
                 startLocation = currentLocation
                 endName = ""
                 endLocation = null
-                screen = AppScreen.LOCATION
+                screen = AppDestination.LOCATION
             },
             onTabSelected = { tab ->
                 screen = when (tab) {
-                    MainTab.EXPLORE -> AppScreen.HOME
-                    MainTab.SAVED -> AppScreen.SAVED
-                    MainTab.SETTINGS -> AppScreen.SETTINGS
+                    MainTab.EXPLORE -> AppDestination.HOME
+                    MainTab.SAVED -> AppDestination.SAVED
+                    MainTab.SETTINGS -> AppDestination.SETTINGS
                 }
             },
         )
 
-        AppScreen.SAVED -> SavedPlacesScreen(
+        AppDestination.SAVED -> SavedPlacesScreen(
             catalogPlaces = catalogPlaces,
             savedPlaces = savedPlaces,
             selectedRegion = catalogRegion,
@@ -563,26 +538,26 @@ fun TteumsaeApp() {
             },
             onTabSelected = { tab ->
                 screen = when (tab) {
-                    MainTab.EXPLORE -> AppScreen.HOME
-                    MainTab.SAVED -> AppScreen.SAVED
-                    MainTab.SETTINGS -> AppScreen.SETTINGS
+                    MainTab.EXPLORE -> AppDestination.HOME
+                    MainTab.SAVED -> AppDestination.SAVED
+                    MainTab.SETTINGS -> AppDestination.SETTINGS
                 }
             },
         )
 
-        AppScreen.SETTINGS -> SettingsTabScreen(
+        AppDestination.SETTINGS -> SettingsTabScreen(
             savedCount = savedPlaces.size,
             onClearSaved = { updateSavedPlaces(emptyList()) },
             onTabSelected = { tab ->
                 screen = when (tab) {
-                    MainTab.EXPLORE -> AppScreen.HOME
-                    MainTab.SAVED -> AppScreen.SAVED
-                    MainTab.SETTINGS -> AppScreen.SETTINGS
+                    MainTab.EXPLORE -> AppDestination.HOME
+                    MainTab.SAVED -> AppDestination.SAVED
+                    MainTab.SETTINGS -> AppDestination.SETTINGS
                 }
             },
         )
 
-        AppScreen.LOCATION -> LocationScreen(
+        AppDestination.LOCATION -> LocationScreen(
             startName = startName,
             endName = endName,
             startLocation = startLocation,
@@ -616,7 +591,7 @@ fun TteumsaeApp() {
                 endLocation = it
             },
             isChecking = locationChecking,
-            onBack = { screen = AppScreen.HOME },
+            onBack = { screen = AppDestination.HOME },
             onNext = {
                 if (!locationChecking) {
                     locationChecking = true
@@ -647,7 +622,7 @@ fun TteumsaeApp() {
                                 startLocation = resolvedStart
                                 endName = resolvedEnd.name
                                 endLocation = resolvedEnd
-                                screen = AppScreen.CONDITIONS
+                                screen = AppDestination.CONDITIONS
                             }
                         } catch (error: Exception) {
                             Toast.makeText(
@@ -663,7 +638,7 @@ fun TteumsaeApp() {
             },
         )
 
-        AppScreen.CONDITIONS -> ConditionsScreen(
+        AppDestination.CONDITIONS -> ConditionsScreen(
             selectedIntents = selectedIntents,
             onIntentSelected = { intent ->
                 selectedIntents = toggleRecommendationIntent(selectedIntents, intent)
@@ -671,11 +646,11 @@ fun TteumsaeApp() {
                 categories = selectedCategories
                 excludeRestaurants = excludeFood
             },
-            onBack = { screen = AppScreen.LOCATION },
-            onSearch = { screen = AppScreen.LOADING },
+            onBack = { screen = AppDestination.LOCATION },
+            onSearch = { screen = AppDestination.LOADING },
         )
 
-        AppScreen.LOADING -> LoadingScreen(
+        AppDestination.LOADING -> LoadingScreen(
             onLoad = {
                 val start = startLocation ?: api.searchPlace(
                     criteria.startName,
@@ -703,12 +678,12 @@ fun TteumsaeApp() {
             },
             onFinished = {
                 routeSummaryExpanded = true
-                screen = AppScreen.RESULTS
+                screen = AppDestination.RESULTS
             },
-            onBack = { screen = AppScreen.CONDITIONS },
+            onBack = { screen = AppDestination.CONDITIONS },
         )
 
-        AppScreen.RESULTS -> ResultsScreen(
+        AppDestination.RESULTS -> ResultsScreen(
             criteria = activeCriteria ?: criteria,
             recommendations = recommendations,
             warning = recommendationWarning,
@@ -728,22 +703,22 @@ fun TteumsaeApp() {
                 val destination = requireNotNull(resolved.endCoordinates)
                 api.route(start, destination, waypoints)
             },
-            onBack = { screen = AppScreen.CONDITIONS },
+            onBack = { screen = AppDestination.CONDITIONS },
             onClearConditions = {
                 categories = emptySet()
                 excludeRestaurants = false
                 selectedIntents = setOf(RecommendationIntent.ANY)
-                screen = AppScreen.LOADING
+                screen = AppDestination.LOADING
             },
-            onSearchOtherPlace = { screen = AppScreen.LOCATION },
+            onSearchOtherPlace = { screen = AppDestination.LOCATION },
             onOpenRoute = openRoute,
             onSelect = {
                 selected = it
-                screen = AppScreen.DETAIL
+                screen = AppDestination.DETAIL
             },
         )
 
-        AppScreen.DETAIL -> selected?.let {
+        AppDestination.DETAIL -> selected?.let {
             val selectedRecommendations = selectedWaypointIds.mapNotNull { selectedId ->
                 recommendations.find { recommendation -> recommendation.place.id == selectedId }
             }
@@ -824,10 +799,10 @@ fun TteumsaeApp() {
                         }
                     }
                 },
-                onBack = { screen = AppScreen.RESULTS },
+                onBack = { screen = AppDestination.RESULTS },
             )
         } ?: run {
-            screen = AppScreen.RESULTS
+            screen = AppDestination.RESULTS
         }
     }
 }
