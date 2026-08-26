@@ -4,7 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.Settings
 import android.widget.Toast
@@ -15,7 +14,6 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
@@ -53,10 +51,6 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items as gridItems
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.selection.selectable
@@ -91,8 +85,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -103,21 +95,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.material3.rememberStandardBottomSheetState
-import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -138,12 +125,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -208,6 +193,8 @@ import com.tteumsae.app.domain.route.additionalDetourDistanceMeters
 import com.tteumsae.app.domain.route.isRouteWithinExtraTimeBudget
 import com.tteumsae.app.domain.route.orderWaypointIdsAlongRoute
 import com.tteumsae.app.domain.route.selectedRouteEstimate
+import com.tteumsae.app.domain.saved.SavedPlace
+import com.tteumsae.app.domain.saved.latestFirst
 import com.tteumsae.app.platform.CONTACT_EMAIL
 import com.tteumsae.app.platform.LOCATION_TERMS_URL
 import com.tteumsae.app.platform.MAX_KAKAO_WAYPOINTS
@@ -222,33 +209,27 @@ import com.tteumsae.app.platform.openKakaoMapInstallPage
 import com.tteumsae.app.platform.openKakaoMapMultiRoute
 import com.tteumsae.app.platform.openKakaoMapRoute
 import com.tteumsae.app.platform.openPolicy
-import com.tteumsae.app.platform.savedImageCache
 import com.tteumsae.app.ui.common.compactTags
 import com.tteumsae.app.ui.common.formatDistance
 import com.tteumsae.app.ui.common.formatMinutes
 import com.tteumsae.app.ui.navigation.AppDestination
 import com.tteumsae.app.ui.navigation.MainTab
 import com.tteumsae.app.ui.navigation.previousDestination
+import com.tteumsae.app.ui.saved.SavedPlacesScreen
+import com.tteumsae.app.ui.saved.SavedPlaceImage
+import com.tteumsae.app.ui.settings.SettingsScreen
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.URL
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.roundToInt
-
-private enum class SavedSort {
-    DEFAULT,
-    NAME,
-}
 
 private val gangwonRegionCodes = linkedMapOf(
     "강원도 전체" to null,
@@ -301,16 +282,6 @@ internal fun shouldAutoLocateStart(startName: String, hasLocation: Boolean): Boo
 private const val HOME_INTRO_PREFERENCES = "home_intro"
 private const val HOME_INTRO_HIDDEN_DATE = "hidden_date"
 
-private data class SavedPlaceEntry(
-    val place: PlaceCandidate,
-    val savedAtMillis: Long,
-)
-
-private data class PlaceCardItem(
-    val place: PlaceCandidate,
-    val savedEntry: SavedPlaceEntry?,
-)
-
 @Composable
 fun TteumsaeApp() {
     val context = LocalContext.current
@@ -354,7 +325,7 @@ fun TteumsaeApp() {
     BackHandler(enabled = screen != AppDestination.HOME) {
         screen = previousDestination(screen)
     }
-    val updateSavedPlaces: (List<SavedPlaceEntry>) -> Unit = { updated ->
+    val updateSavedPlaces: (List<SavedPlace>) -> Unit = { updated ->
         savedPlaces = updated
         storeSavedPlaces(context, updated)
     }
@@ -446,6 +417,7 @@ fun TteumsaeApp() {
             catalogPlaces = catalogPlaces,
             savedPlaces = savedPlaces,
             selectedRegion = catalogRegion,
+            regions = gangwonRegionCodes.keys.toList(),
             onRegionSelected = { catalogRegion = it },
             isLoading = catalogLoading,
             isLoadingMore = catalogLoadingMore,
@@ -480,7 +452,7 @@ fun TteumsaeApp() {
             onToggleSave = { place ->
                 val existing = savedPlaces.find { it.place.id == place.id }
                 if (existing == null) {
-                    updateSavedPlaces(listOf(SavedPlaceEntry(place, System.currentTimeMillis())) + savedPlaces)
+                    updateSavedPlaces(listOf(SavedPlace(place, System.currentTimeMillis())) + savedPlaces)
                 } else {
                     updateSavedPlaces(savedPlaces.filterNot { it.place.id == place.id })
                 }
@@ -488,9 +460,10 @@ fun TteumsaeApp() {
             onRestore = { entry ->
                 updateSavedPlaces(
                     (savedPlaces.filterNot { it.place.id == entry.place.id } + entry)
-                        .sortedByDescending { it.savedAtMillis },
+                        .latestFirst(),
                 )
             },
+            onOpenMap = { place -> openKakaoMap(context, place.name) },
             onTabSelected = { tab ->
                 screen = when (tab) {
                     MainTab.EXPLORE -> AppDestination.HOME
@@ -500,17 +473,59 @@ fun TteumsaeApp() {
             },
         )
 
-        AppDestination.SETTINGS -> SettingsTabScreen(
-            savedCount = savedPlaces.size,
-            onClearSaved = { updateSavedPlaces(emptyList()) },
-            onTabSelected = { tab ->
-                screen = when (tab) {
-                    MainTab.EXPLORE -> AppDestination.HOME
-                    MainTab.SAVED -> AppDestination.SAVED
-                    MainTab.SETTINGS -> AppDestination.SETTINGS
+        AppDestination.SETTINGS -> {
+            val lifecycleOwner = LocalLifecycleOwner.current
+            var locationPermissionGranted by remember {
+                mutableStateOf(hasLocationPermission(context))
+            }
+            var kakaoMapAvailable by remember {
+                mutableStateOf(isKakaoMapAvailable(context))
+            }
+
+            DisposableEffect(lifecycleOwner, context) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        locationPermissionGranted = hasLocationPermission(context)
+                        kakaoMapAvailable = isKakaoMapAvailable(context)
+                    }
                 }
-            },
-        )
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
+            SettingsScreen(
+                savedCount = savedPlaces.size,
+                locationPermissionGranted = locationPermissionGranted,
+                kakaoMapAvailable = kakaoMapAvailable,
+                appVersion = BuildConfig.VERSION_NAME,
+                contactEmail = CONTACT_EMAIL,
+                privacyPolicyAvailable = PRIVACY_POLICY_URL.isNotBlank(),
+                locationTermsAvailable = LOCATION_TERMS_URL.isNotBlank(),
+                onOpenLocationSettings = { openAppSettings(context) },
+                onOpenKakaoMap = {
+                    if (kakaoMapAvailable) {
+                        openKakaoMapHome(context)
+                    } else {
+                        openKakaoMapInstallPage(context)
+                    }
+                },
+                onClearCache = { clearAppCache(context) },
+                onClearSaved = { updateSavedPlaces(emptyList()) },
+                onOpenPrivacyPolicy = { openPolicy(context, PRIVACY_POLICY_URL) },
+                onOpenLocationTerms = { openPolicy(context, LOCATION_TERMS_URL) },
+                onContact = { openContactEmail(context) },
+                onShowMessage = { message ->
+                    Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                },
+                onTabSelected = { tab ->
+                    screen = when (tab) {
+                        MainTab.EXPLORE -> AppDestination.HOME
+                        MainTab.SAVED -> AppDestination.SAVED
+                        MainTab.SETTINGS -> AppDestination.SETTINGS
+                    }
+                },
+            )
+        }
 
         AppDestination.LOCATION -> LocationScreen(
             startName = startName,
@@ -693,7 +708,7 @@ fun TteumsaeApp() {
                     updateSavedPlaces(if (savedPlaces.any { entry -> entry.place.id == it.place.id }) {
                         savedPlaces.filterNot { entry -> entry.place.id == it.place.id }
                     } else {
-                        listOf(SavedPlaceEntry(it.place, System.currentTimeMillis())) + savedPlaces
+                        listOf(SavedPlace(it.place, System.currentTimeMillis())) + savedPlaces
                     })
                 },
                 isOpeningRoute = detailRouteChecking,
@@ -1005,7 +1020,7 @@ private fun HomeIntroDialog(onDismiss: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun BottomNavigation(
+internal fun BottomNavigation(
     selectedTab: MainTab,
     onTabSelected: (MainTab) -> Unit,
 ) {
@@ -1115,839 +1130,6 @@ private fun BottomNavItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
-@Composable
-private fun SavedPlacesScreen(
-    catalogPlaces: List<PlaceCandidate>,
-    savedPlaces: List<SavedPlaceEntry>,
-    selectedRegion: String,
-    onRegionSelected: (String) -> Unit,
-    isLoading: Boolean,
-    isLoadingMore: Boolean,
-    hasMore: Boolean,
-    errorMessage: String?,
-    onRetry: () -> Unit,
-    onLoadMore: () -> Unit,
-    onToggleSave: (PlaceCandidate) -> Unit,
-    onRestore: (SavedPlaceEntry) -> Unit,
-    onTabSelected: (MainTab) -> Unit,
-) {
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val isImeVisible = WindowInsets.isImeVisible
-    var selectedCategory by rememberSaveable { mutableStateOf<PlaceCategory?>(null) }
-    var regionMenuExpanded by remember { mutableStateOf(false) }
-    var savedOnly by rememberSaveable { mutableStateOf(false) }
-    var query by rememberSaveable { mutableStateOf("") }
-    var sort by rememberSaveable { mutableStateOf(SavedSort.DEFAULT) }
-    var selectedPlace by remember { mutableStateOf<PlaceCandidate?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-    val gridState = rememberLazyGridState()
-
-    BackHandler(enabled = isImeVisible && selectedPlace == null) {
-        focusManager.clearFocus(force = true)
-        keyboardController?.hide()
-    }
-    BackHandler(enabled = selectedPlace != null) { selectedPlace = null }
-
-    selectedPlace?.let { place ->
-        SavedPlaceDetailScreen(
-            place = place,
-            onBack = { selectedPlace = null },
-        )
-        return
-    }
-
-    val savedById = savedPlaces.associateBy { it.place.id }
-    val catalogIds = catalogPlaces.mapTo(mutableSetOf()) { it.id }
-    val allPlaces = (catalogPlaces + savedPlaces.map { it.place }).distinctBy { it.id }
-    val visiblePlaces = allPlaces
-        .asSequence()
-        .filter { it.id in catalogIds || matchesGangwonRegion(it.address, selectedRegion) }
-        .filter { !savedOnly || it.id in savedById }
-        .filter { selectedCategory == null || it.category == selectedCategory }
-        .filter { place ->
-            query.isBlank() ||
-                place.name.contains(query, ignoreCase = true) ||
-                place.address.contains(query, ignoreCase = true)
-        }
-        .map { catalogPlace ->
-            val savedEntry = savedById[catalogPlace.id]
-            PlaceCardItem(
-                place = if (savedEntry == null) {
-                    catalogPlace
-                } else {
-                    catalogPlace.copy(tags = savedEntry.place.tags)
-                },
-                savedEntry = savedEntry,
-            )
-        }
-        .let { entries ->
-            when (sort) {
-                SavedSort.DEFAULT -> entries
-                SavedSort.NAME -> entries.sortedBy { it.place.name }
-            }
-        }
-        .toList()
-    val shouldLoadMore by remember(visiblePlaces.size, hasMore, isLoadingMore) {
-        derivedStateOf {
-            val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            hasMore && !isLoadingMore &&
-                (visiblePlaces.isEmpty() || lastVisibleIndex >= visiblePlaces.lastIndex - 6)
-        }
-    }
-
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) onLoadMore()
-    }
-
-    Scaffold(
-        containerColor = Color(0xFFF7F8FA),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        bottomBar = {
-            if (!isImeVisible) {
-                BottomNavigation(
-                    selectedTab = MainTab.SAVED,
-                    onTabSelected = onTabSelected,
-                )
-            }
-        },
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color.White)
-                    .statusBarsPadding()
-                    .padding(top = 12.dp, bottom = 16.dp),
-            ) {
-                OutlinedTextField(
-                    value = query,
-                    onValueChange = { query = it },
-                    placeholder = { Text("탐색 위치 검색", color = TteumMuted) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            focusManager.clearFocus(force = true)
-                            keyboardController?.hide()
-                        },
-                    ),
-                    singleLine = true,
-                    shape = RoundedCornerShape(18.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Color.Transparent,
-                        unfocusedBorderColor = Color.Transparent,
-                        focusedContainerColor = Color.White,
-                        unfocusedContainerColor = Color.White,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp)
-                        .shadow(8.dp, RoundedCornerShape(18.dp)),
-                )
-                Spacer(Modifier.height(20.dp))
-                Box(modifier = Modifier.padding(horizontal = 20.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .clickable { regionMenuExpanded = true }
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(selectedRegion, fontSize = 25.sp, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.width(4.dp))
-                        Icon(
-                            Icons.Default.ExpandMore,
-                            contentDescription = "지역 선택",
-                            tint = TteumMuted,
-                            modifier = Modifier.size(24.dp),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = regionMenuExpanded,
-                        onDismissRequest = { regionMenuExpanded = false },
-                    ) {
-                        gangwonRegionCodes.keys.forEach { region ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        region,
-                                        fontWeight = if (selectedRegion == region) {
-                                            FontWeight.Bold
-                                        } else {
-                                            FontWeight.Normal
-                                        },
-                                    )
-                                },
-                                onClick = {
-                                    onRegionSelected(region)
-                                    regionMenuExpanded = false
-                                },
-                            )
-                        }
-                    }
-                }
-                Spacer(Modifier.height(14.dp))
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    item {
-                        SavedFilterChip(
-                            text = "전체",
-                            selected = selectedCategory == null && !savedOnly,
-                            onClick = {
-                                selectedCategory = null
-                                savedOnly = false
-                            },
-                        )
-                    }
-                    item {
-                        SavedFilterChip(
-                            text = "찜",
-                            selected = savedOnly,
-                            showHeart = true,
-                            onClick = { savedOnly = !savedOnly },
-                        )
-                    }
-                    items(PlaceCategory.entries) { category ->
-                        SavedFilterChip(
-                            text = when (category) {
-                                PlaceCategory.CULTURE -> "문화/예술"
-                                PlaceCategory.FESTIVAL -> "행사/공연/축제"
-                                else -> category.label
-                            },
-                            selected = selectedCategory == category,
-                            onClick = { selectedCategory = category },
-                        )
-                    }
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 18.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "스팟 (${visiblePlaces.size})",
-                        color = TteumMuted,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                        tooltip = {
-                            PlainTooltip {
-                                Text("아래로 스크롤하면 장소를 계속 불러와요.")
-                            }
-                        },
-                        state = rememberTooltipState(),
-                    ) {
-                        Box(
-                            modifier = Modifier.size(36.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "목록 안내",
-                                tint = TteumMuted,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
-                }
-                TextButton(
-                    onClick = {
-                        sort = if (sort == SavedSort.DEFAULT) SavedSort.NAME else SavedSort.DEFAULT
-                    },
-                ) {
-                    Text(
-                        if (sort == SavedSort.DEFAULT) "기본순⌄" else "이름순⌄",
-                        color = TteumMuted,
-                        fontWeight = FontWeight.Bold,
-                    )
-                }
-            }
-
-            if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = TteumRed)
-                }
-            } else if (errorMessage != null) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(errorMessage, color = TteumMuted)
-                    Spacer(Modifier.height(12.dp))
-                    OutlinedButton(onClick = onRetry) { Text("다시 불러오기") }
-                }
-            } else if (visiblePlaces.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        if (catalogPlaces.isEmpty()) "등록된 장소가 아직 없어요." else "조건에 맞는 장소가 없어요.",
-                        color = TteumMuted,
-                    )
-                }
-            } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    state = gridState,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .imePadding(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        bottom = 24.dp,
-                    ),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    gridItems(visiblePlaces, key = { it.place.id }) { place ->
-                        SavedPlaceCard(
-                            place = place.place,
-                            isSaved = place.savedEntry != null,
-                            onClick = { selectedPlace = place.place },
-                            onToggleSave = {
-                                val removedEntry = place.savedEntry
-                                onToggleSave(place.place)
-                                if (removedEntry != null) {
-                                    coroutineScope.launch {
-                                        if (
-                                            snackbarHostState.showSnackbar(
-                                                message = "저장을 해제했어요.",
-                                                actionLabel = "되돌리기",
-                                            ) == SnackbarResult.ActionPerformed
-                                        ) {
-                                            onRestore(removedEntry)
-                                        }
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsTabScreen(
-    savedCount: Int,
-    onClearSaved: () -> Unit,
-    onTabSelected: (MainTab) -> Unit,
-) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var locationPermissionGranted by remember { mutableStateOf(hasLocationPermission(context)) }
-    var kakaoMapAvailable by remember { mutableStateOf(isKakaoMapAvailable(context)) }
-    var showSavedClearDialog by remember { mutableStateOf(false) }
-    var showCacheClearDialog by remember { mutableStateOf(false) }
-
-    DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                locationPermissionGranted = hasLocationPermission(context)
-                kakaoMapAvailable = isKakaoMapAvailable(context)
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    Scaffold(
-        containerColor = Color(0xFFF7F8FA),
-        bottomBar = {
-            BottomNavigation(
-                selectedTab = MainTab.SETTINGS,
-                onTabSelected = onTabSelected,
-            )
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .statusBarsPadding()
-                .padding(horizontal = 24.dp),
-        ) {
-            item {
-                Spacer(Modifier.height(12.dp))
-                Text("설정", fontSize = 28.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(24.dp))
-
-                SettingsSectionTitle("앱 사용")
-                SettingsGroup {
-                    SettingsRow(
-                        title = "위치 권한",
-                        description = if (locationPermissionGranted) "허용됨" else "허용되지 않음",
-                        onClick = {
-                            context.startActivity(
-                                Intent(
-                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                    Uri.parse("package:${context.packageName}"),
-                                ),
-                            )
-                        },
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "카카오맵",
-                        description = if (kakaoMapAvailable) "설치됨 · 눌러서 실행" else "설치 필요",
-                        onClick = {
-                            if (kakaoMapAvailable) {
-                                openKakaoMapHome(context)
-                            } else {
-                                openKakaoMapInstallPage(context)
-                            }
-                        },
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-                SettingsSectionTitle("저장 공간")
-                SettingsGroup {
-                    SettingsRow(
-                        title = "캐시 지우기",
-                        description = "임시 이미지와 지도 데이터를 정리해요.",
-                        onClick = { showCacheClearDialog = true },
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "저장한 장소 비우기",
-                        description = "현재 ${savedCount}개 저장됨",
-                        titleColor = if (savedCount > 0) TteumRed else TteumMuted,
-                        onClick = if (savedCount > 0) {
-                            { showSavedClearDialog = true }
-                        } else {
-                            null
-                        },
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-                SettingsSectionTitle("약관 및 지원")
-                SettingsGroup {
-                    SettingsRow(
-                        title = "개인정보처리방침",
-                        description = if (PRIVACY_POLICY_URL.isBlank()) "준비 중" else "보기",
-                        onClick = { openPolicy(context, PRIVACY_POLICY_URL) },
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "위치기반서비스 이용약관",
-                        description = if (LOCATION_TERMS_URL.isBlank()) "준비 중" else "보기",
-                        onClick = { openPolicy(context, LOCATION_TERMS_URL) },
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "문의하기",
-                        description = CONTACT_EMAIL,
-                        onClick = { openContactEmail(context) },
-                    )
-                }
-
-                Spacer(Modifier.height(24.dp))
-                SettingsSectionTitle("앱 정보")
-                SettingsGroup {
-                    SettingsRow(
-                        title = "앱 버전",
-                        description = BuildConfig.VERSION_NAME,
-                    )
-                    SettingsDivider()
-                    SettingsRow(
-                        title = "데이터 출처",
-                        description = "한국관광공사 TourAPI · 카카오맵",
-                    )
-                }
-                Spacer(Modifier.height(24.dp))
-            }
-        }
-    }
-
-    if (showSavedClearDialog) {
-        AlertDialog(
-            onDismissRequest = { showSavedClearDialog = false },
-            title = { Text("저장 목록을 비울까요?") },
-            text = { Text("이 기기에 저장한 장소가 모두 삭제됩니다.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onClearSaved()
-                        showSavedClearDialog = false
-                    },
-                ) {
-                    Text("삭제")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showSavedClearDialog = false }) {
-                    Text("취소")
-                }
-            },
-        )
-    }
-
-    if (showCacheClearDialog) {
-        AlertDialog(
-            onDismissRequest = { showCacheClearDialog = false },
-            title = { Text("캐시를 지울까요?") },
-            text = { Text("저장한 장소는 유지되고 임시 데이터만 삭제됩니다.") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val cleared = clearAppCache(context)
-                        showCacheClearDialog = false
-                        Toast.makeText(
-                            context,
-                            if (cleared) "캐시를 정리했어요." else "캐시를 정리하지 못했어요.",
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    },
-                ) {
-                    Text("지우기")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCacheClearDialog = false }) {
-                    Text("취소")
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun SettingsSectionTitle(title: String) {
-    Text(
-        title,
-        modifier = Modifier.padding(start = 4.dp, bottom = 10.dp),
-        color = TteumMuted,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.Bold,
-    )
-}
-
-@Composable
-private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.White,
-        shape = RoundedCornerShape(18.dp),
-    ) {
-        Column(content = content)
-    }
-}
-
-@Composable
-private fun SettingsRow(
-    title: String,
-    description: String,
-    titleColor: Color = TteumInk,
-    onClick: (() -> Unit)? = null,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = onClick != null) { onClick?.invoke() }
-            .padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, color = titleColor, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(3.dp))
-            Text(description, color = TteumMuted, fontSize = 13.sp)
-        }
-        if (onClick != null) {
-            Icon(
-                Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = Color(0xFFB7BAC1),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsDivider() {
-    Spacer(
-        Modifier
-            .fillMaxWidth()
-            .height(1.dp)
-            .background(Color(0xFFF0F1F3)),
-    )
-}
-
-@Composable
-private fun SavedPlaceDetailScreen(
-    place: PlaceCandidate,
-    onBack: () -> Unit,
-) {
-    val context = LocalContext.current
-    Scaffold(
-        bottomBar = {
-            Surface(shadowElevation = 8.dp) {
-                Button(
-                    onClick = { openKakaoMap(context, place.name) },
-                    modifier = Modifier
-                        .navigationBarsPadding()
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .height(56.dp),
-                    shape = RoundedCornerShape(16.dp),
-                ) {
-                    Icon(Icons.Default.Map, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("카카오맵 실행 및 안내", fontWeight = FontWeight.Bold)
-                }
-            }
-        },
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .statusBarsPadding(),
-        ) {
-            item {
-                Box {
-                    SavedPlaceImage(
-                        imageUrl = place.imageUrl,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(260.dp),
-                    )
-                    IconButton(
-                        onClick = onBack,
-                        modifier = Modifier
-                            .padding(14.dp)
-                            .background(Color.White.copy(alpha = 0.92f), CircleShape),
-                    ) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "뒤로")
-                    }
-                }
-            }
-            item {
-                Column(Modifier.padding(20.dp)) {
-                    Text(place.category.label, color = TteumRed, fontWeight = FontWeight.Bold)
-                    Text(place.name, fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                    if (place.address.isNotBlank()) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(place.address, color = TteumMuted)
-                    }
-                    Spacer(Modifier.height(18.dp))
-                    Text(
-                        "평균 머무름 ${formatMinutes(place.stayMinutes)}",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(place.tags) { tag ->
-                            Surface(
-                                color = Color(0xFFF1F2F4),
-                                shape = RoundedCornerShape(4.dp),
-                            ) {
-                                Text(
-                                    tag,
-                                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                                    color = Color(0xFF55585F),
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SavedFilterChip(
-    text: String,
-    selected: Boolean,
-    showHeart: Boolean = false,
-    onClick: () -> Unit,
-) {
-    Surface(
-        modifier = Modifier.selectable(
-            selected = selected,
-            role = Role.Checkbox,
-            onClick = onClick,
-        ),
-        color = if (selected) TteumInk else Color(0xFFF4F5F7),
-        shape = RoundedCornerShape(50),
-        border = if (selected) null else BorderStroke(1.dp, Color(0xFFE1E3E8)),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text,
-                color = if (selected) Color.White else Color(0xFF596170),
-                fontWeight = FontWeight.Bold,
-            )
-            if (showHeart) {
-                Spacer(Modifier.width(4.dp))
-                Icon(
-                    Icons.Default.Favorite,
-                    contentDescription = null,
-                    tint = TteumRed,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SavedPlaceCard(
-    place: PlaceCandidate,
-    isSaved: Boolean,
-    onClick: () -> Unit,
-    onToggleSave: () -> Unit,
-) {
-    val (visibleTags, hiddenTagCount) = compactTags(place.tags)
-    Card(
-        modifier = Modifier.clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
-        shape = RoundedCornerShape(18.dp),
-    ) {
-        Column {
-            Box {
-                SavedPlaceImage(
-                    imageUrl = place.imageUrl,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(128.dp),
-                )
-                IconButton(
-                    onClick = onToggleSave,
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(8.dp)
-                        .background(Color.White.copy(alpha = 0.92f), CircleShape),
-                ) {
-                    Icon(
-                        if (isSaved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isSaved) "저장 해제" else "저장",
-                        tint = if (isSaved) TteumRed else TteumMuted,
-                    )
-                }
-            }
-            Column(Modifier.padding(12.dp)) {
-                Text(
-                    place.name,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .widthIn(max = 155.dp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(place.category.label, color = Color(0xFF55585F), fontSize = 14.sp)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "평균 머무름 ${formatMinutes(place.stayMinutes)}",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(8.dp))
-                val compactItems = visibleTags + if (hiddenTagCount > 0) listOf("+ $hiddenTagCount") else emptyList()
-                compactItems.chunked(2).forEach { rowTags ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        rowTags.forEach { tag ->
-                            Surface(
-                                color = Color(0xFFF1F2F4),
-                                shape = RoundedCornerShape(3.dp),
-                            ) {
-                                Text(
-                                    tag,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontSize = 12.sp,
-                                    color = Color(0xFF55585F),
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(5.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SavedPlaceImage(
-    imageUrl: String,
-    modifier: Modifier = Modifier,
-) {
-    var bitmap by remember(imageUrl) {
-        mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null)
-    }
-    LaunchedEffect(imageUrl) {
-        val loadedBitmap = if (imageUrl.isBlank()) {
-            null
-        } else {
-            withContext(Dispatchers.IO) {
-                savedImageCache.get(imageUrl)?.asImageBitmap() ?: runCatching {
-                    val connection = URL(imageUrl).openConnection().apply {
-                        connectTimeout = 8_000
-                        readTimeout = 8_000
-                    }
-                    connection.getInputStream().use { BitmapFactory.decodeStream(it) }
-                        ?.also { savedImageCache.put(imageUrl, it) }
-                        ?.asImageBitmap()
-                }.getOrNull()
-            }
-        }
-        bitmap = loadedBitmap
-    }
-
-    if (bitmap == null) {
-        Box(
-            modifier = modifier.background(TteumRedSoft),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    Icons.Default.Place,
-                    contentDescription = null,
-                    tint = TteumRed,
-                    modifier = Modifier.size(32.dp),
-                )
-                Spacer(Modifier.height(4.dp))
-                Text("틈새", color = TteumRed, fontWeight = FontWeight.Bold)
-            }
-        }
-    } else {
-        Image(
-            bitmap = bitmap!!,
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = modifier,
-        )
-    }
-}
-
 private fun fallbackRouteSummary(
     criteria: SearchCriteria,
     recommendations: List<SafeRecommendation>,
@@ -2014,7 +1196,7 @@ private fun recommendationConditionSummary(categories: Set<PlaceCategory>): Stri
 private const val SAVED_PLACES_PREFERENCES = "saved_places"
 private const val SAVED_PLACES_KEY = "entries"
 
-private fun loadSavedPlaces(context: Context): List<SavedPlaceEntry> {
+private fun loadSavedPlaces(context: Context): List<SavedPlace> {
     val json = context
         .getSharedPreferences(SAVED_PLACES_PREFERENCES, Context.MODE_PRIVATE)
         .getString(SAVED_PLACES_KEY, null)
@@ -2027,7 +1209,7 @@ private fun loadSavedPlaces(context: Context): List<SavedPlaceEntry> {
                 val item = entries.getJSONObject(index)
                 val tags = item.getJSONArray("tags")
                 add(
-                    SavedPlaceEntry(
+                    SavedPlace(
                         place = PlaceCandidate(
                             id = item.getString("id"),
                             name = item.getString("name"),
@@ -2052,13 +1234,13 @@ private fun loadSavedPlaces(context: Context): List<SavedPlaceEntry> {
                     ),
                 )
             }
-        }.sortedByDescending { it.savedAtMillis }
+        }.latestFirst()
     }.getOrDefault(emptyList())
 }
 
 private fun storeSavedPlaces(
     context: Context,
-    entries: List<SavedPlaceEntry>,
+    entries: List<SavedPlace>,
 ) {
     val json = JSONArray().apply {
         entries.forEach { entry ->
