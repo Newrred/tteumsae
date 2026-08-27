@@ -188,7 +188,10 @@ Use `CAFE_CAT3_CODES = new Set(["A05020900"])`. Parse only eight-digit Tour date
 
 - [ ] **Step 4: Add `fetchTourCommon(contentId)`**
 
-Call `detailCommon2` with `defaultYN=Y`, `overviewYN=Y`, and other optional data groups `N`. Keep the shared response parser's single-object/array/empty handling.
+Call the current `KorService2/detailCommon2` contract with `contentId`, `numOfRows`, and
+`pageNo`. The current operation returns `overview` and `homepage` without the legacy
+`defaultYN`/`overviewYN` selection flags. Keep the shared response parser's
+single-object/array/empty handling.
 
 - [ ] **Step 5: Keep `normalizeTourEnrichment` as a compatibility wrapper**
 
