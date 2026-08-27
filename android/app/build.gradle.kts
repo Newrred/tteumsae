@@ -1,9 +1,11 @@
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
     id("org.jetbrains.kotlin.kapt")
 }
 
@@ -15,10 +17,17 @@ val localProperties = Properties().apply {
 }
 val kakaoMapNativeAppKey =
     localProperties.getProperty("KAKAO_MAP_NATIVE_APP_KEY", "")
+val supabaseUrl =
+    localProperties.getProperty("SUPABASE_URL", "").trim()
+val supabasePublishableKey =
+    localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY", "").trim()
+
+fun String.asBuildConfigString(): String =
+    "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
 
 android {
     namespace = "com.tteumsae.app"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.tteumsae.app"
@@ -34,7 +43,22 @@ android {
         buildConfigField(
             "String",
             "KAKAO_MAP_NATIVE_APP_KEY",
-            "\"$kakaoMapNativeAppKey\"",
+            kakaoMapNativeAppKey.asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_URL",
+            supabaseUrl.asBuildConfigString(),
+        )
+        buildConfigField(
+            "String",
+            "SUPABASE_PUBLISHABLE_KEY",
+            supabasePublishableKey.asBuildConfigString(),
+        )
+        buildConfigField(
+            "boolean",
+            "AUTH_ENABLED",
+            (supabaseUrl.isNotBlank() && supabasePublishableKey.isNotBlank()).toString(),
         )
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -56,10 +80,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         compose = true
         buildConfig = true
@@ -67,6 +87,12 @@ android {
 
     packaging {
         resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
@@ -90,6 +116,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     kapt("androidx.room:room-compiler:2.8.4")
+    implementation(platform("io.github.jan-tennert.supabase:bom:3.5.0"))
+    implementation("io.github.jan-tennert.supabase:auth-kt")
+    implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.ktor:ktor-client-android:3.0.3")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

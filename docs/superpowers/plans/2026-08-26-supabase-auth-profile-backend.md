@@ -6,13 +6,13 @@
 
 **Architecture:** Android는 Supabase Auth와 PostgREST에 직접 연결하고 Vercel은 기존 공개 API와 관리자 계정 삭제만 담당한다. Auth SDK 호환을 위해 도구체인을 독립 커밋으로 올린 뒤, DB/RLS와 서버를 먼저 검증하고 Android 어댑터·ViewModel·설정 UI를 연결한다.
 
-**Tech Stack:** AGP 8.10.1, Gradle 8.11.1, Kotlin 2.2.21, Java 17, Android API 26–35, Supabase Kotlin BOM 3.5.0, Ktor Android 3.0.3, kotlinx serialization, Node.js 20+, Vercel Functions, Supabase Auth/Postgres
+**Tech Stack:** AGP 8.13.2, Gradle 8.13, Kotlin 2.3.20, Java 17, Android API 26–36 (target 35), Supabase Kotlin BOM 3.5.0, Ktor Android 3.0.3, kotlinx serialization, Node.js 20+, Vercel Functions, Supabase Auth/Postgres
 
 **Spec:** docs/superpowers/specs/2026-08-26-account-sync-user-data-design.md
 
 ## Global Constraints
 
-- Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`와 `docs/superpowers/plans/2026-08-26-deadline-aware-route-core.md`가 모두 완료되어야 한다. 이 계획의 Task 1부터 Kotlin 2.2.21/AGP 8.10.1로 올린다.
+- Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`와 `docs/superpowers/plans/2026-08-26-deadline-aware-route-core.md`가 모두 완료되어야 한다. 이 계획의 Task 1부터 Kotlin 2.3.20/AGP 8.13.2로 올린다. Supabase Kotlin 3.5.0의 Kotlin 2.3 메타데이터와 AndroidX Browser 1.9.0 요구사항 때문에 compileSdk 36을 사용하되 targetSdk 35와 minSdk 26은 유지한다.
 - 로그인은 선택 기능이며 Auth 설정 누락·장애가 추천·경로·게스트 저장을 막지 않는다.
 - Android에는 Supabase URL과 publishable key만 포함한다.
 - service role은 Vercel 환경변수에만 둔다.
@@ -57,7 +57,7 @@
 - Produces: Auth and Postgrest modules available
 - Consumes: current Java 17 and API 26 minimum
 
-- [ ] **Step 1: Establish the pre-upgrade baseline**
+- [x] **Step 1: Establish the pre-upgrade baseline**
 
 ~~~powershell
 cd C:\app\tteumsae\android
@@ -66,30 +66,30 @@ cd C:\app\tteumsae\android
 
 Expected: BUILD SUCCESSFUL. Save the task output in the work log.
 
-- [ ] **Step 2: Upgrade versions in one isolated change**
+- [x] **Step 2: Upgrade versions in one isolated change**
 
-Use Gradle 8.11.1, AGP 8.10.1, Kotlin Android/Compose/serialization/kapt 2.2.21. Keep compileSdk 35, targetSdk 35, minSdk 26, Java 17.
+Use Gradle 8.13, AGP 8.13.2, Kotlin Android/Compose/serialization/kapt 2.3.20. Use compileSdk 36, targetSdk 35, minSdk 26, Java 17.
 
 ~~~kotlin
 plugins {
-    id("com.android.application") version "8.10.1" apply false
-    id("org.jetbrains.kotlin.android") version "2.2.21" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.2.21" apply false
-    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.21" apply false
-    id("org.jetbrains.kotlin.kapt") version "2.2.21" apply false
+    id("com.android.application") version "8.13.2" apply false
+    id("org.jetbrains.kotlin.android") version "2.3.20" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.3.20" apply false
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.3.20" apply false
+    id("org.jetbrains.kotlin.kapt") version "2.3.20" apply false
 }
 ~~~
 
-- [ ] **Step 3: Run the same baseline before adding Supabase**
+- [x] **Step 3: Run the same baseline before adding Supabase**
 
 ~~~powershell
 .\gradlew.bat --version
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
 ~~~
 
-Expected: Gradle 8.11.1 and BUILD SUCCESSFUL. Fix only toolchain compatibility errors in this step.
+Expected: Gradle 8.13 and BUILD SUCCESSFUL. Fix only toolchain compatibility errors in this step.
 
-- [ ] **Step 4: Add Supabase modules and safe BuildConfig inputs**
+- [x] **Step 4: Add Supabase modules and safe BuildConfig inputs**
 
 ~~~kotlin
 id("org.jetbrains.kotlin.plugin.serialization")
@@ -102,7 +102,7 @@ implementation("io.ktor:ktor-client-android:3.0.3")
 
 Read SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY from local.properties with blank defaults. Define AUTH_ENABLED as true only when both are nonblank. Add names with empty values to local.properties.example; never add real values.
 
-- [ ] **Step 5: Verify release shrinking and commit**
+- [x] **Step 5: Verify release shrinking and commit**
 
 ~~~powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleRelease
