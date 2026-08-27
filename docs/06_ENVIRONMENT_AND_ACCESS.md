@@ -284,7 +284,7 @@ Project URL과 publishable key만 설정한다.
 
 | 서비스 | 현재 대상 | 새 담당자 최소 권한 | 별도 전달 항목 | 인수 확인 |
 |---|---|---|---|---|
-| GitHub | `minjaeimnydaa/tteumsae` | 저장소 Write 이상 | 보호 브랜치·PR 규칙 | clone, branch push 가능 |
+| GitHub | `Newrred/tteumsae` (원본 `minjaeimnydaa/tteumsae` 포크) | 저장소 Write 이상 | 보호 브랜치·PR 규칙 | clone, branch push 가능 |
 | Vercel 백엔드 | 팀 `newrreds-projects` / `tteumsae-backend` | 배포·환경변수 확인 가능 역할 | 팀 초대 | 프로젝트 연결, 배포·로그 조회 |
 | Vercel APK 페이지 | 팀 `jaturi`의 APK 다운로드 프로젝트 | 배포 가능 역할 | 정확한 프로젝트 선택 | Preview 후 Production 배포 |
 | Supabase | `tteumsae` (`ysainvblgtewlpsygfyr`) | Developer 이상, 비밀은 필요 시에만 | 프로젝트 초대 | 테이블·로그·SQL 접근 확인 |

@@ -595,7 +595,7 @@ cd ..\android
 git diff --check
 ~~~
 
-- [ ] **Step 3: Run live service checks** *(2026-08-27: Supabase migration/RLS PASS, Vercel health·places·Kakao Mobility route·정책 페이지·무토큰 삭제 401 확인. TourAPI 키, Google provider, 서명 기기 검증 대기)*
+- [ ] **Step 3: Run live service checks** *(2026-08-27: Supabase migration/RLS PASS, Vercel health·places·Kakao Mobility route·정책 페이지·무토큰 삭제 401 확인. TourAPI 키, Google provider, 서명 기기 검증 대기. Vercel Git 자동 배포 연결은 GitHub sudo 이메일 인증 대기)*
 
 - Apply migrations 001–003 to the new Supabase project.
 - Run verify-user-rls.js and require PASS.

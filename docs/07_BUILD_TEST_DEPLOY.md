@@ -63,7 +63,7 @@ Java/Kotlin target 17
 ```powershell
 New-Item -ItemType Directory -Force C:\dev | Out-Null
 Set-Location C:\dev
-git clone https://github.com/minjaeimnydaa/tteumsae.git
+git clone https://github.com/Newrred/tteumsae.git
 Set-Location tteumsae
 ```
 
@@ -83,7 +83,8 @@ git remote -v
 
 - 작업 트리가 깨끗함
 - 기준 브랜치 `main`
-- 원격 `https://github.com/minjaeimnydaa/tteumsae.git`
+- 작업 원격 `https://github.com/Newrred/tteumsae.git`
+- 원본 추적이 필요하면 upstream으로 `https://github.com/minjaeimnydaa/tteumsae.git` 추가
 - `android/`, `backend/`, `download/`, `design/`, `docs/`가 모두 존재
 
 실제 키, `.env.local`, `local.properties`, APK, 키스토어가 Git에서 내려오면
