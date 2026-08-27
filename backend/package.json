@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "24.x"
   },
   "scripts": {
     "dev": "vercel dev",
-    "test": "node --test tests",
+    "test": "node scripts/run-tests.js",
     "check": "node scripts/check-project.js"
   },
   "devDependencies": {

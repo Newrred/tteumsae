@@ -6,7 +6,7 @@
 
 **Architecture:** Android는 Supabase Auth와 PostgREST에 직접 연결하고 Vercel은 기존 공개 API와 관리자 계정 삭제만 담당한다. Auth SDK 호환을 위해 도구체인을 독립 커밋으로 올린 뒤, DB/RLS와 서버를 먼저 검증하고 Android 어댑터·ViewModel·설정 UI를 연결한다.
 
-**Tech Stack:** AGP 8.13.2, Gradle 8.13, Kotlin 2.3.20, Java 17, Android API 26–36 (target 35), Supabase Kotlin BOM 3.5.0, Ktor Android 3.0.3, kotlinx serialization, Node.js 20+, Vercel Functions, Supabase Auth/Postgres
+**Tech Stack:** AGP 8.13.2, Gradle 8.13, Kotlin 2.3.20, Java 17, Android API 26–36 (target 35), Supabase Kotlin BOM 3.5.0, Ktor Android 3.0.3, kotlinx serialization, Node.js 24.x, Vercel Functions, Supabase Auth/Postgres
 
 **Spec:** docs/superpowers/specs/2026-08-26-account-sync-user-data-design.md
 

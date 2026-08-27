@@ -37,7 +37,7 @@ Android 패키지: `com.tteumsae.app`
 - Android Studio Ladybug 이상 권장
 - JDK 17 또는 Android Studio 내장 JBR
 - Android SDK Platform 35와 SDK Build Tools
-- Node.js 20 이상
+- Node.js 24.x
 - Corepack 또는 pnpm
 
 복제 경로는 한글과 공백이 없는 `C:\dev\tteumsae`를 권장합니다. 기존 한글 경로에서는 Gradle JUnit 워커가 테스트 클래스를 읽지 못하는 `ClassNotFoundException`이 발생했습니다.

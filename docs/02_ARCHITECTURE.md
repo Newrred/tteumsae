@@ -59,7 +59,7 @@ Android에는 카카오 네이티브 지도 키와 Supabase Project URL·publish
 
 ### `backend/`
 
-- Node.js 20 이상
+- Node.js 24.x
 - Vercel Functions
 - 런타임 외부 의존성 없이 표준 `fetch` 사용
 - Node 내장 테스트 러너

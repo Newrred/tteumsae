@@ -93,7 +93,7 @@ API 키와 서비스 역할 키, Cron 비밀값은 Sensitive로 저장합니다.
 
 ## 로컬 검증
 
-Node.js 20 이상:
+Node.js 24.x:
 
 ```powershell
 npm test
