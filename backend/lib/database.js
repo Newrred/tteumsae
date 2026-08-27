@@ -1,4 +1,5 @@
 import { requiredEnv } from "./env.js";
+import { supabaseApiHeaders } from "./supabase-auth.js";
 
 const publicColumns = [
   "content_id",
@@ -33,11 +34,9 @@ function toPublicPlace(row) {
 async function databaseRequest(path, { method = "GET", body, prefer } = {}) {
   const baseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const serviceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
-  const headers = {
-    apikey: serviceKey,
-    authorization: `Bearer ${serviceKey}`,
+  const headers = supabaseApiHeaders(serviceKey, serviceKey, {
     "content-type": "application/json"
-  };
+  });
   if (prefer) headers.prefer = prefer;
 
   const response = await fetch(`${baseUrl}/rest/v1/${path}`, {

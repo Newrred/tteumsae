@@ -6,6 +6,16 @@ export function readBearerToken(request) {
   return match?.[1] ?? null;
 }
 
+export function supabaseApiHeaders(apiKey, authorizationToken = apiKey, extra = {}) {
+  const headers = { apikey: apiKey, ...extra };
+  const isOpaqueApiKey = authorizationToken === apiKey
+    && /^(sb_publishable|sb_secret)_/.test(apiKey);
+  if (authorizationToken && !isOpaqueApiKey) {
+    headers.authorization = `Bearer ${authorizationToken}`;
+  }
+  return headers;
+}
+
 export async function verifySupabaseUser(token, fetchImpl = fetch) {
   const baseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const publishableKey = requiredEnv("SUPABASE_PUBLISHABLE_KEY");
@@ -33,10 +43,7 @@ export async function deleteSupabaseUser(userId, fetchImpl = fetch) {
     `${baseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
     {
       method: "DELETE",
-      headers: {
-        apikey: serviceRoleKey,
-        authorization: `Bearer ${serviceRoleKey}`
-      }
+      headers: supabaseApiHeaders(serviceRoleKey)
     }
   );
 

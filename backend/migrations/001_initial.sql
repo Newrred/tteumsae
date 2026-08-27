@@ -40,6 +40,9 @@ on conflict (id) do nothing;
 alter table public.places enable row level security;
 alter table public.sync_state enable row level security;
 
+revoke all on public.places, public.sync_state from anon, authenticated;
+grant select, insert, update, delete on public.places, public.sync_state to service_role;
+
 comment on table public.places is
   'TourAPI에서 동기화한 강원도 장소. 앱은 Vercel API를 통해서만 접근한다.';
 comment on table public.sync_state is

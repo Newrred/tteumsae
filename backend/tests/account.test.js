@@ -92,6 +92,33 @@ test("검증된 토큰 사용자만 삭제하고 204를 반환한다", async () 
   }
 });
 
+test("새 Supabase secret 키는 관리자 Bearer 토큰으로 보내지 않는다", async () => {
+  const handler = await loadHandler();
+  configureSupabase();
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_secret_server-only-key";
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url: String(url), init });
+    if (String(url).endsWith("/auth/v1/user")) {
+      return Response.json({ id: "verified-user" });
+    }
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const response = await handler.fetch(new Request("https://example.test/api/account", {
+      method: "DELETE",
+      headers: { authorization: "Bearer valid-user-token" }
+    }));
+
+    assert.equal(response.status, 204);
+    assert.equal(calls[1].init.headers.apikey, "sb_secret_server-only-key");
+    assert.equal("authorization" in calls[1].init.headers, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("요청 본문의 위조 user_id는 삭제 대상에 사용하지 않는다", async () => {
   const handler = await loadHandler();
   configureSupabase();

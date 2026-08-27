@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { supabaseApiHeaders } from "../lib/supabase-auth.js";
 
 const requiredNames = [
   "SUPABASE_TEST_URL",
@@ -18,11 +19,7 @@ const publishableKey = process.env.SUPABASE_TEST_PUBLISHABLE_KEY;
 const serviceRoleKey = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY;
 
 function headers(key, token = key, extra = {}) {
-  return {
-    apikey: key,
-    authorization: `Bearer ${token}`,
-    ...extra
-  };
+  return supabaseApiHeaders(key, token, extra);
 }
 
 async function readBody(response) {
