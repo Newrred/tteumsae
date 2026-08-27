@@ -8,6 +8,14 @@
   },
   "rewrites": [
     {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/account-deletion",
+      "destination": "/account-deletion.html"
+    },
+    {
       "source": "/downloads/tteumsae-latest-debug.apk",
       "destination": "/downloads/tteumsae-v0.4.0-debug.apk"
     }

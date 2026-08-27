@@ -19,6 +19,8 @@ const requiredFiles = [
   "migrations/003_user_accounts.sql",
   "scripts/verify-user-rls.js",
   "lib/supabase-auth.js",
+  "privacy.html",
+  "account-deletion.html",
   ".env.example",
   "vercel.json"
 ];

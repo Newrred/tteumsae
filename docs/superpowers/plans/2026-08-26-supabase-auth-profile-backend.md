@@ -347,15 +347,15 @@ git commit -m "feat: 인증된 계정 삭제 API 추가"
 - Produces: GET /privacy and GET /account-deletion
 - Consumes: final operator name and support email before release
 
-- [ ] **Step 1: Write failing static-page tests**
+- [x] **Step 1: Write failing static-page tests**
 
 Read both files and assert UTF-8 HTML, tteumsae/틈새 name, privacy contact, collected data categories, deletion/retention section, in-app deletion path, and a mailto deletion request. Assert vercel rewrites expose clean paths.
 
-- [ ] **Step 2: Implement semantic no-JS HTML**
+- [x] **Step 2: Implement semantic no-JS HTML**
 
 Use headings, lists, visible effective date, responsive viewport, and normal anchor links. Do not use PDF, login wall, geofencing, remote fonts, trackers, or JavaScript-only content.
 
-- [ ] **Step 3: Add clean rewrites**
+- [x] **Step 3: Add clean rewrites**
 
 ~~~json
 { "source": "/privacy", "destination": "/privacy.html" }
@@ -364,7 +364,7 @@ Use headings, lists, visible effective date, responsive viewport, and normal anc
 
 Preserve current APK rewrite and cron entries.
 
-- [ ] **Step 4: Verify locally and after preview deployment**
+- [ ] **Step 4: Verify locally and after preview deployment** *(로컬 41 tests + project check 완료, 새 Vercel Preview 배포 후 HTTP 200 확인 대기)*
 
 ~~~powershell
 $tests=(Get-ChildItem tests -Filter "*.test.js").FullName

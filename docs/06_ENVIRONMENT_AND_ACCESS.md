@@ -15,7 +15,7 @@ Supabase와 Kakao 연동을 복구하도록 안내한다. 이 문서에는 환�
 | Android 앱 코드 | `android/app/build.gradle.kts` | 백엔드 기준 URL, 앱 버전 |
 | 백엔드 로컬 | `backend/.env.local` | Vercel 환경변수의 로컬 사본 |
 | 백엔드 운영 | Vercel Project Settings | TourAPI, Kakao REST, Supabase, Cron 설정 |
-| 데이터베이스 | Supabase SQL Editor/CLI | 마이그레이션 2개 |
+| 데이터베이스 | Supabase SQL Editor/CLI | 마이그레이션 3개 |
 | Kakao Android | Kakao Developers 플랫폼 설정 | 패키지명과 빌드 서명 키 해시 |
 
 ## 2. 절대 커밋하지 않는 항목
@@ -204,6 +204,7 @@ pnpm dlx vercel env ls
 
 1. [`backend/migrations/001_initial.sql`](../backend/migrations/001_initial.sql)
 2. [`backend/migrations/002_detail_sync_state.sql`](../backend/migrations/002_detail_sync_state.sql)
+3. [`backend/migrations/003_user_accounts.sql`](../backend/migrations/003_user_accounts.sql)
 
 그다음 새 프로젝트의 URL과 service role 키를 Vercel 환경변수에 설정하고
 기본·상세 Cron을 순서대로 실행한다.
@@ -213,10 +214,35 @@ pnpm dlx vercel env ls
 ```text
 public.places
 public.sync_state
+public.profiles
+public.user_saved_places
 ```
 
-두 테이블은 RLS가 활성화되어 있어야 하며, Android나 익명 사용자를 위한 공개
-정책을 만들지 않는다. 앱은 Vercel API를 통해서만 데이터를 읽는다.
+모든 테이블은 RLS가 활성화되어 있어야 한다. 장소 데이터는 Android나 익명
+사용자를 위한 공개 정책을 만들지 않고 Vercel API를 통해서만 읽는다. 로그인
+이용자의 `profiles`, `user_saved_places`는 Supabase Auth의 본인 행만 직접
+조회·변경할 수 있다. 새 프로젝트에서는 다음으로 실제 RLS 격리를 검증한다.
+
+```powershell
+cd backend
+node scripts/verify-user-rls.js
+```
+
+검증에는 서로 다른 테스트 이용자 두 명의 액세스 토큰이 필요하다. 서비스 역할
+키나 토큰의 실제 값은 콘솔·문서에 남기지 않는다.
+
+## 5.1 공개 정책 페이지
+
+백엔드를 Vercel에 배포하면 다음 주소가 공개된다.
+
+```text
+https://운영-도메인/privacy
+https://운영-도메인/account-deletion
+```
+
+두 페이지는 JavaScript나 외부 폰트 없이 동작하며, Google Play Console의
+개인정보처리방침 URL과 계정 삭제 URL에 각각 등록한다. 운영자 또는 문의 메일이
+바뀌면 두 HTML과 앱·스토어 연락처를 함께 수정한다.
 
 ## 6. 서비스 접근권한 전달표
 
@@ -301,8 +327,9 @@ TourAPI, Kakao REST, Supabase service role, Cron 키는 서버 환경변수 교�
 
 ## 9. 현재 미완료 설정
 
-- 개인정보처리방침 URL과 위치기반서비스 이용약관 URL이 앱에서 빈 문자열이며
-  설정 탭에 `준비 중`으로 보인다.
+- 개인정보처리방침과 계정 삭제 공개 페이지는 준비되었으나 새 Vercel 운영
+  도메인 배포 및 Google Play Console 등록은 아직 필요하다. 앱 설정 화면의
+  정책 URL 연결도 후속 구현 대상이다.
 - 릴리스 키스토어와 Gradle `signingConfig`가 없다.
 - Play App Signing용 키 해시 등록 완료 여부를 저장소만으로 확인할 수 없다.
 - APK 다운로드 프로젝트의 `.vercel` 연결 정보는 보안·로컬 파일이라 Git에 없다.
