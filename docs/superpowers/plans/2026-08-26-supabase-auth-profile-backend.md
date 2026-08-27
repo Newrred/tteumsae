@@ -442,23 +442,23 @@ git commit -m "feat: 선택형 로그인 세션 계층 추가"
 - Produces: handle(intent): DeepLinkResult
 - Consumes: Supabase client from Task 5
 
-- [ ] **Step 1: Write URI acceptance tests**
+- [x] **Step 1: Write URI acceptance tests**
 
 Accept only scheme tteumsae and host auth-callback. Reject missing code, wrong host, and wrong scheme before forwarding to the SDK adapter.
 
-- [ ] **Step 2: Add the exported callback intent filter**
+- [x] **Step 2: Add the exported callback intent filter**
 
 Keep MainActivity as the launcher. Add VIEW, DEFAULT, BROWSABLE and exact scheme/host. Do not add broad path wildcards.
 
-- [ ] **Step 3: Handle cold and warm intents**
+- [x] **Step 3: Handle cold and warm intents**
 
 Call the handler in onCreate with the initial intent and override onNewIntent to forward the new intent. Send SDK verification errors to AuthRepository as a user-safe login failure.
 
-- [ ] **Step 4: Configure provider consoles**
+- [ ] **Step 4: Configure provider consoles** *(설정 절차 문서화 완료, 새 Supabase 프로젝트 ref와 provider credentials 입력 대기)*
 
 Register the Supabase callback required by Kakao/Google and tteumsae://auth-callback in Supabase redirect allowlist. Store provider secrets only in provider/Supabase dashboards.
 
-- [ ] **Step 5: Verify and commit**
+- [ ] **Step 5: Verify and commit** *(54 unit tests + lintDebug + assembleDebug 완료, 연결된 Android 기기가 없어 adb 콜백 스모크 테스트 대기)*
 
 ~~~powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug

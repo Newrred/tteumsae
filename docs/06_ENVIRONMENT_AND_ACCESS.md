@@ -250,6 +250,33 @@ https://운영-도메인/account-deletion
 개인정보처리방침 URL과 계정 삭제 URL에 각각 등록한다. 운영자 또는 문의 메일이
 바뀌면 두 HTML과 앱·스토어 연락처를 함께 수정한다.
 
+## 5.2 카카오·Google 로그인 콜백 설정
+
+Android 앱은 PKCE 로그인 완료 주소로 다음 exact 딥링크만 받는다.
+
+```text
+tteumsae://auth-callback
+```
+
+새 Supabase 프로젝트를 만든 뒤 다음 순서로 설정한다.
+
+1. Supabase Dashboard의 Authentication → URL Configuration → Redirect URLs에
+   `tteumsae://auth-callback`을 추가한다.
+2. Supabase Authentication → Sign In / Providers에서 Kakao와 Google을 켠다.
+3. 각 Provider 화면에 표시되는 Supabase 콜백 주소
+   `https://<project-ref>.supabase.co/auth/v1/callback`을 복사한다.
+4. Kakao Developers의 Kakao Login Redirect URI와 Google Auth Platform의 Web
+   OAuth Client Authorized redirect URI에 위 Supabase 콜백 주소를 각각 등록한다.
+5. Kakao REST API key와 Kakao Login Client Secret, Google Web Client ID와 Client
+   Secret은 Supabase Provider 설정 화면에만 저장한다.
+6. Kakao 이메일 동의를 필수로 받지 않을 계획이므로 Supabase Kakao Provider의
+   **Allow users without an email**을 켠다. 프로필 닉네임·이미지 동의 항목은
+   서비스 화면에 실제 사용하는 범위로 설정한다.
+
+Provider secret, Supabase service role key, OAuth code와 사용자 access token은
+`local.properties`, Android BuildConfig, Git 또는 로그에 넣지 않는다. Android에는
+Project URL과 publishable key만 설정한다.
+
 ## 6. 서비스 접근권한 전달표
 
 비밀번호 공유 대신 각 서비스의 팀/협업자 초대 기능을 사용한다. 새 담당자가
