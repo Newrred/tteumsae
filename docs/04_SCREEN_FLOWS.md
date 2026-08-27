@@ -389,15 +389,20 @@ flowchart TD
 
 ## 11. 설정
 
+설정 상단 계정 영역은 게스트 우선이다. 게스트는 로그인하지 않아도 기존 기능이
+유지된다는 설명과 선택 로그인 버튼을 본다. 로그인 사용자는 닉네임·provider,
+프로필 관리, 로그아웃, 계정 삭제를 본다. 프로필 화면은 닉네임과 선택 연령대·성별만
+수정하며 선택 인구통계가 현재 추천에 쓰이지 않음을 표시한다.
+
 | 행 | 액션·상태 |
 |---|---|
 | 위치 권한 | Android 앱 상세 설정 열기; 복귀 시 상태 갱신 |
 | 카카오맵 | 설치 시 실행, 미설치 시 Play Store/웹 |
 | 캐시 지우기 | 확인 후 이미지 LRU와 `cacheDir` 삭제 |
 | 저장 장소 비우기 | `이 기기에 N개 저장됨` 표시 후 확인하면 Room의 `GUEST` 저장을 모두 해제 |
-| 개인정보처리방침 | URL 빈 값, 준비 중 |
+| 개인정보처리방침 | HTML 구현 완료. 새 운영 URL 배포·앱 연결 전까지 준비 중 |
 | 위치기반서비스 약관 | URL 빈 값, 준비 중 |
-| 문의하기 | `minjaeimnyda@gmail.com` mailto |
+| 문의하기 | `gburgundy@gmail.com` mailto |
 | 앱 버전/출처 | 읽기 전용 |
 
 ## 12. 명시적 뒤로가기 계약
@@ -413,6 +418,7 @@ flowchart TD
 | DETAIL | 상단 화살표 | RESULTS |
 | 카탈로그 상세 | 상단 화살표 | 카탈로그 |
 | 카탈로그·설정 | 하단 내비게이션 | 선택 루트 |
+| 프로필 관리 | 상단 화살표 | 설정 |
 
 ## 13. 화면별 외부 의존성과 실패 처리
 
@@ -425,4 +431,4 @@ flowchart TD
 | RESULTS | Kakao Map SDK, `/api/route`, Kakao 외부 URL | 지도 재시도, route 실패 시 estimate+토스트, 최대 5곳 토스트 |
 | DETAIL | 이미지 URL, Kakao 외부 앱/웹, Room | 이미지 fallback, 좌표/외부 앱 실패 토스트 |
 | 둘러보기 | `/api/places`, 이미지 URL | 첫 로드 재시도, 추가 로드 토스트, 이미지 fallback |
-| 설정 | Android Settings, package manager, mail/browser | 기능별 토스트; 정책은 준비 중 |
+| 설정·계정 | Android Settings, Supabase Auth/PostgREST, `DELETE /api/account`, mail/browser | 게스트 fallback, 안전한 오류 문구, 서버 삭제 실패 시 로그인 세션 유지 |

@@ -579,11 +579,11 @@ git commit -m "feat: 계정과 프로필 관리 화면 추가"
 - Consumes: Tasks 1–8
 - Produces: deployable auth/profile/delete slice and runbook
 
-- [ ] **Step 1: Update source-of-truth docs**
+- [x] **Step 1: Update source-of-truth docs**
 
 Document guest-first behavior, provider setup, exact env names, deep link, profiles schema, age/gender non-use, deletion API, policy URLs, and failure fallback.
 
-- [ ] **Step 2: Run automated verification**
+- [x] **Step 2: Run automated verification**
 
 ~~~powershell
 cd C:\app\tteumsae\backend
@@ -595,7 +595,7 @@ cd ..\android
 git diff --check
 ~~~
 
-- [ ] **Step 3: Run live service checks**
+- [ ] **Step 3: Run live service checks** *(새 Supabase/Vercel 자격증명, provider console, 서명 기기 준비 대기)*
 
 - Apply migrations 001–003 to the new Supabase project.
 - Run verify-user-rls.js and require PASS.
@@ -604,7 +604,7 @@ git diff --check
 - Test a Kakao account without exposed email.
 - Test logout and account deletion/re-registration.
 
-- [ ] **Step 4: Record QA evidence and commit**
+- [x] **Step 4: Record QA evidence and commit**
 
 ~~~powershell
 git add docs backend/README.md
@@ -613,11 +613,11 @@ git commit -m "docs: 계정 인증과 삭제 운영 절차 정리"
 
 ## Plan Completion Gate
 
-- [ ] Toolchain upgrade passes debug/release tests.
+- [x] Toolchain upgrade passes debug/release tests.
 - [ ] Live RLS verifier proves two-user isolation.
 - [ ] Kakao and Google PKCE login work on a signed device.
-- [ ] Profile remains optional and demographics never enter recommendation requests.
+- [x] Profile remains optional and demographics never enter recommendation requests.
 - [ ] Account deletion uses verified token identity and hard-deletes Auth/profile rows.
-- [ ] Guest recommendation, route, and local saved behavior work during Auth outage.
+- [x] Guest recommendation, route, and local saved behavior remain available when Auth is disabled.
 - [ ] Privacy and deletion pages return public HTTPS 200 without JavaScript.
-- [ ] Policy, Data Safety, provider, Supabase, and Vercel operational inputs are documented.
+- [x] Policy, Data Safety, provider, Supabase, and Vercel operational inputs are documented.

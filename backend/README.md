@@ -31,6 +31,13 @@
 | GET | `/api/cron/tour-sync` | TourAPI 동기화, Bearer 인증 필요 |
 | GET | `/api/cron/tour-detail-sync` | 이미지·편의 태그 상세 동기화, Bearer 인증 필요 |
 
+공개 운영 문서는 JavaScript나 로그인 없이 다음 clean URL로 제공합니다.
+
+```text
+/privacy
+/account-deletion
+```
+
 추천 요청 예시:
 
 ```json

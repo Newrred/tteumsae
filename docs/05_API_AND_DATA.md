@@ -1,6 +1,6 @@
 # API 및 데이터 설계
 
-작성 기준: 2026-08-20 통합 소스
+작성 기준: 2026-08-27 통합 소스
 백엔드 패키지 버전: `0.2.0`
 운영 API 기준 주소: `https://tteumsae-backend.vercel.app`
 
@@ -14,6 +14,7 @@ TourAPI 동기화 과정을 설명한다. 기획상 예정된 동작이 아니�
 
 ```text
 Android 앱
+  ├─ 선택 로그인·프로필 ─────> Supabase Auth / profiles(RLS)
   ├─ 위치 검색 ──────────────> GET /api/geocode ──> Kakao Local 키워드 검색
   ├─ 행정구역 확인/역지오코딩 > GET /api/region ───> Kakao Local 좌표→행정구역
   ├─ 틈새 발견 목록 ─────────> GET /api/places ────> Supabase places
@@ -32,17 +33,19 @@ Vercel Cron
 중요한 경계는 다음과 같다.
 
 - Android 앱에는 TourAPI 키, Kakao REST API 키, Supabase 서비스 역할 키가 없다.
-- Android는 Vercel 공개 API만 호출한다.
+- 장소·추천·경로 기능은 Android가 Vercel 공개 API를 통해서만 호출한다.
+- 예외적으로 선택 로그인 세션과 본인 `profiles` 행은 Supabase 공개 클라이언트와
+  RLS를 통해 Android가 직접 처리한다. 장소·추천 데이터는 계속 Vercel만 통한다.
 - Kakao Maps **네이티브 앱 키**만 Android 빌드 시 주입된다.
-- Supabase는 앱에서 직접 읽지 않는다. 서버의 service role 요청만 사용한다.
+- Android에는 Supabase publishable key만 있고 service role key는 없다.
 - 추천 API는 직행 `baseRoute`를 먼저 계산한 뒤 그 경로 주변에서 후보를 찾고,
   후보 한 곳을 경유하는 경로를 장소별로 계산한다.
 - 결과 화면에서 경유지를 추가·제거할 때 Android가 `POST /api/route`를 호출한다.
   선택 순서의 0~5개 경유지를 포함한 통합 시간·거리·통행료·path를 Kakao
   Mobility에서 다시 계산한다.
-- Android는 TIME에서 사용자가 입력한 순수 경유 여유시간 `extraTimeMinutes`와
-  그보다 작은 `safetyBufferMinutes`를 보낸다. 서버는 직행 `baseRoute` 시간에
-  순수 여유시간을 더해 내부 `effectiveDeadlineMinutes`를 만든다.
+- 현재 활성 UI에는 시간 입력 단계가 없다. Android는 넓은 경로 주변 후보 탐색을
+  위한 내부 호환값 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`를 보낸다.
+  이는 사용자의 실제 도착 마감이나 보장 시간이 아니다.
 
 ## 2. 공통 HTTP 규칙
 
@@ -714,7 +717,7 @@ numOfRows=100
 | `last_completed_at` | 전체 순회 완료시각 |
 | `updated_at` | 상태 갱신시각 |
 
-두 테이블 모두 RLS가 활성화되어 있고 공개 정책은 마이그레이션에 없다. 서버는
+`places`, `sync_state`는 RLS가 활성화되어 있고 공개 정책은 마이그레이션에 없다. 서버는
 `SUPABASE_SERVICE_ROLE_KEY`로 PostgREST를 호출해 RLS를 우회한다. service role
 키를 Android, 브라우저, 로그, 문서에 노출하면 안 된다.
 
@@ -756,7 +759,7 @@ delete는 할 수 없다. [`verify-user-rls.js`](../backend/scripts/verify-user-
 
 계약 변경에는 반드시 백엔드 Node 테스트와 Android JSON 파서 테스트를 함께
 추가한다. 현재 소스의 `sigunguCode` 검증과 route/baseRoute/corridor를 포함한
-백엔드 테스트는 `2026-08-20` 기준 28/28 통과했다.
+백엔드 테스트는 `2026-08-27` 기준 41/41 통과했다.
 
 ## 9. 알려진 데이터·API 부채
 

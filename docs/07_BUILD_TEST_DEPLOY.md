@@ -288,14 +288,16 @@ pnpm dev
 ```text
 backend/migrations/001_initial.sql
 backend/migrations/002_detail_sync_state.sql
+backend/migrations/003_user_accounts.sql
 ```
 
 적용 후 확인:
 
-- `public.places`, `public.sync_state` 존재
-- 두 테이블 RLS 활성화
+- `public.places`, `public.sync_state`, `public.profiles`, `public.user_saved_places` 존재
+- 네 테이블 RLS 활성화
 - `sync_state`에 `tour_api`, `tour_details` 두 행 존재
 - 익명 공개 정책 없음
+- `node scripts/verify-user-rls.js`가 임시 사용자 2명의 교차 접근 차단 `PASS`
 
 마이그레이션을 Production에 적용하기 전에 백업 또는 Supabase 복구 지점을
 확인한다.

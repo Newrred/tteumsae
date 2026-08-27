@@ -153,7 +153,8 @@
 결정:
 
 - TourAPI 서비스키, Kakao REST 키와 Supabase Service Role 키는 Vercel에만 둔다.
-- Android에는 Kakao Native App Key만 빌드 시 주입한다.
+- Android에는 Kakao Native App Key와 Supabase URL·publishable key만 빌드 시
+  주입한다. publishable key의 권한 경계는 RLS다.
 
 영향:
 
@@ -167,5 +168,18 @@
 - 결과 카드에서 거리·통행료를 노출할지
 - 붉은 후보 영역을 실제 corridor로 개선할지 제거할지
 - 저장 탭을 전체 둘러보기와 분리할지
-- 최종 운영 문의 메일과 법적 서비스 주체
 - `com.tteumsae.app` 패키지명을 Play 출시까지 유지할지
+
+## 2026-08-27 — 선택 로그인과 최소 프로필
+
+상태: 확정
+
+결정:
+
+- 게스트 기능을 기본으로 유지하고 카카오·Google 로그인은 저장 연속성이 필요한
+  사용자에게만 제안한다.
+- 공개 프로필 DB에는 이메일을 복제하지 않고 닉네임·이미지와 선택 연령대·성별만
+  저장한다. 연령대·성별은 현재 추천에 사용하지 않는다.
+- 운영자 표기는 `신홍`, 문의 메일은 `gburgundy@gmail.com`을 사용한다.
+- 계정 삭제는 검증된 토큰 ID만 사용하고 Auth 사용자 삭제 cascade로 프로필과
+  원격 저장 행을 함께 삭제한다.

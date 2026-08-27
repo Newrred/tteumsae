@@ -1,6 +1,6 @@
 # QA와 알려진 문제
 
-기준일: `2026-08-26`
+기준일: `2026-08-27`
 대상 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
 
 ## 1. 현재 검증 기준선
@@ -8,11 +8,11 @@
 | 대상 | 상태 | 근거·주의 |
 |---|---|---|
 | Android `compileDebugKotlin` | 성공 | Room Flow UI 연결과 레거시 UI 저장 코드 제거 기준 |
-| Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `3BECCB01D6F1F486D06D40CF7B45C9EC14C55C3B7CC0ED47C3F09B668A36C7D1` |
-| Android `testDebugUnitTest` | 40/40 성공 | 저장 JSON 이전, 게스트 Repository, 설정 로컬 저장 문구 포함 |
-| Android `lintDebug` | 성공 | Lifecycle Compose 2.8.7 사용. 2.10.0은 현재 Kotlin 2.0.21/AGP 8.7.3 Lint 분석기와 충돌하므로 사용하지 않음 |
+| Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `F988EFB6F03E51DECD64280C230B14054BDF746A7C777DACEAFEE8EB61E2B602` |
+| Android `testDebugUnitTest` | 70/70 성공 | 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
+| Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
-| 백엔드 Node 테스트 | 28/28 성공 | `2026-08-20`; `extraTimeMinutes`, `sigunguCode`, route/baseRoute/corridor와 체류 종료 전 운영시간 검증 포함 |
+| 백엔드 Node 테스트 | 41/41 성공 | `2026-08-27`; 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
 | 운영 백엔드 계약 | 배포 필요 | `2026-08-20` 운영 URL은 아직 `deadlineMinutes`만 허용함을 400 응답으로 확인; 새 백엔드를 먼저 배포해야 최신 APK 추천이 동작한다 |
 | 최신 APK 실기기 전체 회귀 | 필요 | 빌드 성공과 사용자 흐름 통과는 별개 |
 
@@ -194,7 +194,9 @@ pnpm run check
 - [ ] 설정에 `이 기기에 N개 저장됨`이 표시되고 전체 비우기 후 0개와 빈 찜 목록이 함께 반영된다.
 - [ ] 저장·해제·복원·전체 비우기 후 강제 종료와 재실행에도 Room 상태가 유지된다.
 - [ ] 위치 권한·카카오맵 설치 상태, 캐시 지우기, 저장 전체 삭제, 문의 메일을 확인한다.
-- [ ] 정책 두 항목은 URL 연결 전까지 `준비 중`임을 확인한다.
+- [ ] 개인정보처리방침은 Vercel 배포 뒤 HTTPS 200으로 연결하고, 위치 약관은 준비 전까지 `준비 중`임을 확인한다.
+- [ ] 게스트 로그인 선택 문구, 카카오·Google OAuth 왕복, 프로필 선택값, 로그아웃을 확인한다.
+- [ ] 계정 삭제 2단계 확인·재로그인·cascade·재가입과 실패 시 세션 보존을 확인한다.
 
 ## 4. 백엔드 스모크 테스트
 
@@ -319,7 +321,8 @@ pnpm run check
 #### 레거시 화면과 단일 대형 파일
 
 - 도달 불가능한 `TimeScreen`, NEARBY UI와 관련 헬퍼가 남아 있다.
-- `TteumsaeApp.kt` 한 파일에 화면·상태·지도·딥링크가 집중돼 충돌 위험이 크다.
+- `TteumsaeApp.kt`에서 저장·설정·계정 UI와 딥링크 처리는 분리됐지만 추천·지도
+  상태는 여전히 집중돼 충돌 위험이 남아 있다.
 
 #### 프로세스 복원
 
@@ -327,7 +330,10 @@ pnpm run check
 
 #### 정책·릴리스 체인
 
-- 개인정보처리방침과 위치기반서비스 약관 URL이 비어 있다.
+- 개인정보처리방침 HTML은 준비됐지만 새 Vercel HTTPS 배포와 Android URL 연결이
+  남아 있다. 위치기반서비스 약관은 아직 준비되지 않았다.
+- 새 Supabase migrations 001~003, 2-user RLS verifier, 카카오·Google provider와
+  release-signed OAuth, 실제 계정 삭제는 아직 라이브 검증하지 않았다.
 - release signing, 업로드 키, AAB, Play App Signing, CI 배포 체인이 없다.
 - 정책/아이콘/스플래시/데이터 안전/스토어 이미지가 제출 전 필요하다.
 

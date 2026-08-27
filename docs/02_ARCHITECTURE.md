@@ -7,6 +7,7 @@ flowchart LR
     U["Android 사용자"] --> A["Android 앱\nKotlin + Compose"]
     A --> KM["Kakao Map Android SDK"]
     A --> B["Vercel Functions 백엔드"]
+    A --> SA["Supabase Auth·PostgREST\n선택 로그인·본인 프로필"]
     B --> KL["Kakao Local API"]
     B --> KMO["Kakao Mobility Directions"]
     B --> T["한국관광공사 TourAPI KorService2"]
@@ -14,7 +15,9 @@ flowchart LR
     A --> KA["카카오맵 앱·웹 딥링크"]
 ```
 
-Android에는 카카오 네이티브 지도 키만 주입합니다. TourAPI 서비스키, Kakao REST 키와 Supabase 서비스 역할 키는 백엔드 환경변수에만 둡니다.
+Android에는 카카오 네이티브 지도 키와 Supabase Project URL·publishable key만
+주입합니다. TourAPI 서비스키, Kakao REST 키와 Supabase service role key는
+백엔드 환경변수에만 둡니다.
 
 ## 2. 저장소 모듈
 
@@ -35,18 +38,24 @@ Android에는 카카오 네이티브 지도 키만 주입합니다. TourAPI 서�
 |---|---|
 | `android/app/src/main/java/com/tteumsae/app/MainActivity.kt` | Compose 진입점 |
 | `android/app/src/main/java/com/tteumsae/app/TteumsaeApplication.kt` | Kakao 지도 SDK·앱 데이터 컨테이너 초기화 |
-| `android/app/src/main/java/com/tteumsae/app/AppContainer.kt` | Room DB와 저장 Repository 단일 생성 |
+| `android/app/src/main/java/com/tteumsae/app/AppContainer.kt` | Room, 인증·프로필·계정 삭제 Repository 단일 생성 |
+| `android/app/src/main/java/com/tteumsae/app/data/auth/` | 선택형 Supabase PKCE 세션과 exact 딥링크 어댑터 |
+| `android/app/src/main/java/com/tteumsae/app/data/profile/` | 본인 프로필 RLS 조회·생성·수정 |
+| `android/app/src/main/java/com/tteumsae/app/data/account/` | 검증된 토큰 기반 계정 삭제 HTTP 클라이언트 |
 | `android/app/src/main/java/com/tteumsae/app/data/local/` | 저장 장소 Room 엔티티·DAO·스냅샷·기존 JSON 이전 |
 | `android/app/src/main/java/com/tteumsae/app/data/saved/SavedPlacesRepository.kt` | 게스트 저장·해제·복원·전체 비우기 진입점 |
 | `android/app/src/main/java/com/tteumsae/app/ui/saved/` | 틈새 발견·저장 목록과 카탈로그 상세 UI |
 | `android/app/src/main/java/com/tteumsae/app/ui/settings/` | 설정 UI와 기기 로컬 저장 안내 |
+| `android/app/src/main/java/com/tteumsae/app/ui/account/` | 로그인 시트, 프로필 편집, 탈퇴 확인과 AccountViewModel |
 | `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt` | 루트 화면 조립, 추천 상태, 지도 흐름 |
 | `android/app/src/main/java/com/tteumsae/app/ui/CurrentLocation.kt` | 위치 권한 이후 좌표 취득 |
 | `android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt` | 백엔드 HTTP 호출과 JSON 파싱 |
 | `android/app/src/main/java/com/tteumsae/app/domain/Models.kt` | 앱 도메인 모델 |
 | `android/app/src/main/java/com/tteumsae/app/ui/theme/Theme.kt` | 브랜드 색상과 Compose 테마 |
 
-현재 `TteumsaeApp.kt`는 3,843줄이며 저장·설정 화면과 저장 계층은 분리됐지만 추천 상태와 지도 화면 대부분은 여전히 함께 관리합니다. 다음 단계에서도 기능을 크게 갈아엎지 않고 상태 소유권을 순차적으로 분리해야 합니다.
+현재 `TteumsaeApp.kt`는 약 3,882줄이며 저장·설정·계정 화면과 각 데이터 계층은
+분리됐지만 추천 상태와 지도 화면 대부분은 여전히 함께 관리합니다. 다음 단계에서도
+기능을 크게 갈아엎지 않고 상태 소유권을 순차적으로 분리해야 합니다.
 
 ### `backend/`
 
@@ -86,6 +95,8 @@ stateDiagram-v2
     HOME --> LOCATION: "목적지 검색"
     HOME --> SAVED: "장소 둘러보기 탭"
     HOME --> SETTINGS: "설정 탭"
+    SETTINGS --> PROFILE: "프로필 관리"
+    PROFILE --> SETTINGS: "뒤로"
     LOCATION --> CONDITIONS: "유효한 위치 확인"
     CONDITIONS --> LOCATION: "뒤로"
     CONDITIONS --> LOADING: "추천 시작"
@@ -206,6 +217,8 @@ detourMinutes = candidateRouteMinutes - baseRouteMinutes
 
 - 저장 장소의 단일 원본은 Android Room의 `saved_places` 테이블이며 UI는 lifecycle-aware Flow로 관찰합니다.
 - 현재 활성 범위는 `GUEST`뿐이고 계정이나 서버와 동기화하지 않습니다. 게스트 행은 네트워크 작업을 만들지 않습니다.
+- 로그인 사용자의 원격 `user_saved_places` 테이블과 RLS는 준비됐지만 Room과의
+  동기화는 별도 후속 계획이며, 현재 설정 UI가 이를 완료된 기능처럼 표시하지 않습니다.
 - 저장 해제와 전체 비우기는 행을 즉시 삭제하지 않고 `desired_saved=false` tombstone으로 남깁니다.
 - 저장 스냅샷에는 장소명, 분류, 평균 머무름, 주소, 좌표, 이미지 URL, 태그, 운영시간과 휴무일을 포함하고 추천 시점의 경로 시간·거리는 저장하지 않습니다.
 - 앱 업데이트 시 기존 `saved_places/entries` JSON은 Room 트랜잭션 성공 후 한 번만 이전·제거합니다.
@@ -218,6 +231,7 @@ detourMinutes = candidateRouteMinutes - baseRouteMinutes
 | 키 | 위치 | Android 포함 여부 |
 |---|---|---|
 | Kakao Native App Key | `android/local.properties` | 포함됨 |
+| Supabase URL / publishable key | `android/local.properties` | 포함됨(공개 클라이언트 설정) |
 | TourAPI 서비스키 | Vercel 환경변수 | 포함 안 됨 |
 | Kakao REST API Key | Vercel 환경변수 | 포함 안 됨 |
 | Supabase Service Role Key | Vercel 환경변수 | 포함 안 됨 |

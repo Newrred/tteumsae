@@ -23,7 +23,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 화면 전환 | `부분 구현/추정` | 단일 Activity/컴포저블이 `AppScreen` enum 값으로 화면을 교체한다 | `NavHost`와 앱 내부 시스템 뒤로가기 백스택이 없고, 좌표·추천·경로는 프로세스 종료 후 복원되지 않는다 | `MainActivity.kt`, `ui/TteumsaeApp.kt` |
 | 내부 시간 기준 | `부분 구현/추정` | 홈에서 탐색을 시작할 때 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`로 고정한다. 사용자는 활성 흐름에서 시간을 입력하지 않는다 | 넓은 경로 주변 후보를 위한 API 호환값이다. 실제 도착 마감이나 남은 시간을 입력받지 않으므로 `늦지 않음 보장`으로 표현하면 안 된다 | `ui/TteumsaeApp.kt`의 `DEFAULT_EXTRA_TIME_MINUTES`, `HomeScreen.onStart`, `SearchCriteria` |
 | 브랜드 토큰 | `구현 및 코드 검증` | 기본색 `#E60F33`; 연한 강조색과 내비게이션 그림자에 파생 알파를 사용한다 | 신규 화면에서 임의 빨간색을 추가하지 말고 테마 토큰을 재사용한다 | `ui/theme/Theme.kt`, `ui/TteumsaeApp.kt` |
-| 서버 키 보호 | `구현 및 코드 검증` | TourAPI·Kakao REST·Supabase service-role 키는 백엔드에만 있다. Android에는 공개 API 주소와 빌드 시 주입하는 Kakao 네이티브 앱 키만 있다 | CI·release 빌드에서도 네이티브 키를 안전하게 주입해야 한다 | `app/build.gradle.kts`, `data/TteumsaeApi.kt` |
+| 서버 키 보호 | `구현 및 코드 검증` | TourAPI·Kakao REST·Supabase service-role 키는 백엔드에만 있다. Android에는 공개 API 주소, Kakao 네이티브 키, Supabase URL·publishable key만 있다 | CI·release 빌드에서도 네이티브 키와 공개 설정을 올바른 환경에 주입해야 한다 | `app/build.gradle.kts`, `data/TteumsaeApi.kt` |
 
 ## 2. 홈·내비게이션·GPS
 
@@ -106,10 +106,11 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 위치 권한 | `구현, QA 필요` | 권한 상태를 표시하고 앱 설정으로 이동; `ON_RESUME`에 갱신 | 위치 서비스 자체 상태는 별도 표시하지 않음 | `SettingsTabScreen` |
 | 카카오맵 상태 | `구현, QA 필요` | 설치 여부 확인, 앱 실행 또는 Play Store/웹 설치 경로 | 기기별 intent 처리 QA 필요 | `isKakaoMapAvailable`, `openKakaoMapHome`, `openKakaoMapInstallPage` |
 | 캐시·저장 삭제 | `구현, QA 필요` | 확인 후 이미지 캐시/cacheDir 삭제 또는 Room의 게스트 저장 목록 전체 해제 | 지도 SDK 내부 캐시까지 지운다는 보장은 없음 | `SettingsScreen`, `SavedPlacesRepository.clearGuest`, `clearAppCache` |
-| 문의하기 | `구현, QA 필요` | `minjaeimnyda@gmail.com`으로 앱 버전을 포함한 메일 작성 화면 | 출시 전 운영 메일로 교체 | `CONTACT_EMAIL`, `openContactEmail` |
-| 개인정보처리방침 | `미구현` | 설정 행은 있으나 URL이 비어 있고 `준비 중` | Play 제출 전 공개 HTTPS 문서 필수 | `PRIVACY_POLICY_URL` |
+| 문의하기 | `구현, QA 필요` | `gburgundy@gmail.com`으로 앱 버전을 포함한 메일 작성 화면 | 실제 메일 수신·응답 QA 필요 | `CONTACT_EMAIL`, `openContactEmail` |
+| 개인정보처리방침 | `부분 구현/배포 필요` | no-JS 공개 HTML과 `/privacy` rewrite는 구현됨. Android URL은 새 운영 배포 전까지 비어 있음 | Vercel HTTPS 200 확인 후 앱·Play Console URL 연결 | `backend/privacy.html`, `PRIVACY_POLICY_URL` |
 | 위치기반서비스 약관 | `미구현` | 설정 행은 있으나 URL이 비어 있고 `준비 중` | 법률 검토·공개 문서·동의 정책 필요 | `LOCATION_TERMS_URL` |
-| 계정·푸시 | `미구현` | 로그인, 계정 동기화, 푸시가 없음 | 저장 데이터는 로컬 전용 | Android 전체 소스 |
+| 선택 로그인·프로필 | `구현 및 코드 검증, 운영 QA 필요` | 게스트 우선, 카카오·Google PKCE, 선택 닉네임·연령대·성별, 로그아웃과 계정 삭제 UI | Supabase/provider 콘솔과 서명 기기 OAuth 미검증. 저장 동기화·푸시는 미구현 | `data/auth`, `data/profile`, `ui/account` |
+| 계정 삭제 | `구현 및 코드 검증, 운영 QA 필요` | 2단계 영향 확인 후 재로그인, Bearer 전용 `DELETE /api/account`, 성공 시 로컬 세션 제거 | 실제 Auth cascade·재가입은 새 Supabase/Vercel에서 검증 필요 | `AccountDeletionApi`, `AccountViewModel`, `backend/api/account.js` |
 
 ## 10. 릴리스·검증 준비
 
@@ -117,8 +118,8 @@ Android 버전: `0.12.4` (`versionCode 25`)
 |---|---|---|---|
 | Kotlin 컴파일 | `구현 및 코드 검증` | 최신 통합 소스 `compileDebugKotlin` 성공 | CI로 고정 |
 | Debug APK | `구현 및 코드 검증` | 지역/찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 `assembleDebug` 성공 (`2026-08-20`) | 새 버전 번호, 실기기 회귀 후 배포 |
-| Android 단위 테스트 | `구현 및 코드 검증` | 현재 작업공간에서 저장 이전·Repository·설정 문구를 포함한 40/40 통과 (`2026-08-26`) | Room 계측 테스트는 연결 기기에서 별도 실행 필요 |
-| 백엔드 테스트 | `구현 및 코드 검증` | `extraTimeMinutes`, route/baseRoute/corridor, 체류 종료 전 운영시간 검증을 포함한 Node 테스트 28/28 통과 (`2026-08-20`) | 계약 변경 시 같은 테스트를 다시 실행 |
+| Android 단위 테스트 | `구현 및 코드 검증` | 인증·프로필·계정 삭제를 포함한 70/70 통과 (`2026-08-27`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
+| 백엔드 테스트 | `구현 및 코드 검증` | 정책 페이지·사용자 RLS 계약·계정 삭제를 포함한 Node 테스트 41/41 통과 (`2026-08-27`) | 실제 RLS는 새 Supabase에서 verifier 필요 |
 | Release 서명·AAB | `미구현` | signingConfig/키 전달/CI 없음 | 업로드 키, Play App Signing, `bundleRelease` |
 | 정책·스토어 자료 | `미구현` | 정책 URL·런처 아이콘·스토어 제출 체인 미완성 | 정책, 아이콘/스플래시, 데이터 안전, 스크린샷, AAB 준비 |
 | 실기기 회귀 | `구현, QA 필요` | 새 결과·상세·복수 경유지와 Room 저장 흐름은 코드/빌드 기준 | GPS, Kakao Map SDK, 0~5 경유지, 기존 JSON 업데이트 이전, 저장 복원·전체 해제 검증 |
