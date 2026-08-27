@@ -1,7 +1,7 @@
 import { requiredEnv } from "./env.js";
 import { supabaseApiHeaders } from "./supabase-auth.js";
 
-const publicColumns = [
+const basePublicColumns = [
   "content_id",
   "source",
   "name",
@@ -14,7 +14,10 @@ const publicColumns = [
   "address",
   "image_url",
   "tel",
-  "default_stay_minutes",
+  "default_stay_minutes"
+];
+
+const enrichmentPublicColumns = [
   "cat1",
   "cat2",
   "cat3",
@@ -26,17 +29,35 @@ const publicColumns = [
   "homepage_url",
   "image_urls",
   "tags"
-].join(",");
+];
+
+const publicColumns = [...basePublicColumns, ...enrichmentPublicColumns].join(",");
+
+const legacyPublicColumns = [...basePublicColumns, "raw"].join(",");
 
 function toPublicPlace(row) {
+  const legacy = row.raw?._tteumsae ?? {};
   const { raw: _raw, ...place } = row;
-  const imageUrls = Array.isArray(place.image_urls) ? place.image_urls : [];
-  const tags = Array.isArray(place.tags) ? place.tags : [];
+  const imageUrls = Array.isArray(place.image_urls)
+    ? place.image_urls
+    : Array.isArray(legacy.imageUrls)
+      ? legacy.imageUrls
+      : [];
+  const tags = Array.isArray(place.tags)
+    ? place.tags
+    : Array.isArray(legacy.tags)
+      ? legacy.tags
+      : [];
   return {
     ...place,
+    cat1: place.cat1 ?? row.raw?.cat1 ?? null,
+    cat2: place.cat2 ?? row.raw?.cat2 ?? null,
+    cat3: place.cat3 ?? row.raw?.cat3 ?? null,
     image_url: place.image_url || imageUrls[0] || null,
     image_urls: imageUrls,
-    tags
+    tags,
+    opening_hours: place.opening_hours ?? legacy.openingHours ?? null,
+    closed_days: place.closed_days ?? legacy.closedDays ?? null
   };
 }
 
@@ -55,11 +76,34 @@ async function databaseRequest(path, { method = "GET", body, prefer } = {}) {
   });
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Database request failed (${response.status}): ${detail.slice(0, 300)}`);
+    const error = new Error(`Database request failed (${response.status}): ${detail.slice(0, 300)}`);
+    error.status = response.status;
+    try {
+      const databaseError = JSON.parse(detail);
+      error.code = databaseError.code;
+      error.databaseMessage = databaseError.message;
+    } catch {
+      error.code = null;
+      error.databaseMessage = null;
+    }
+    throw error;
   }
   if (response.status === 204) return null;
   const text = await response.text();
   return text ? JSON.parse(text) : null;
+}
+
+async function requestPublicPlaceRows(query) {
+  try {
+    return await databaseRequest(`places?${query}`);
+  } catch (error) {
+    const missingEnrichmentColumn =
+      error.code === "42703" &&
+      enrichmentPublicColumns.some((column) => error.databaseMessage?.includes(`places.${column}`));
+    if (!missingEnrichmentColumn) throw error;
+    query.set("select", legacyPublicColumns);
+    return databaseRequest(`places?${query}`);
+  }
 }
 
 export async function listPlaces({
@@ -86,7 +130,7 @@ export async function listPlaces({
   if (Number.isFinite(minLongitude)) query.set("longitude", `gte.${minLongitude}`);
   if (Number.isFinite(maxLongitude)) query.append("longitude", `lte.${maxLongitude}`);
 
-  const rows = await databaseRequest(`places?${query}`);
+  const rows = await requestPublicPlaceRows(query);
   return rows.map(toPublicPlace);
 }
 
@@ -97,7 +141,7 @@ export async function getPlace(contentId) {
     is_active: "eq.true",
     limit: "1"
   });
-  const rows = await databaseRequest(`places?${query}`);
+  const rows = await requestPublicPlaceRows(query);
   return rows?.[0] ? toPublicPlace(rows[0]) : null;
 }
 

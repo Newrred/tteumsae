@@ -55,3 +55,51 @@ test("정규화된 TourAPI 상세 컬럼을 공개하고 raw는 숨긴다", asyn
     globalThis.fetch = originalFetch;
   }
 });
+
+test("상세 컬럼 마이그레이션 전에는 레거시 장소 조회로 폴백한다", async () => {
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    if (requests.length === 1) {
+      return Response.json(
+        { code: "42703", message: "column places.cat1 does not exist" },
+        { status: 400 }
+      );
+    }
+    return Response.json([
+      {
+        content_id: "legacy-123",
+        source: "TOUR_API",
+        name: "기존 장소",
+        category: "RESTAURANT",
+        content_type_id: 39,
+        area_code: 32,
+        latitude: 37.75,
+        longitude: 128.87,
+        default_stay_minutes: 40,
+        raw: {
+          _tteumsae: {
+            openingHours: "10:00~20:00",
+            imageUrls: ["https://example.com/legacy.jpg"],
+            tags: ["주차 가능"]
+          }
+        }
+      }
+    ]);
+  };
+  try {
+    const [place] = await listPlaces({ limit: 1 });
+    assert.equal(requests.length, 2);
+    assert.match(requests[0], /cat1/);
+    assert.match(requests[1], /raw/);
+    assert.equal(place.opening_hours, "10:00~20:00");
+    assert.deepEqual(place.image_urls, ["https://example.com/legacy.jpg"]);
+    assert.deepEqual(place.tags, ["주차 가능"]);
+    assert.equal("raw" in place, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
