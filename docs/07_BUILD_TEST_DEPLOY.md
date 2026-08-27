@@ -277,7 +277,7 @@ pnpm dlx vercel env pull .env.local
 pnpm dev
 ```
 
-팀 `jaturi`, 프로젝트 `tteumsae-backend`를 선택한다. 운영 DB를 로컬에서
+팀 `newrreds-projects`, 프로젝트 `tteumsae-backend`를 선택한다. 운영 DB를 로컬에서
 수정하지 않도록 `.env.local`의 대상 환경을 확인한다.
 
 ## 6. Supabase 최초 구성
@@ -326,7 +326,7 @@ pnpm exec vercel --prod
 운영 기준 주소:
 
 ```text
-https://tteumsae-backend.vercel.app
+https://tteumsae-backend-one.vercel.app
 ```
 
 환경변수를 추가·교체한 경우 코드 변경이 없어도 새 배포를 생성한다.
@@ -334,7 +334,7 @@ https://tteumsae-backend.vercel.app
 ### 7.3 읽기 전용 스모크 테스트
 
 ```powershell
-$base = 'https://tteumsae-backend.vercel.app'
+$base = 'https://tteumsae-backend-one.vercel.app'
 
 Invoke-RestMethod "$base/api/health"
 Invoke-RestMethod "$base/api/places?page=1&pageSize=2"
@@ -381,7 +381,7 @@ Cron은 DB를 변경하고 외부 API 쿼터를 사용한다. 운영 담당자�
 비밀값을 명령 기록에 직접 적지 말고 별도 환경변수로 주입한다.
 
 ```powershell
-$base = 'https://tteumsae-backend.vercel.app'
+$base = 'https://tteumsae-backend-one.vercel.app'
 $headers = @{ Authorization = "Bearer $env:TTEUMSAE_CRON_CALL_SECRET" }
 
 Invoke-RestMethod -Headers $headers "$base/api/cron/tour-sync"

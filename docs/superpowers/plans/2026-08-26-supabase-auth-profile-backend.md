@@ -251,7 +251,7 @@ gender in ('FEMALE','MALE','OTHER','PREFER_NOT_TO_SAY')
 
 verify-user-rls.js runs only when SUPABASE_TEST_URL, SUPABASE_TEST_PUBLISHABLE_KEY, and SUPABASE_TEST_SERVICE_ROLE_KEY exist. It creates two temporary Auth users with random emails, signs each in, verifies own CRUD, verifies cross-user select/update returns no row or 403, deletes both admin users in finally, and exits nonzero on any leak.
 
-- [ ] **Step 5: Run static tests and, on the new test project, live RLS tests**
+- [x] **Step 5: Run static tests and, on the new test project, live RLS tests** *(2026-08-27: 프로젝트 `ysainvblgtewlpsygfyr`에 001–003 적용, 44 tests + project check + two-user RLS PASS)*
 
 ~~~powershell
 $tests=(Get-ChildItem tests -Filter "*.test.js").FullName
@@ -364,7 +364,7 @@ Use headings, lists, visible effective date, responsive viewport, and normal anc
 
 Preserve current APK rewrite and cron entries.
 
-- [ ] **Step 4: Verify locally and after preview deployment** *(로컬 41 tests + project check 완료, 새 Vercel Preview 배포 후 HTTP 200 확인 대기)*
+- [x] **Step 4: Verify locally and after preview deployment** *(2026-08-27: 로컬 44 tests + project check, Production `/privacy`·`/account-deletion` HTTP 200 확인)*
 
 ~~~powershell
 $tests=(Get-ChildItem tests -Filter "*.test.js").FullName
@@ -454,7 +454,7 @@ Keep MainActivity as the launcher. Add VIEW, DEFAULT, BROWSABLE and exact scheme
 
 Call the handler in onCreate with the initial intent and override onNewIntent to forward the new intent. Send SDK verification errors to AuthRepository as a user-safe login failure.
 
-- [ ] **Step 4: Configure provider consoles** *(설정 절차 문서화 완료, 새 Supabase 프로젝트 ref와 provider credentials 입력 대기)*
+- [ ] **Step 4: Configure provider consoles** *(2026-08-27: Kakao 앱·Supabase provider·`tteumsae://auth-callback` 연결 완료. Google OAuth는 운영 계정 `gburgundy@gmail.com` 로그인 후 전용 프로젝트/credentials 생성 대기)*
 
 Register the Supabase callback required by Kakao/Google and tteumsae://auth-callback in Supabase redirect allowlist. Store provider secrets only in provider/Supabase dashboards.
 
@@ -595,7 +595,7 @@ cd ..\android
 git diff --check
 ~~~
 
-- [ ] **Step 3: Run live service checks** *(새 Supabase/Vercel 자격증명, provider console, 서명 기기 준비 대기)*
+- [ ] **Step 3: Run live service checks** *(2026-08-27: Supabase migration/RLS PASS, Vercel health·places·Kakao Mobility route·정책 페이지·무토큰 삭제 401 확인. TourAPI 키, Google provider, 서명 기기 검증 대기)*
 
 - Apply migrations 001–003 to the new Supabase project.
 - Run verify-user-rls.js and require PASS.
@@ -614,10 +614,10 @@ git commit -m "docs: 계정 인증과 삭제 운영 절차 정리"
 ## Plan Completion Gate
 
 - [x] Toolchain upgrade passes debug/release tests.
-- [ ] Live RLS verifier proves two-user isolation.
+- [x] Live RLS verifier proves two-user isolation.
 - [ ] Kakao and Google PKCE login work on a signed device.
 - [x] Profile remains optional and demographics never enter recommendation requests.
 - [ ] Account deletion uses verified token identity and hard-deletes Auth/profile rows.
 - [x] Guest recommendation, route, and local saved behavior remain available when Auth is disabled.
-- [ ] Privacy and deletion pages return public HTTPS 200 without JavaScript.
+- [x] Privacy and deletion pages return public HTTPS 200 without JavaScript.
 - [x] Policy, Data Safety, provider, Supabase, and Vercel operational inputs are documented.

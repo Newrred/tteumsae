@@ -127,7 +127,7 @@ pnpm dlx vercel link
 pnpm dlx vercel env pull .env.local
 ```
 
-팀 `jaturi`, 프로젝트 `tteumsae-backend`를 선택합니다.
+팀 `newrreds-projects`, 프로젝트 `tteumsae-backend`를 선택합니다.
 
 ## 7. 첫 실행 스모크 테스트
 

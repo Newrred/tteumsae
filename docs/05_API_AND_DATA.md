@@ -2,7 +2,7 @@
 
 작성 기준: 2026-08-27 통합 소스
 백엔드 패키지 버전: `0.2.0`
-운영 API 기준 주소: `https://tteumsae-backend.vercel.app`
+운영 API 기준 주소: `https://tteumsae-backend-one.vercel.app`
 
 이 문서는 현재 구현된 HTTP 계약, 외부 API 연동, Supabase 스키마와
 TourAPI 동기화 과정을 설명한다. 기획상 예정된 동작이 아니라 실제

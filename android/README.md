@@ -27,7 +27,7 @@
 ## 운영 API
 
 ```text
-https://tteumsae-backend.vercel.app
+https://tteumsae-backend-one.vercel.app
 ```
 
 배포 환경별 주소를 분리하려면

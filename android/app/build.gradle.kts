@@ -38,7 +38,7 @@ android {
         buildConfigField(
             "String",
             "API_BASE_URL",
-            "\"https://tteumsae-backend.vercel.app\"",
+            "\"https://tteumsae-backend-one.vercel.app\"",
         )
         buildConfigField(
             "String",

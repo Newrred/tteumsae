@@ -96,7 +96,7 @@ SUPABASE_PUBLISHABLE_KEY=Supabase publishable key
 | minSdk | 26 |
 | compileSdk / targetSdk | 35 / 35 |
 | API 기준 URL | `android/app/build.gradle.kts`의 `BuildConfig.API_BASE_URL` |
-| 현재 API 기준 URL | `https://tteumsae-backend.vercel.app` |
+| 현재 API 기준 URL | `https://tteumsae-backend-one.vercel.app` |
 
 Preview 백엔드를 쓰려면 Git에 임시 URL을 커밋하지 말고 로컬 브랜치 또는 별도
 build type의 `API_BASE_URL`로 분리한다.
@@ -190,7 +190,7 @@ pnpm dlx vercel link
 pnpm dlx vercel env pull .env.local
 ```
 
-연결 대상은 Vercel 팀 `jaturi`의 `tteumsae-backend` 프로젝트다. `.vercel/`과
+연결 대상은 Vercel 팀 `newrreds-projects`의 `tteumsae-backend` 프로젝트다. `.vercel/`과
 `.env.local`은 Git에 포함하지 않는다. 환경변수를 바꾼 뒤에는 새 Production
 배포가 필요하다.
 
@@ -285,9 +285,9 @@ Project URL과 publishable key만 설정한다.
 | 서비스 | 현재 대상 | 새 담당자 최소 권한 | 별도 전달 항목 | 인수 확인 |
 |---|---|---|---|---|
 | GitHub | `minjaeimnydaa/tteumsae` | 저장소 Write 이상 | 보호 브랜치·PR 규칙 | clone, branch push 가능 |
-| Vercel 백엔드 | 팀 `jaturi` / `tteumsae-backend` | 배포·환경변수 확인 가능 역할 | 팀 초대 | 프로젝트 연결, 배포·로그 조회 |
+| Vercel 백엔드 | 팀 `newrreds-projects` / `tteumsae-backend` | 배포·환경변수 확인 가능 역할 | 팀 초대 | 프로젝트 연결, 배포·로그 조회 |
 | Vercel APK 페이지 | 팀 `jaturi`의 APK 다운로드 프로젝트 | 배포 가능 역할 | 정확한 프로젝트 선택 | Preview 후 Production 배포 |
-| Supabase | 틈새 운영 DB 프로젝트 | Developer 이상, 비밀은 필요 시에만 | 프로젝트 초대 | 테이블·로그·SQL 접근 확인 |
+| Supabase | `tteumsae` (`ysainvblgtewlpsygfyr`) | Developer 이상, 비밀은 필요 시에만 | 프로젝트 초대 | 테이블·로그·SQL 접근 확인 |
 | Kakao Developers | 틈새 Kakao 앱 | 앱 편집 가능한 팀원 | 앱 팀 초대 | 네이티브/REST 키 종류, 플랫폼 확인 |
 | Kakao Mobility | 같은 Kakao 앱의 길찾기 제품 | 제품 설정·쿼터 확인 | 제품 활성화 상태 | 서버 REST 키로 테스트 경로 성공 |
 | 공공데이터포털 | 한국관광공사 국문 관광정보 서비스 | 활용신청 관리 가능 계정 | 계정 소유권 또는 새 키 | 승인·만료일·쿼터 확인 |
