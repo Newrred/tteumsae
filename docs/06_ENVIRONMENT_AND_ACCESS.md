@@ -11,7 +11,7 @@ Supabase와 Kakao 연동을 복구하도록 안내한다. 이 문서에는 환�
 
 | 실행 위치 | 설정 파일/관리 화면 | 필요한 설정 |
 |---|---|---|
-| Android 로컬 빌드 | `android/local.properties` | SDK 경로, Kakao 네이티브 앱 키 |
+| Android 로컬 빌드 | `android/local.properties` | SDK 경로, Kakao 네이티브 앱 키, 선택 로그인용 Supabase 공개 설정 |
 | Android 앱 코드 | `android/app/build.gradle.kts` | 백엔드 기준 URL, 앱 버전 |
 | 백엔드 로컬 | `backend/.env.local` | Vercel 환경변수의 로컬 사본 |
 | 백엔드 운영 | Vercel Project Settings | TourAPI, Kakao REST, Supabase, Cron 설정 |
@@ -67,11 +67,13 @@ cd android
 Copy-Item local.properties.example local.properties
 ```
 
-새 파일에 다음 **두 이름**을 설정한다.
+새 파일에 다음 이름을 설정한다.
 
 ```properties
 sdk.dir=새 컴퓨터의 Android SDK 절대 경로
 KAKAO_MAP_NATIVE_APP_KEY=Kakao Developers 네이티브 앱 키
+SUPABASE_URL=Supabase Project URL
+SUPABASE_PUBLISHABLE_KEY=Supabase publishable key
 ```
 
 주의:
@@ -81,6 +83,10 @@ KAKAO_MAP_NATIVE_APP_KEY=Kakao Developers 네이티브 앱 키
   클라이언트 식별자다. 서버 비밀키처럼 취급하지는 않지만 Git에는 넣지 않는다.
 - 값이 비어 있으면 앱이 빌드되더라도 지도 영역에 앱 키 설정 필요 안내가 나온다.
 - 서버용 `KAKAO_REST_API_KEY`를 이 파일에 넣으면 안 된다.
+- `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY` 중 하나라도 비어 있으면 로그인만
+  비활성화되고 지도·추천·게스트 저장 기능은 계속 동작한다.
+- Android에는 publishable key만 넣는다. RLS를 우회하는
+  `SUPABASE_SERVICE_ROLE_KEY`는 절대 넣지 않는다.
 
 현재 Android 식별값:
 

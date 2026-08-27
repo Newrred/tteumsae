@@ -99,6 +99,8 @@ Copy-Item local.properties.example local.properties
 ```
 
 `local.properties`에 로컬 SDK 경로와 `KAKAO_MAP_NATIVE_APP_KEY`를 입력한다.
+선택 로그인을 시험할 때만 `SUPABASE_URL`과 `SUPABASE_PUBLISHABLE_KEY`도
+입력한다. 두 값이 비어 있으면 게스트 기능을 유지한 채 로그인만 비활성화된다.
 키 이름과 Kakao 플랫폼 등록 방법은
 [`06_ENVIRONMENT_AND_ACCESS.md`](06_ENVIRONMENT_AND_ACCESS.md)를 따른다.
 

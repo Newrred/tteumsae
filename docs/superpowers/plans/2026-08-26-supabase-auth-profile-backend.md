@@ -396,11 +396,11 @@ git commit -m "feat: 개인정보와 계정 삭제 안내 페이지 추가"
 - Produces: AuthRepository.sessions, signIn(provider), signOut(), accessToken()
 - Consumes: Supabase Auth SDK only through AuthGateway
 
-- [ ] **Step 1: Write repository state tests with a fake gateway**
+- [x] **Step 1: Write repository state tests with a fake gateway**
 
 Test initial restoring, no stored session → guest, authenticated event → signed in, refresh network failure → unavailable without clearing guest app state, explicit sign-out → guest, and login cancellation → guest.
 
-- [ ] **Step 2: Implement domain states**
+- [x] **Step 2: Implement domain states**
 
 ~~~kotlin
 sealed interface AccountSession {
@@ -413,15 +413,15 @@ sealed interface AccountSession {
 enum class LoginProvider { KAKAO, GOOGLE }
 ~~~
 
-- [ ] **Step 3: Build the Supabase client only when configured**
+- [x] **Step 3: Build the Supabase client only when configured**
 
 Install Auth with PKCE, scheme tteumsae, host auth-callback, and Postgrest. When AUTH_ENABLED is false, AppContainer supplies DisabledAuthGateway and the rest of the app remains operational.
 
-- [ ] **Step 4: Implement the repository and adapter**
+- [x] **Step 4: Implement the repository and adapter**
 
 Map SDK sessionStatus/events into domain states. Keep SDK types out of UI and domain packages. Never log tokens.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ~~~powershell
 .\gradlew.bat testDebugUnitTest compileDebugKotlin
