@@ -4,6 +4,7 @@ enum class AppDestination {
     HOME,
     SAVED,
     SETTINGS,
+    PROFILE,
     LOCATION,
     CONDITIONS,
     LOADING,
@@ -22,6 +23,8 @@ fun previousDestination(current: AppDestination): AppDestination = when (current
     AppDestination.SETTINGS,
     AppDestination.LOCATION,
     -> AppDestination.HOME
+
+    AppDestination.PROFILE -> AppDestination.SETTINGS
 
     AppDestination.CONDITIONS -> AppDestination.LOCATION
     AppDestination.LOADING,

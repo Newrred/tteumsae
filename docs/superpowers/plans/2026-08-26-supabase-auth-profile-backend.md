@@ -534,27 +534,27 @@ git commit -m "feat: 선택형 사용자 프로필 추가"
 - Produces: AccountUiState and AccountEvent
 - Consumes: AuthRepository, ProfileRepository, existing AppContainer
 
-- [ ] **Step 1: Write ViewModel tests**
+- [x] **Step 1: Write ViewModel tests**
 
 Test guest login CTA, login cancellation, signed-in profile load, nullable demographic save, sign-out, delete requiring confirmation and re-login, server failure preserving local session, and server success returning guest.
 
-- [ ] **Step 2: Implement the deletion HTTP client**
+- [x] **Step 2: Implement the deletion HTTP client**
 
 Use DELETE BuildConfig.API_BASE_URL/api/account with Authorization bearer. Return Success for 204, NeedsLogin for 401, Retryable for 429/5xx, and Failed for other responses. Do not include user ID or JSON body.
 
-- [ ] **Step 3: Implement AccountViewModel**
+- [x] **Step 3: Implement AccountViewModel**
 
 Use one immutable AccountUiState. The ViewModel owns auth/profile/loading/error states, but not saved places or route state. Trigger provider login through AuthRepository and profile load only after SignedIn.
 
-- [ ] **Step 4: Build account UI**
+- [x] **Step 4: Build account UI**
 
 Guest settings show login benefit, Kakao, Google, and non-required copy. Signed-in settings show avatar/name/provider, profile management, and logout. Profile screen edits only nickname, age group, and gender; show that optional demographics are not used in current recommendations.
 
-- [ ] **Step 5: Add deletion confirmation and re-login**
+- [x] **Step 5: Add deletion confirmation and re-login**
 
 Use two explicit confirmation states. After fresh provider login, call AccountDeletionApi. At this phase clear profile/session and return guest; the saved-sync plan extends cleanup to user scopes, ActiveTrip, alarms, and geofences.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 ~~~powershell
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug

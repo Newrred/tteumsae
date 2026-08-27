@@ -7,7 +7,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
@@ -17,11 +20,15 @@ class AuthRepository(
 ) {
     private val mutableSessions = MutableStateFlow<AccountSession>(AccountSession.Restoring)
     val sessions: StateFlow<AccountSession> = mutableSessions.asStateFlow()
+    private val mutableSessionEvents = MutableSharedFlow<AccountSession>(extraBufferCapacity = 8)
+    val sessionEvents: SharedFlow<AccountSession> = mutableSessionEvents.asSharedFlow()
 
     init {
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             gateway.statuses.collect { status ->
-                mutableSessions.value = status.toAccountSession()
+                val session = status.toAccountSession()
+                mutableSessions.value = session
+                mutableSessionEvents.emit(session)
             }
         }
     }
@@ -54,6 +61,14 @@ class AuthRepository(
             mutableSessions.value = AccountSession.AuthUnavailable(NETWORK_ERROR_MESSAGE)
         } catch (_: Exception) {
             mutableSessions.value = AccountSession.AuthUnavailable(GENERIC_ERROR_MESSAGE)
+        }
+    }
+
+    suspend fun clearLocalSession() {
+        try {
+            gateway.clearLocalSession()
+        } finally {
+            mutableSessions.value = AccountSession.Guest
         }
     }
 

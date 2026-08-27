@@ -2,6 +2,7 @@ package com.tteumsae.app
 
 import android.content.Context
 import androidx.room.Room
+import com.tteumsae.app.data.account.AccountDeletionApi
 import com.tteumsae.app.data.auth.AuthRepository
 import com.tteumsae.app.data.auth.DisabledAuthGateway
 import com.tteumsae.app.data.auth.SupabaseAuthGateway
@@ -48,6 +49,8 @@ class AppContainer(context: Context) {
             metadataSource = SupabaseOAuthProfileMetadataSource(client),
         )
     }
+
+    val accountDeletionClient = AccountDeletionApi()
 
     val savedPlacePreferencesMigration = SavedPlacePreferencesMigration(
         preferences = SharedPreferencesSavedPlaceMigrationPreferences(context.applicationContext),

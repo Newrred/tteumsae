@@ -11,6 +11,8 @@ interface AuthGateway {
 
     suspend fun signOut()
 
+    suspend fun clearLocalSession() = signOut()
+
     fun accessToken(): String?
 }
 

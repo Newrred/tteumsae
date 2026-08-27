@@ -150,6 +150,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kakao.vectormap.KakaoMap
 import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.GestureType
@@ -218,6 +219,9 @@ import com.tteumsae.app.ui.navigation.previousDestination
 import com.tteumsae.app.ui.saved.SavedPlacesScreen
 import com.tteumsae.app.ui.saved.SavedPlaceImage
 import com.tteumsae.app.ui.settings.SettingsScreen
+import com.tteumsae.app.ui.account.AccountViewModel
+import com.tteumsae.app.ui.account.AccountViewModelFactory
+import com.tteumsae.app.ui.account.ProfileEditScreen
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
@@ -285,6 +289,16 @@ fun TteumsaeApp() {
     val context = LocalContext.current
     val api = remember { TteumsaeApi() }
     val application = context.applicationContext as TteumsaeApplication
+    val accountViewModel: AccountViewModel = viewModel(
+        factory = remember(application) {
+            AccountViewModelFactory(
+                authRepository = application.container.authRepository,
+                profileRepository = application.container.profileRepository,
+                deletionClient = application.container.accountDeletionClient,
+            )
+        },
+    )
+    val accountState by accountViewModel.state.collectAsStateWithLifecycle()
     val savedPlacesRepository = remember(application) {
         application.container.savedPlacesRepository
     }
@@ -488,6 +502,7 @@ fun TteumsaeApp() {
             }
 
             SettingsScreen(
+                accountState = accountState,
                 savedCount = savedPlaces.size,
                 locationPermissionGranted = locationPermissionGranted,
                 kakaoMapAvailable = kakaoMapAvailable,
@@ -495,6 +510,18 @@ fun TteumsaeApp() {
                 contactEmail = CONTACT_EMAIL,
                 privacyPolicyAvailable = PRIVACY_POLICY_URL.isNotBlank(),
                 locationTermsAvailable = LOCATION_TERMS_URL.isNotBlank(),
+                onOpenLogin = accountViewModel::openLogin,
+                onDismissLogin = accountViewModel::dismissLogin,
+                onLogin = accountViewModel::signIn,
+                onOpenProfile = {
+                    if (accountState.profile != null) screen = AppDestination.PROFILE
+                },
+                onSignOut = accountViewModel::signOut,
+                onRequestAccountDeletion = accountViewModel::requestDeletion,
+                onConfirmDeletionConsequences = accountViewModel::confirmDeletionConsequences,
+                onRequireReauthentication = accountViewModel::requireReauthentication,
+                onReauthenticateForDeletion = accountViewModel::reauthenticateForDeletion,
+                onCancelDeletion = accountViewModel::cancelDeletion,
                 onOpenLocationSettings = { openAppSettings(context) },
                 onOpenKakaoMap = {
                     if (kakaoMapAvailable) {
@@ -521,6 +548,18 @@ fun TteumsaeApp() {
                     }
                 },
             )
+        }
+
+        AppDestination.PROFILE -> accountState.profile?.let { profile ->
+            ProfileEditScreen(
+                profile = profile,
+                isLoading = accountState.isLoading,
+                errorMessage = accountState.errorMessage,
+                onBack = { screen = AppDestination.SETTINGS },
+                onSave = accountViewModel::saveProfile,
+            )
+        } ?: run {
+            LaunchedEffect(Unit) { screen = AppDestination.SETTINGS }
         }
 
         AppDestination.LOCATION -> LocationScreen(

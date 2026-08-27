@@ -21,12 +21,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tteumsae.app.ui.BottomNavigation
+import com.tteumsae.app.ui.account.AccountDeletionDialogs
+import com.tteumsae.app.ui.account.AccountSettingsCard
+import com.tteumsae.app.ui.account.AccountUiState
+import com.tteumsae.app.ui.account.LoginSheet
 import com.tteumsae.app.ui.navigation.MainTab
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 
 @Composable
 internal fun SettingsScreen(
+    accountState: AccountUiState,
     savedCount: Int,
     locationPermissionGranted: Boolean,
     kakaoMapAvailable: Boolean,
@@ -34,6 +39,16 @@ internal fun SettingsScreen(
     contactEmail: String,
     privacyPolicyAvailable: Boolean,
     locationTermsAvailable: Boolean,
+    onOpenLogin: () -> Unit,
+    onDismissLogin: () -> Unit,
+    onLogin: (com.tteumsae.app.domain.account.LoginProvider) -> Unit,
+    onOpenProfile: () -> Unit,
+    onSignOut: () -> Unit,
+    onRequestAccountDeletion: () -> Unit,
+    onConfirmDeletionConsequences: () -> Unit,
+    onRequireReauthentication: () -> Unit,
+    onReauthenticateForDeletion: () -> Unit,
+    onCancelDeletion: () -> Unit,
     onOpenLocationSettings: () -> Unit,
     onOpenKakaoMap: () -> Unit,
     onClearCache: () -> Boolean,
@@ -66,6 +81,17 @@ internal fun SettingsScreen(
             item {
                 Spacer(Modifier.height(12.dp))
                 Text("설정", fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(24.dp))
+
+                SettingsSectionTitle("계정")
+                AccountSettingsCard(
+                    state = accountState,
+                    onLogin = onOpenLogin,
+                    onOpenProfile = onOpenProfile,
+                    onSignOut = onSignOut,
+                    onDeleteAccount = onRequestAccountDeletion,
+                )
+
                 Spacer(Modifier.height(24.dp))
 
                 SettingsSectionTitle("앱 사용")
@@ -143,6 +169,19 @@ internal fun SettingsScreen(
             }
         }
     }
+
+    if (accountState.showLoginSheet) {
+        LoginSheet(onDismiss = onDismissLogin, onLogin = onLogin)
+    }
+
+    AccountDeletionDialogs(
+        step = accountState.deletionStep,
+        isLoading = accountState.isLoading,
+        onContinue = onConfirmDeletionConsequences,
+        onRequireReauthentication = onRequireReauthentication,
+        onReauthenticate = onReauthenticateForDeletion,
+        onCancel = onCancelDeletion,
+    )
 
     if (showSavedClearDialog) {
         AlertDialog(

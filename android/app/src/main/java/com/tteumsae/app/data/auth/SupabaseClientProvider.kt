@@ -86,6 +86,10 @@ class SupabaseAuthGateway(
         client.auth.signOut()
     }
 
+    override suspend fun clearLocalSession() {
+        client.auth.clearSession()
+    }
+
     override fun accessToken(): String? = client.auth.currentAccessTokenOrNull()
 }
 

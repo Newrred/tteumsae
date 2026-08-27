@@ -9,7 +9,7 @@ import android.util.LruCache
 import android.widget.Toast
 import com.tteumsae.app.BuildConfig
 
-internal const val CONTACT_EMAIL = "minjaeimnyda@gmail.com"
+internal const val CONTACT_EMAIL = "gburgundy@gmail.com"
 internal const val PRIVACY_POLICY_URL = ""
 internal const val LOCATION_TERMS_URL = ""
 
