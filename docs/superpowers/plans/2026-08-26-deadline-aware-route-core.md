@@ -6,14 +6,23 @@
 
 **Architecture:** 기존 `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL` 흐름과 `/api/recommendations`, `/api/route`를 유지한다. 서버에는 명시적 `ARRIVAL_DEADLINE_V1` 계산 분기를 추가해 기존 클라이언트 동작을 보존하고, Android에는 순수 시간 계산 계층·화면 상태를 소유하는 ViewModel·얇은 Compose 화면·AlarmManager 기반 알림 계층을 추가한다. 두 번째 경유지는 첫 장소 선택 후 상위 6개 후보만 기존 `/api/route`로 정확 계산하며 동시에 최대 2개만 요청한다.
 
-**Tech Stack:** Node.js 20+ ES modules/node:test, Kotlin 2.0.21, Java 17, Android API 26–35, Jetpack Compose BOM 2024.12.01, Lifecycle 2.10.0, kotlinx-coroutines 1.9.0, AlarmManager, SharedPreferences, Kakao Mobility/Kakao Map
+**Tech Stack:** Node.js 24.x ES modules/node:test, Kotlin 2.3.20, AGP 8.13.2, Java 17, Android API 26–36 (`targetSdk=35`), Jetpack Compose BOM 2024.12.01, Lifecycle 2.8.7, kotlinx-coroutines 1.9.0, Room 2.8.4, Supabase 3.5.0, Ktor 3.0.3, AlarmManager, SharedPreferences, Kakao Mobility/Kakao Map
 
 **Spec:** `docs/superpowers/specs/2026-08-26-deadline-aware-route-flow-design.md`
 
+## Rebase Checkpoint (2026-08-27)
+
+- 이 계획은 `agent/new-route-flow-ui`의 `d113002`를 기준으로 현재 코드와 다시 대조했다.
+- 계정 기반, OAuth, Room 저장 장소, 저장/설정 화면 분리는 이미 구현돼 있으므로 선행 계획을 다시 실행하지 않는다.
+- `TteumsaeApp.kt`는 5,091줄에서 약 3,882줄로 줄었지만 위치·조건·결과 화면은 여전히 이 파일에 집중돼 있다. Task 8~9에서 기존 저장/설정 분리를 보존하며 점진적으로 추출한다.
+- 현재 경로 선택 순수 함수는 `domain/route/RouteSelectionPolicy.kt`에 있다. 같은 이름의 UI 계층 정책을 새로 만들지 않고 이 파일을 확장한다.
+- 앱 조립 경계는 `AppContainer.kt`다. 네트워크 게이트웨이와 알림 구현체는 여기에 연결하고 ViewModel에는 Android `Context`를 주입하지 않는다.
+- 기준 상태의 사용자 소유 미추적 경로는 `output/`, `tmp/`뿐이며 이 계획의 작업 대상에서 제외한다.
+
 ## Global Constraints
 
-- Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`를 먼저 완료한다. Task 8~9를 시작할 때는 이미 분리된 저장·설정 화면을 유지하고 현재 `TteumsaeApp.kt` 기준으로 대상 위치를 다시 확인한다.
-- 이 계획은 문서에 고정된 Kotlin 2.0.21/AGP 8.7.3 기준으로 먼저 완료하고, Supabase Auth 계획의 Kotlin 2.2.21/AGP 8.10.1 업그레이드는 이후에 수행한다.
+- Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`의 실제 구현 상태를 유지한다. 완료된 계정/OAuth/Room/저장·설정 화면을 되돌리거나 중복 구현하지 않는다.
+- 현재 빌드 도구 버전을 유지한다. 이 기능을 위해 Kotlin, AGP, Lifecycle, Compose BOM을 별도로 업그레이드하지 않는다.
 - 제품 상 경유지는 최대 2곳이지만 서버 `/api/route`의 0–5개 호환성은 유지한다.
 - 사용자는 체류시간과 안전 여유를 입력하지 않는다. `SAFETY_BUFFER_MINUTES=10`, `MINIMUM_STAY_MINUTES=15`, `DEPARTURE_REMINDER_LEAD_MINUTES=5`를 단일 도메인 상수로 사용한다.
 - 지도 핀에는 추가 이동시간만 표시한다. 최대 체류 가능 시간과 출발 마감은 장소 선택 뒤 표시한다.
@@ -30,10 +39,12 @@
 | `backend/lib/validation.js` | `timeModel` 허용값과 요청 조합 검증 |
 | `backend/lib/time-safe.js` | 레거시/도착 마감 모델 분기, 최소·최대 체류 및 영업 종료 계산 |
 | `backend/api/recommendations.js` | 모델 전달, 후보 탐색, 응답 메타 조립 |
-| `android/app/src/main/java/com/tteumsae/app/domain/RouteFlowModels.kt` | 제품 상수와 경유 흐름 도메인 타입 |
-| `android/app/src/main/java/com/tteumsae/app/domain/TripTiming.kt` | 마감 선택·1/2경유 시간 계산 순수 함수 |
-| `android/app/src/main/java/com/tteumsae/app/data/RouteGateway.kt` | ViewModel이 사용하는 네트워크 경계 |
+| `android/app/src/main/java/com/tteumsae/app/domain/route/RouteFlowModels.kt` | 제품 상수와 경유 흐름 도메인 타입 |
+| `android/app/src/main/java/com/tteumsae/app/domain/route/TripTiming.kt` | 마감 선택·1/2경유 시간 계산 순수 함수 |
+| `android/app/src/main/java/com/tteumsae/app/domain/route/RouteSelectionPolicy.kt` | 기존 경유 순서 정책과 새 도착 마감 선택 정책 |
+| `android/app/src/main/java/com/tteumsae/app/data/route/RouteGateway.kt` | ViewModel이 사용하는 네트워크 경계 |
 | `android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt` | V1 요청/응답 직렬화와 기존 API 호출 |
+| `android/app/src/main/java/com/tteumsae/app/AppContainer.kt` | 게이트웨이·저장소·알림 구현체 조립 |
 | `android/app/src/main/java/com/tteumsae/app/ui/route/RouteFlowUiState.kt` | 화면 상태와 파생 UI 모델 |
 | `android/app/src/main/java/com/tteumsae/app/ui/route/RouteFlowViewModel.kt` | 검색, 선택, 정확 경로 탐색, 오류/취소 소유 |
 | `android/app/src/main/java/com/tteumsae/app/ui/route/LocationScreen.kt` | 출발·목적지·도착 마감 입력 UI |
@@ -275,16 +286,16 @@ function recommendationModelMeta(criteria) {
 Spread `recommendationModelMeta(criteria)` into the existing `meta` object after `safetyBufferMinutes`; do not rename or remove any current metadata field.
 
 - [ ] Run `node --test tests/validation.test.js tests/time-safe.test.js tests/recommendations.test.js`; expect all tests to pass.
-- [ ] Run `pnpm run check` from `backend/`; expect the project structural check to pass.
+- [ ] Run `npm run check` from `backend/`; expect the project structural check to pass.
 - [ ] Commit: `git add backend/api/recommendations.js backend/tests/recommendations.test.js && git commit -m "feat: 도착 마감 추천 API 응답 제공"`.
 
 ### Task 5: Introduce Android route-flow domain types and pure deadline calculations
 
 **Files:**
 
-- Create: `android/app/src/main/java/com/tteumsae/app/domain/RouteFlowModels.kt`
-- Create: `android/app/src/main/java/com/tteumsae/app/domain/TripTiming.kt`
-- Create: `android/app/src/test/java/com/tteumsae/app/domain/TripTimingTest.kt`
+- Create: `android/app/src/main/java/com/tteumsae/app/domain/route/RouteFlowModels.kt`
+- Create: `android/app/src/main/java/com/tteumsae/app/domain/route/TripTiming.kt`
+- Create: `android/app/src/test/java/com/tteumsae/app/domain/route/TripTimingTest.kt`
 - Modify: `android/app/src/main/java/com/tteumsae/app/domain/Models.kt`
 
 - [ ] Write failing unit tests for nearest-future time selection, past-clock rollover, 15-minute/24-hour bounds, one-stop timing, two-stop timing, and insufficient two-stop time.
@@ -313,7 +324,7 @@ Spread `recommendationModelMeta(criteria)` into the existing `meta` object after
 }
 ```
 
-- [ ] Run `./gradlew.bat testDebugUnitTest --tests "com.tteumsae.app.domain.TripTimingTest"` from `android/`; expect compilation failure because the files do not exist.
+- [ ] Run `./gradlew.bat testDebugUnitTest --tests "com.tteumsae.app.domain.route.TripTimingTest"` from `android/`; expect compilation failure because the files do not exist.
 - [ ] Create the constants and immutable types.
 
 ```kotlin
@@ -387,13 +398,13 @@ fun calculateTripTiming(
 
 - [ ] Add nullable `arrivalDeadlineEpochMillis` to `SearchCriteria` while temporarily retaining `deadlineMinutesFromNow` and `safetyBufferMinutes` so the existing UI compiles between commits. Add `minimumStayMinutes` and nullable `maximumStayMinutes` to `SafeRecommendation`. Keep `PlaceCandidate.stayMinutes` for legacy place-list data, but stop using it as user-facing dwell time in the new route flow. Task 12 removes the temporary legacy criteria fields after all call sites migrate.
 - [ ] Re-run the focused unit test; expect all timing tests to pass.
-- [ ] Commit: `git add android/app/src/main/java/com/tteumsae/app/domain android/app/src/test/java/com/tteumsae/app/domain/TripTimingTest.kt && git commit -m "feat: 도착 마감 경로 시간 도메인 추가"`.
+- [ ] Commit: `git add android/app/src/main/java/com/tteumsae/app/domain/Models.kt android/app/src/main/java/com/tteumsae/app/domain/route android/app/src/test/java/com/tteumsae/app/domain/route/TripTimingTest.kt && git commit -m "feat: 도착 마감 경로 시간 도메인 추가"`.
 
 ### Task 6: Add a testable Android gateway and V1 wire contract
 
 **Files:**
 
-- Create: `android/app/src/main/java/com/tteumsae/app/data/RouteGateway.kt`
+- Create: `android/app/src/main/java/com/tteumsae/app/data/route/RouteGateway.kt`
 - Modify: `android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt`
 - Modify: `android/app/src/test/java/com/tteumsae/app/data/TteumsaeApiTest.kt`
 
@@ -441,20 +452,21 @@ internal fun recommendationRequestBody(
 
 - [ ] Make the helper branch before the shown V1 builder: use it when `arrivalDeadlineEpochMillis != null`, otherwise preserve the current `extraTimeMinutes` body. Parse `minimumStayMinutes` with a 15-minute fallback and require `maximumStayMinutes` for V1; surface malformed V1 data as `ApiException` rather than silently inventing availability.
 - [ ] Re-run the focused API tests; expect all to pass.
-- [ ] Commit: `git add android/app/src/main/java/com/tteumsae/app/data android/app/src/test/java/com/tteumsae/app/data/TteumsaeApiTest.kt && git commit -m "feat: Android 도착 마감 API 계약 연결"`.
+- [ ] Commit: `git add android/app/src/main/java/com/tteumsae/app/data/route/RouteGateway.kt android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt android/app/src/test/java/com/tteumsae/app/data/TteumsaeApiTest.kt && git commit -m "feat: Android 도착 마감 API 계약 연결"`.
 
 ### Task 7: Build the selection policy and exact second-stop probe
 
 **Files:**
 
 - Modify: `android/app/build.gradle.kts`
+- Modify: `android/app/src/main/java/com/tteumsae/app/domain/route/RouteSelectionPolicy.kt`
+- Modify: `android/app/src/main/java/com/tteumsae/app/AppContainer.kt`
 - Create: `android/app/src/main/java/com/tteumsae/app/ui/route/RouteFlowUiState.kt`
-- Create: `android/app/src/main/java/com/tteumsae/app/ui/route/RouteSelectionPolicy.kt`
 - Create: `android/app/src/main/java/com/tteumsae/app/ui/route/RouteFlowViewModel.kt`
-- Create: `android/app/src/test/java/com/tteumsae/app/ui/route/RouteSelectionPolicyTest.kt`
+- Create: `android/app/src/test/java/com/tteumsae/app/domain/route/RouteSelectionPolicyTest.kt`
 - Create: `android/app/src/test/java/com/tteumsae/app/ui/route/RouteFlowViewModelTest.kt`
 
-- [ ] Add `androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0` and `org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0`.
+- [ ] Reuse the existing `androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7`; add only `org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0` for ViewModel tests.
 - [ ] Write pure policy tests: one selected stop is always valid if its V1 recommendation is eligible; a two-stop route needs 3 legs and at least 30 combined stay minutes; first-stop max stay reserves 15 minutes for the second stop.
 - [ ] Write ViewModel tests with a fake `RouteGateway`: selecting a first result probes only the top 6 unselected candidates; at most 2 route calls are active; infeasible/error candidates are omitted; a new first selection cancels/invalidates stale probe results.
 - [ ] Run the two focused test classes; expect missing types and behavior failures.
@@ -484,7 +496,8 @@ data class RouteFlowUiState(
 - [ ] Implement `probeSecondStops(first)` by sorting unselected recommendations by detour, taking 6, and processing `chunked(2).flatMap { chunk -> coroutineScope { chunk.map { async { ... } }.awaitAll() } }`; only exact `/api/route` results that pass the two-stop timing policy become options. Cache results by `(firstPlaceId, secondPlaceId, arrivalDeadlineEpochMillis)` and clear both the visible options and irrelevant cache entries when the first selection changes. Use a monotonically increasing probe generation to discard stale responses.
 - [ ] Add tests for cache reuse, cache reset, and resume-time recalculation. When there is no active navigation trip, `onResume(now)` must recompute the selected timing and refresh recommendations if their timestamp is older than 60 seconds; with an active trip, leave baseline reminders unchanged because the app cannot infer the travel stage without phase-2 arrival detection.
 - [ ] Re-run focused tests and then `./gradlew.bat compileDebugKotlin`; expect pass.
-- [ ] Commit: `git add android/app/build.gradle.kts android/app/src/main/java/com/tteumsae/app/ui/route android/app/src/test/java/com/tteumsae/app/ui/route && git commit -m "feat: 한 곳 우선 경유 선택 상태 구현"`.
+- [ ] Wire the concrete `RouteGateway` and `RouteFlowViewModel` factory at `AppContainer.kt` without moving existing auth/profile/saved-place ownership.
+- [ ] Commit: `git add android/app/build.gradle.kts android/app/src/main/java/com/tteumsae/app/AppContainer.kt android/app/src/main/java/com/tteumsae/app/domain/route/RouteSelectionPolicy.kt android/app/src/main/java/com/tteumsae/app/ui/route android/app/src/test/java/com/tteumsae/app/domain/route/RouteSelectionPolicyTest.kt android/app/src/test/java/com/tteumsae/app/ui/route/RouteFlowViewModelTest.kt && git commit -m "feat: 한 곳 우선 경유 선택 상태 구현"`.
 
 ### Task 8: Move and enhance the LOCATION screen without adding a new step
 
@@ -626,15 +639,15 @@ cd C:\app\tteumsae\android
 - Modify: `docs/09_NEXT_VERSION_PLAN.md`
 - Modify: `docs/10_DECISION_LOG.md`
 
-- [ ] Update the documented `TteumsaeApp.kt` line count/ownership after extraction and mark only actually implemented items complete.
+- [ ] Update the documented `TteumsaeApp.kt` line count/ownership from the current approximately 3,882-line baseline after extraction and mark only actually implemented items complete.
 - [ ] Document the V1 request/response examples, exact constants, one-stop/two-stop formulas, notification permission fallback, and continued 0–5 backend compatibility.
 - [ ] Add manual QA cases: same-day deadline, next-day rollover, exactly 15 minutes available, 14 minutes unavailable, no feasible second stop, failed second-route probe, notification denied, device reboot/time change, and Kakao Map missing.
-- [ ] Run all backend tests with explicit paths because PowerShell does not expand the package-script glob consistently.
+- [ ] Run the backend test runner and structural check maintained by the project.
 
 ```powershell
 cd C:\app\tteumsae\backend
-node --test tests/validation.test.js tests/time-safe.test.js tests/recommendations.test.js tests/route-api.test.js tests/routing.test.js tests/kakao-local.test.js tests/kakao-mobility.test.js tests/places-api.test.js tests/tour-api.test.js
-pnpm run check
+npm test
+npm run check
 ```
 
 - [ ] Run Android verification.
