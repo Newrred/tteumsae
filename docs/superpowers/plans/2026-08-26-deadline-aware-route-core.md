@@ -21,6 +21,7 @@
 
 ## Global Constraints
 
+- Prerequisite: `docs/superpowers/plans/2026-08-27-tour-data-enrichment.md`를 먼저 완료해 기본 동기화가 상세 데이터를 지우지 않고 운영시간 우선 백필이 가능한 상태로 만든다. 도착 마감 코드 테스트는 독립적으로 가능하지만 운영 활성화는 TourAPI 인트로 백필 확인 뒤 진행한다.
 - Prerequisite: `docs/superpowers/plans/2026-08-26-account-foundation-local-saved.md`의 실제 구현 상태를 유지한다. 완료된 계정/OAuth/Room/저장·설정 화면을 되돌리거나 중복 구현하지 않는다.
 - 현재 빌드 도구 버전을 유지한다. 이 기능을 위해 Kotlin, AGP, Lifecycle, Compose BOM을 별도로 업그레이드하지 않는다.
 - 제품 상 경유지는 최대 2곳이지만 서버 `/api/route`의 0–5개 호환성은 유지한다.
