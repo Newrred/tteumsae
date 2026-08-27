@@ -7,6 +7,7 @@ const root = new URL("../", import.meta.url);
 const rootPath = fileURLToPath(root);
 const requiredFiles = [
   "api/health.js",
+  "api/account.js",
   "api/places/index.js",
   "api/places/[id].js",
   "api/recommendations.js",
@@ -17,6 +18,7 @@ const requiredFiles = [
   "migrations/002_detail_sync_state.sql",
   "migrations/003_user_accounts.sql",
   "scripts/verify-user-rls.js",
+  "lib/supabase-auth.js",
   ".env.example",
   "vercel.json"
 ];

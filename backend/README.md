@@ -27,6 +27,7 @@
 | GET | `/api/region?latitude={위도}&longitude={경도}` | 행정구역·강원도 여부 확인 |
 | POST | `/api/recommendations` | 타임 세이프 추천 |
 | POST | `/api/route` | 출발지·경유지 0~5개·목적지 통합 차량 경로 |
+| DELETE | `/api/account` | 검증된 Bearer 사용자의 Supabase 계정 영구 삭제 |
 | GET | `/api/cron/tour-sync` | TourAPI 동기화, Bearer 인증 필요 |
 | GET | `/api/cron/tour-detail-sync` | 이미지·편의 태그 상세 동기화, Bearer 인증 필요 |
 
@@ -72,6 +73,7 @@ Vercel Project Settings에서 다음 환경변수를 등록합니다.
 TOUR_API_SERVICE_KEY
 KAKAO_REST_API_KEY
 SUPABASE_URL
+SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SERVICE_ROLE_KEY
 CRON_SECRET
 TOUR_SYNC_MAX_PAGES=10
@@ -106,6 +108,8 @@ SUPABASE_TEST_SERVICE_ROLE_KEY
 ## 보안
 
 - 외부 API 키는 Vercel Functions에서만 사용합니다.
+- `/api/account`는 Bearer 토큰을 Supabase에서 먼저 검증하고, 검증 응답의 사용자
+  ID만 service role 관리자 삭제에 사용합니다. 요청 본문의 사용자 ID는 읽지 않습니다.
 - 카카오 REST API 키는 Android 앱이나 API 응답에 포함하지 않습니다.
 - Supabase 테이블은 RLS를 활성화하고 클라이언트 공개 정책을 만들지 않습니다.
 - `profiles`, `user_saved_places`는 authenticated 역할에 필요한 열만 허용하고

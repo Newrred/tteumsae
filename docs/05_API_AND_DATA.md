@@ -114,6 +114,7 @@ Vercel 경계 정책으로 교체해야 한다.
 | GET | `/api/region` | 없음 | 좌표의 행정구역 및 강원도 여부 |
 | POST | `/api/recommendations` | 없음 | 시간·경로·카테고리 기반 추천 |
 | POST | `/api/route` | 없음 | 출발·최종 목적지와 경유지 0~5개의 통합 차량 경로 재계산 |
+| DELETE | `/api/account` | Supabase Bearer | 현재 로그인 사용자의 Auth 계정과 연관 사용자 데이터 영구 삭제 |
 | GET | `/api/cron/tour-sync` | Bearer | TourAPI 기본 장소 페이지 동기화 |
 | GET | `/api/cron/tour-detail-sync` | Bearer | 이미지·편의·운영정보 보강 |
 
@@ -552,6 +553,21 @@ effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
 않으면 서버가 500을 반환한다. Android는 실패 시 단일 후보 우회값을 합친
 `ESTIMATE` fallback을 표시하고 토스트를 띄운다. fallback은 Kakao 통합
 경로와 동급 정확도가 아니다.
+
+### 5.8 `DELETE /api/account`
+
+선택형 로그인 사용자의 계정을 영구 삭제한다. 요청은
+`Authorization: Bearer {Supabase access token}`만 사용하며 JSON 본문이나
+클라이언트가 제시한 사용자 ID는 신뢰하지 않는다.
+
+서버는 publishable key와 사용자 Bearer 토큰으로 `/auth/v1/user`를 조회한 뒤,
+그 응답의 `id`만 service role 관리자 삭제 경로에 전달한다. 성공은 본문 없는
+204, 토큰 누락·무효는 401, 인스턴스 기준 IP별 분당 3회 초과는 429다.
+관리자 삭제 오류는 외부 응답 본문을 노출하지 않는 공통 500으로 바뀐다.
+
+`profiles`와 `user_saved_places`는 `auth.users(id) on delete cascade`라 Auth 사용자
+삭제와 함께 제거된다. service role 키는 Vercel 환경변수에만 저장하며 Android
+APK나 응답에 포함하지 않는다.
 
 ## 6. TourAPI 동기화
 

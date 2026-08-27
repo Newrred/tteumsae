@@ -287,7 +287,7 @@ git commit -m "feat: 사용자 프로필과 저장 RLS 추가"
 - Produces: DELETE /api/account → 204
 - Consumes: SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SERVICE_ROLE_KEY
 
-- [ ] **Step 1: Write failing endpoint tests**
+- [x] **Step 1: Write failing endpoint tests**
 
 Cover method 405, no bearer 401, invalid token 401, valid token plus admin delete 204, admin failure 500, and a malicious JSON user_id that is never used.
 
@@ -308,22 +308,22 @@ test("검증된 토큰 사용자만 삭제한다", async () => {
 });
 ~~~
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 ~~~powershell
 $tests=(Get-ChildItem tests -Filter "*.test.js").FullName
 node --test $tests
 ~~~
 
-- [ ] **Step 3: Implement token verification and hard deletion**
+- [x] **Step 3: Implement token verification and hard deletion**
 
 GET SUPABASE_URL/auth/v1/user with project publishable apikey and user bearer token. Use only the returned id. DELETE SUPABASE_URL/auth/v1/admin/users/{verified id} with service-role apikey and bearer. Do not log headers or response bodies containing user data.
 
-- [ ] **Step 4: Add 204 support and rate limit**
+- [x] **Step 4: Add 204 support and rate limit**
 
 Add an emptyResponse(status) helper to lib/http.js instead of sending JSON for 204. Apply a small per-IP best-effort limit such as 3/minute; authentication remains the real authorization boundary.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ~~~powershell
 $tests=(Get-ChildItem tests -Filter "*.test.js").FullName

@@ -12,6 +12,13 @@ export function json(data, status = 200, extraHeaders = {}) {
   });
 }
 
+export function emptyResponse(status, extraHeaders = {}) {
+  return new Response(null, {
+    status,
+    headers: { "cache-control": "no-store", ...extraHeaders }
+  });
+}
+
 export function methodNotAllowed(allowed) {
   return json(
     { error: { code: "METHOD_NOT_ALLOWED", message: "지원하지 않는 요청 방식입니다." } },
