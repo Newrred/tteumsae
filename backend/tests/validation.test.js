@@ -45,6 +45,30 @@ test("순수 여유시간을 받고 기존 전체시간과 동시에 입력하�
   );
 });
 
+test("도착 마감 V1 모델은 deadlineMinutes와 함께만 허용한다", () => {
+  const v1Request = {
+    ...valid,
+    safetyBufferMinutes: 10,
+    timeModel: "ARRIVAL_DEADLINE_V1"
+  };
+  assert.deepEqual(parseRecommendationRequest(v1Request), v1Request);
+
+  assert.throws(
+    () => parseRecommendationRequest({ ...valid, timeModel: "UNKNOWN" }),
+    /timeModel/
+  );
+
+  const { deadlineMinutes: _deadlineMinutes, ...withoutDeadline } = valid;
+  assert.throws(
+    () => parseRecommendationRequest({
+      ...withoutDeadline,
+      extraTimeMinutes: 90,
+      timeModel: "ARRIVAL_DEADLINE_V1"
+    }),
+    /deadlineMinutes/
+  );
+});
+
 test("안전 여유가 전체 시간보다 길면 거부한다", () => {
   assert.throws(
     () =>

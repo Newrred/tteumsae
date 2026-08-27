@@ -1,5 +1,7 @@
 const searchModes = new Set(["ON_THE_WAY", "NEARBY"]);
 const transportModes = new Set(["WALK", "CAR"]);
+export const ARRIVAL_DEADLINE_TIME_MODEL = "ARRIVAL_DEADLINE_V1";
+const recommendationTimeModels = new Set([ARRIVAL_DEADLINE_TIME_MODEL]);
 export const placeCategories = new Set([
   "ATTRACTION",
   "RESTAURANT",
@@ -63,6 +65,15 @@ export function parseRecommendationRequest(value) {
       "deadlineMinutes와 extraTimeMinutes 중 하나만 입력해야 합니다."
     );
   }
+  const timeModel = value.timeModel;
+  if (timeModel != null && !recommendationTimeModels.has(timeModel)) {
+    throw new Error("지원하지 않는 timeModel입니다.");
+  }
+  if (timeModel === ARRIVAL_DEADLINE_TIME_MODEL && !hasDeadline) {
+    throw new Error(
+      "ARRIVAL_DEADLINE_V1은 deadlineMinutes와 함께 사용해야 합니다."
+    );
+  }
   const timeBudgetMinutes = hasExtraTime
     ? value.extraTimeMinutes
     : value.deadlineMinutes;
@@ -102,6 +113,7 @@ export function parseRecommendationRequest(value) {
       : { deadlineMinutes: value.deadlineMinutes }),
     safetyBufferMinutes: value.safetyBufferMinutes,
     transport: value.transport,
-    categories
+    categories,
+    ...(timeModel ? { timeModel } : {})
   };
 }
