@@ -183,6 +183,73 @@ export async function updatePlaceEnrichment(place, enrichment) {
   });
 }
 
+const introOwnedTags = new Set(["주차 가능", "아이 동반"]);
+
+export async function listPlacesForIntroSync({ limit = 20, now = new Date() } = {}) {
+  const dueAt = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(dueAt.getTime())) throw new Error("Invalid intro sync reference time");
+  const query = new URLSearchParams({
+    select: "content_id,content_type_id,tags,enrichment_raw,enrichment_attempts",
+    is_active: "eq.true",
+    intro_synced_at: "is.null",
+    or: `(next_enrichment_at.is.null,next_enrichment_at.lte.${dueAt.toISOString()})`,
+    order: "next_enrichment_at.asc.nullsfirst,content_id.asc",
+    limit: String(Math.min(Math.max(Number.parseInt(limit, 10) || 1, 1), 40))
+  });
+  return databaseRequest(`places?${query}`);
+}
+
+export async function savePlaceIntro(place, enrichment) {
+  const body = {
+    enrichment_raw: {
+      ...(place.enrichment_raw ?? {}),
+      intro: enrichment.intro
+    },
+    intro_synced_at: enrichment.syncedAt,
+    enrichment_attempts: 0,
+    enrichment_last_error: null,
+    next_enrichment_at: null
+  };
+
+  if (enrichment.intro !== null) {
+    if (enrichment.openingHours != null) body.opening_hours = enrichment.openingHours;
+    if (enrichment.closedDays != null) body.closed_days = enrichment.closedDays;
+    if (enrichment.eventStartDate != null) body.event_start_date = enrichment.eventStartDate;
+    if (enrichment.eventEndDate != null) body.event_end_date = enrichment.eventEndDate;
+    if (Array.isArray(enrichment.tags) && enrichment.tags.length > 0) {
+      const retainedTags = (Array.isArray(place.tags) ? place.tags : [])
+        .filter((tag) => !introOwnedTags.has(tag));
+      body.tags = [...new Set([...retainedTags, ...enrichment.tags])];
+    }
+  }
+
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
+    method: "PATCH",
+    body,
+    prefer: "return=minimal"
+  });
+}
+
+export async function recordPlaceEnrichmentFailure(place, error, now = new Date()) {
+  const failedAt = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(failedAt.getTime())) throw new Error("Invalid enrichment failure time");
+  const attempts = Math.max(Number.parseInt(place.enrichment_attempts, 10) || 0, 0) + 1;
+  const exponent = Math.min(attempts - 1, 16);
+  const delayMinutes = Math.min(24 * 60, 15 * (2 ** exponent));
+  const nextAttemptAt = new Date(failedAt.getTime() + delayMinutes * 60_000);
+  const message = (error instanceof Error ? error.message : String(error)).slice(0, 300);
+
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
+    method: "PATCH",
+    body: {
+      enrichment_attempts: attempts,
+      enrichment_last_error: message,
+      next_enrichment_at: nextAttemptAt.toISOString()
+    },
+    prefer: "return=minimal"
+  });
+}
+
 export async function getSyncState(id = "tour_api") {
   const query = new URLSearchParams({
     select: "*",
