@@ -250,6 +250,29 @@ export async function recordPlaceEnrichmentFailure(place, error, now = new Date(
   });
 }
 
+export async function resetPlaceEnrichment(contentId) {
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(contentId)}`, {
+    method: "PATCH",
+    body: {
+      intro_synced_at: null,
+      common_synced_at: null,
+      media_synced_at: null,
+      enrichment_attempts: 0,
+      enrichment_last_error: null,
+      next_enrichment_at: null
+    },
+    prefer: "return=minimal"
+  });
+}
+
+export async function setPlaceActive(contentId, active) {
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(contentId)}`, {
+    method: "PATCH",
+    body: { is_active: Boolean(active) },
+    prefer: "return=minimal"
+  });
+}
+
 export async function getSyncState(id = "tour_api") {
   const query = new URLSearchParams({
     select: "*",

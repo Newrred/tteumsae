@@ -279,35 +279,35 @@ git commit -m "feat: 운영시간 우선 TourAPI 동기화 추가"
 - Produces `fetchTourSyncPage({ pageNo, numOfRows, modifiedTime })`, `mapTourSyncItem(item, syncedAt)`.
 - Produces `resetPlaceEnrichment(contentId)` and `setPlaceActive(contentId, active)`.
 
-- [ ] **Step 1: Add a failing sync fixture test**
+- [x] **Step 1: Add a failing sync fixture test**
 
-Stub TourAPI with two items using `showflag: "1"` and `"0"`. Assert the request path ends in `/areaBasedSyncList2`, sends literal `modifiedtime=20260827000000`, and maps active values to true/false.
+Stub TourAPI with two items using `showflag: "1"` and `"0"`. Assert the request path ends in `/areaBasedSyncList2`, sends the current official `YYYYMMDD` contract as literal `modifiedtime=20260827`, and maps active values to true/false.
 
-- [ ] **Step 2: Run `node --test tests/tour-catalog-sync.test.js` and confirm RED**
+- [x] **Step 2: Run `node --test tests/tour-catalog-sync.test.js` and confirm RED**
 
-- [ ] **Step 3: Implement sync fetch and mapping**
+- [x] **Step 3: Implement sync fetch and mapping**
 
-Reuse the shared payload parser. Send `areaCode=32`, `arrange=C`, pagination, and `modifiedtime` only when supplied. Keep inactive supported items so their existing DB rows can be disabled.
+Reuse the shared payload parser. Send legacy-compatible `areaCode=32` together with the current legal-district filter `lDongRegnCd=51`, plus `arrange=C`, pagination, and `modifiedtime` only when supplied. Keep inactive supported items so their existing DB rows can be disabled.
 
-- [ ] **Step 4: Implement safe cursor transitions**
+- [x] **Step 4: Implement safe cursor transitions**
 
 Read `tour_catalog_delta`; choose its cursor, otherwise the completed `tour_api.last_completed_at`, otherwise 24 hours before now. Save `cycle_started_at` on page 1. Process at most `TOUR_SYNC_MAX_PAGES`. Active changed rows upsert base fields and clear the three stage timestamps; inactive rows only set an existing row inactive. On final page, promote cycle start to `source_cursor`, reset page to 1, and clear cycle start. Overlap is allowed; gaps are not.
 
-- [ ] **Step 5: Keep full sync for recovery only**
+- [x] **Step 5: Keep full sync for recovery only**
 
 Leave `/api/cron/tour-sync` authenticated and callable, remove it from Vercel Cron, and schedule `/api/cron/tour-catalog-sync` at `20 18 * * *`.
 
-- [ ] **Step 6: Verify `showflag` against one live response before activation**
+- [x] **Step 6: Verify `showflag` against the current official operation contract before activation**
 
-Do not log the key. If live semantics differ, update the literal fixture and mapper together before deploying.
+Do not log the key. The current official Swagger contract defines `1=표출`, `0=비표출`; if a later live response differs, update the literal fixture and mapper together before deploying.
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 ```powershell
 node --test tests/tour-catalog-sync.test.js tests/tour-api.test.js tests/database.test.js
 npm test
 npm run check
-git add backend/lib/tour-api.js backend/lib/database.js backend/api/cron/tour-catalog-sync.js backend/tests/tour-catalog-sync.test.js backend/vercel.json backend/scripts/check-project.js
+git add backend/lib/tour-api.js backend/lib/database.js backend/api/cron/tour-catalog-sync.js backend/tests/tour-catalog-sync.test.js backend/vercel.json backend/scripts/check-project.js docs/superpowers/plans/2026-08-27-tour-data-enrichment.md docs/superpowers/specs/2026-08-27-tour-data-enrichment-design.md
 git commit -m "feat: TourAPI 카탈로그 증분 동기화"
 ```
 

@@ -22,7 +22,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/tour-sync",
+      "path": "/api/cron/tour-catalog-sync",
       "schedule": "20 18 * * *"
     },
     {

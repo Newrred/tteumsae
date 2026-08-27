@@ -13,6 +13,7 @@ const requiredFiles = [
   "api/recommendations.js",
   "api/route.js",
   "api/cron/tour-sync.js",
+  "api/cron/tour-catalog-sync.js",
   "api/cron/tour-detail-sync.js",
   "api/cron/tour-intro-sync.js",
   "migrations/001_initial.sql",

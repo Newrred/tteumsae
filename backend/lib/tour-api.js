@@ -76,16 +76,7 @@ export async function fetchTourPage(pageNo, numOfRows = 100) {
   }
 
   const payload = await response.json();
-  const header = payload?.response?.header;
-  if (!header || String(header.resultCode) !== "0000") {
-    throw new Error(
-      `TourAPI error: ${header?.resultCode ?? "UNKNOWN"} ${header?.resultMsg ?? ""}`.trim()
-    );
-  }
-
-  const body = payload.response.body ?? {};
-  const rawItems = body.items?.item ?? [];
-  const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
+  const { body, items } = parseTourListPayload(payload, "areaBasedList2");
   const syncedAt = new Date().toISOString();
 
   return {
@@ -261,6 +252,69 @@ export function normalizeTourIntro({ contentTypeId, intro, syncedAt }) {
     eventEndDate: parseTourDate(intro?.eventenddate),
     intro: intro ?? null,
     syncedAt
+  };
+}
+
+export async function fetchTourSyncPage({ pageNo = 1, numOfRows = 100, modifiedTime } = {}) {
+  const query = new URLSearchParams({
+    serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
+    MobileOS: "ETC",
+    MobileApp: "Tteumsae",
+    _type: "json",
+    arrange: "C",
+    areaCode: "32",
+    lDongRegnCd: "51",
+    pageNo: String(pageNo),
+    numOfRows: String(numOfRows)
+  });
+  if (modifiedTime) query.set("modifiedtime", String(modifiedTime));
+
+  const response = await fetch(`${serviceBaseUrl}/areaBasedSyncList2?${query}`, {
+    headers: { accept: "application/json" }
+  });
+  if (!response.ok) {
+    throw new Error(`TourAPI areaBasedSyncList2 request failed (${response.status})`);
+  }
+
+  const payload = await response.json();
+  const { body, items } = parseTourListPayload(payload, "areaBasedSyncList2");
+  const syncedAt = new Date().toISOString();
+  return {
+    pageNo: numeric(body.pageNo, pageNo),
+    numOfRows: numeric(body.numOfRows, numOfRows),
+    totalCount: numeric(body.totalCount),
+    rawCount: items.length,
+    places: items.map((item) => mapTourSyncItem(item, syncedAt)).filter(Boolean)
+  };
+}
+
+export function mapTourSyncItem(item, syncedAt = new Date().toISOString()) {
+  const contentId = String(item?.contentid ?? "").trim();
+  const showFlag = String(item?.showflag ?? "").trim();
+  if (!contentId || !["0", "1"].includes(showFlag)) return null;
+  if (showFlag === "0") {
+    return {
+      content_id: contentId,
+      is_active: false,
+      source_modified_at: item.modifiedtime || null,
+      raw: item
+    };
+  }
+  return mapTourItem(item, syncedAt);
+}
+
+function parseTourListPayload(payload, operation) {
+  const header = payload?.response?.header;
+  if (!header || String(header.resultCode) !== "0000") {
+    throw new Error(
+      `TourAPI ${operation} error: ${header?.resultCode ?? "UNKNOWN"} ${header?.resultMsg ?? ""}`.trim()
+    );
+  }
+  const body = payload.response.body ?? {};
+  const rawItems = body.items?.item ?? [];
+  return {
+    body,
+    items: Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : []
   };
 }
 
