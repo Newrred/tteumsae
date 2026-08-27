@@ -15,19 +15,28 @@ const publicColumns = [
   "image_url",
   "tel",
   "default_stay_minutes",
-  "raw"
+  "cat1",
+  "cat2",
+  "cat3",
+  "opening_hours",
+  "closed_days",
+  "event_start_date",
+  "event_end_date",
+  "overview",
+  "homepage_url",
+  "image_urls",
+  "tags"
 ].join(",");
 
 function toPublicPlace(row) {
-  const enrichment = row.raw?._tteumsae ?? {};
   const { raw: _raw, ...place } = row;
+  const imageUrls = Array.isArray(place.image_urls) ? place.image_urls : [];
+  const tags = Array.isArray(place.tags) ? place.tags : [];
   return {
     ...place,
-    image_url: place.image_url || enrichment.imageUrls?.[0] || null,
-    image_urls: enrichment.imageUrls ?? [],
-    tags: enrichment.tags ?? [],
-    opening_hours: enrichment.openingHours ?? null,
-    closed_days: enrichment.closedDays ?? null
+    image_url: place.image_url || imageUrls[0] || null,
+    image_urls: imageUrls,
+    tags
   };
 }
 
