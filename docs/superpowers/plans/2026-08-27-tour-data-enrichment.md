@@ -246,7 +246,12 @@ Accept only `GET` with `Bearer CRON_SECRET`. Clamp `TOUR_INTRO_SYNC_BATCH_SIZE` 
 
 - [ ] **Step 6: Register runtime values and Cron**
 
-Add `TOUR_INTRO_SYNC_BATCH_SIZE=20`, `TOUR_SYNC_CONCURRENCY=4`. Register the file in project check. Schedule intro at `40 18 * * *`; move the existing detail Cron to `0 19 * * *`.
+Add `TOUR_INTRO_SYNC_BATCH_SIZE=20`, `TOUR_SYNC_CONCURRENCY=4`. Register the file in
+project check. Replace the existing detail Cron schedule with intro at `40 18 * * *` and
+leave the legacy detail endpoint available only for manual compatibility. Vercel Hobby
+Cron has up to 59 minutes of scheduling imprecision, so separate `18:40` and `19:00`
+schedules cannot enforce intro-first ordering. Task 5 reintroduces the presentation Cron
+after its selector requires completed intro state.
 
 - [ ] **Step 7: Verify and commit**
 
