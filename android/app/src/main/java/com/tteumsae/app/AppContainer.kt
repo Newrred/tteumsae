@@ -10,6 +10,9 @@ import com.tteumsae.app.data.local.RoomDatabaseTransactionRunner
 import com.tteumsae.app.data.local.SavedPlacePreferencesMigration
 import com.tteumsae.app.data.local.SharedPreferencesSavedPlaceMigrationPreferences
 import com.tteumsae.app.data.local.TteumsaeDatabase
+import com.tteumsae.app.data.profile.ProfileRepository
+import com.tteumsae.app.data.profile.SupabaseOAuthProfileMetadataSource
+import com.tteumsae.app.data.profile.SupabaseProfileRemoteDataSource
 import com.tteumsae.app.data.saved.RoomSavedPlacesRepository
 import com.tteumsae.app.data.saved.SavedPlacesRepository
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +41,13 @@ class AppContainer(context: Context) {
         gateway = supabaseClient?.let(::SupabaseAuthGateway) ?: DisabledAuthGateway(),
         scope = applicationScope,
     )
+
+    val profileRepository: ProfileRepository? = supabaseClient?.let { client ->
+        ProfileRepository(
+            remote = SupabaseProfileRemoteDataSource(client),
+            metadataSource = SupabaseOAuthProfileMetadataSource(client),
+        )
+    }
 
     val savedPlacePreferencesMigration = SavedPlacePreferencesMigration(
         preferences = SharedPreferencesSavedPlaceMigrationPreferences(context.applicationContext),

@@ -483,11 +483,11 @@ Expected: invalid code shows a recoverable account-area error and does not crash
 - Produces: loadOrCreate(user): UserProfile, update(profile): UserProfile
 - Consumes: authenticated Postgrest client and OAuth metadata adapter
 
-- [ ] **Step 1: Write validation and creation tests**
+- [x] **Step 1: Write validation and creation tests**
 
 Cover missing row creation, provider nickname/avatar mapping, no email duplication, blank nickname → null, nickname 41 chars rejected, optional age/gender, and explicit prefer-not-to-say.
 
-- [ ] **Step 2: Implement domain model**
+- [x] **Step 2: Implement domain model**
 
 ~~~kotlin
 enum class AgeGroup {
@@ -504,11 +504,11 @@ data class UserProfile(
 )
 ~~~
 
-- [ ] **Step 3: Implement RLS-scoped PostgREST access**
+- [x] **Step 3: Implement RLS-scoped PostgREST access**
 
 Select profiles filtered by current user_id. If absent, insert current user ID and provider metadata. If a concurrent first-login insert returns unique conflict, select again instead of broadening key-column update grants. Existing-row updates send only display_name, avatar_url, age_group, gender. Do not send user_id, created_at, or updated_at in an update.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
 ~~~powershell
 .\gradlew.bat testDebugUnitTest compileDebugKotlin
