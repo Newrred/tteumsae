@@ -400,9 +400,9 @@ flowchart TD
 | 카카오맵 | 설치 시 실행, 미설치 시 Play Store/웹 |
 | 캐시 지우기 | 확인 후 이미지 LRU와 `cacheDir` 삭제 |
 | 저장 장소 비우기 | `이 기기에 N개 저장됨` 표시 후 확인하면 Room의 `GUEST` 저장을 모두 해제 |
-| 개인정보처리방침 | HTML 구현 완료. 새 운영 URL 배포·앱 연결 전까지 준비 중 |
+| 개인정보처리방침 | HTML과 운영 URL 배포 완료. Android 설정 URL 연결 전까지 앱에서는 준비 중 |
 | 위치기반서비스 약관 | URL 빈 값, 준비 중 |
-| 문의하기 | `gburgundy@gmail.com` mailto |
+| 문의하기 | `godburgundy@gmail.com` mailto |
 | 앱 버전/출처 | 읽기 전용 |
 
 ## 12. 명시적 뒤로가기 계약

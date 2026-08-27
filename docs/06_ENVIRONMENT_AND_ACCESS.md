@@ -291,11 +291,12 @@ Project URL과 publishable key만 설정한다.
 | Kakao Developers | 틈새 Kakao 앱 | 앱 편집 가능한 팀원 | 앱 팀 초대 | 네이티브/REST 키 종류, 플랫폼 확인 |
 | Kakao Mobility | 같은 Kakao 앱의 길찾기 제품 | 제품 설정·쿼터 확인 | 제품 활성화 상태 | 서버 REST 키로 테스트 경로 성공 |
 | 공공데이터포털 | 한국관광공사 국문 관광정보 서비스 | 활용신청 관리 가능 계정 | 계정 소유권 또는 새 키 | 승인·만료일·쿼터 확인 |
+| Google Auth Platform | `tteumsae-auth` (`proven-splicer-506804-q1`) | OAuth 설정 편집 권한 | 프로젝트 초대 | Web Client·Supabase callback 확인 |
 | Google Play Console | `com.tteumsae.app` 앱 | 릴리스에 필요한 최소 역할 | 조직 초대 | 테스트 트랙·앱 서명 접근 확인 |
 | 문의 메일 | 현재 개인 Gmail | 메일 수신·응답 담당 | 향후 회사 주소 | 실제 메일 앱 연결 확인 |
 
 현재 문의 주소는
-[`TteumsaeApp.kt`](../android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt)의
+[`ExternalSettings.kt`](../android/app/src/main/java/com/tteumsae/app/platform/ExternalSettings.kt)의
 `CONTACT_EMAIL` 상수에 직접 들어 있다. 회사 메일을 준비하면 코드와 스토어
 연락처를 함께 바꾼다.
 
@@ -342,6 +343,14 @@ Project URL과 publishable key만 설정한다.
 - [ ] 내부/비공개 테스트 트랙 접근 확인
 - [ ] 개인정보처리방침, 위치 고지, 데이터 보안 양식 담당자 지정
 
+### 7.6 Google Auth Platform
+
+- [ ] 운영 계정 `godburgundy@gmail.com`의 복구·2단계 인증 확인
+- [x] `tteumsae-auth` Web OAuth Client와 Supabase callback 확인
+- [x] Supabase Google provider의 Client ID·Secret 저장 상태 확인
+- [x] 외부 사용자 대상 프로덕션 게시 상태 확인
+- [ ] 서명된 Android 기기에서 Google PKCE 로그인·앱 복귀 확인
+
 ## 8. 키 교체 순서
 
 키 노출이 의심되면 이전 키를 먼저 문서에서 찾으려 하지 말고 서비스에서 새 키를
@@ -360,9 +369,10 @@ TourAPI, Kakao REST, Supabase service role, Cron 키는 서버 환경변수 교�
 
 ## 9. 현재 미완료 설정
 
-- 개인정보처리방침과 계정 삭제 공개 페이지는 준비되었으나 새 Vercel 운영
-  도메인 배포 및 Google Play Console 등록은 아직 필요하다. 앱 설정 화면의
-  정책 URL 연결도 후속 구현 대상이다.
+- 개인정보처리방침과 계정 삭제 페이지는 Vercel 운영 도메인에 배포됐다.
+  Google Play Console 등록과 앱 설정 화면의 정책 URL 연결은 후속 구현 대상이다.
+- Google Auth Platform과 Supabase provider는 프로덕션 연결됐지만, 서명된 실제
+  Android 기기에서 Google 로그인·딥링크 앱 복귀를 아직 확인하지 않았다.
 - 릴리스 키스토어와 Gradle `signingConfig`가 없다.
 - Play App Signing용 키 해시 등록 완료 여부를 저장소만으로 확인할 수 없다.
 - APK 다운로드 프로젝트의 `.vercel` 연결 정보는 보안·로컬 파일이라 Git에 없다.

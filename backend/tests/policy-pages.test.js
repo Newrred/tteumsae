@@ -14,7 +14,7 @@ test("개인정보처리방침은 서비스·운영자·처리 항목과 삭제 
   assert.match(html, /개인정보처리방침/);
   assert.match(html, /틈새|Tteumsae/);
   assert.match(html, /신홍/);
-  assert.match(html, /mailto:gburgundy@gmail\.com/i);
+  assert.match(html, /mailto:godburgundy@gmail\.com/i);
   assert.match(html, /위치/);
   assert.match(html, /닉네임/);
   assert.match(html, /연령대/);
@@ -34,7 +34,7 @@ test("계정 삭제 페이지는 앱 내부와 이메일 요청 경로를 모두
   assert.match(html, /틈새|Tteumsae/);
   assert.match(html, /신홍/);
   assert.match(html, /설정[\s\S]*계정[\s\S]*계정 삭제/);
-  assert.match(html, /mailto:gburgundy@gmail\.com/i);
+  assert.match(html, /mailto:godburgundy@gmail\.com/i);
   assert.match(html, /로그인 제공자/);
   assert.match(html, /프로필/);
   assert.match(html, /저장한 장소/);

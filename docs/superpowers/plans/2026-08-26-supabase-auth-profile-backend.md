@@ -454,7 +454,7 @@ Keep MainActivity as the launcher. Add VIEW, DEFAULT, BROWSABLE and exact scheme
 
 Call the handler in onCreate with the initial intent and override onNewIntent to forward the new intent. Send SDK verification errors to AuthRepository as a user-safe login failure.
 
-- [ ] **Step 4: Configure provider consoles** *(2026-08-27: Kakao 앱·Supabase provider·`tteumsae://auth-callback` 연결 완료. Google OAuth는 운영 계정 `gburgundy@gmail.com` 로그인 후 전용 프로젝트/credentials 생성 대기)*
+- [x] **Step 4: Configure provider consoles** *(2026-08-27: Kakao 앱·Supabase provider·`tteumsae://auth-callback` 연결 완료. Google Cloud `tteumsae-auth` 프로젝트와 Web OAuth Client 생성, Supabase callback·provider 연결, 승인 도메인·브랜딩 저장, 외부 사용자 대상 프로덕션 게시 완료. Supabase settings API에서 Google·Kakao 활성화 및 Google authorize의 `accounts.google.com` 리다이렉트 확인)*
 
 Register the Supabase callback required by Kakao/Google and tteumsae://auth-callback in Supabase redirect allowlist. Store provider secrets only in provider/Supabase dashboards.
 
@@ -595,7 +595,7 @@ cd ..\android
 git diff --check
 ~~~
 
-- [ ] **Step 3: Run live service checks** *(2026-08-27: Supabase migration/RLS PASS, Vercel health·places·Kakao Mobility route·정책 페이지·무토큰 삭제 401 확인. TourAPI 키, Google provider, 서명 기기 검증 대기. Vercel Git 자동 배포 연결은 GitHub sudo 이메일 인증 대기)*
+- [ ] **Step 3: Run live service checks** *(2026-08-27: Supabase migration/RLS PASS, Vercel health·places·Kakao Mobility route·정책 페이지·무토큰 삭제 401 확인. TourAPI Production 키 반영 후 기본 783건·상세 10건 동기화 성공. `Newrred/tteumsae` Git 자동 배포 연결 및 `agent/new-route-flow-ui` Production Branch 지정 완료. Google·Kakao provider 활성화와 Google authorize 리다이렉트 확인. 서명된 Android 기기의 로그인·삭제 E2E만 대기)*
 
 - Apply migrations 001–003 to the new Supabase project.
 - Run verify-user-rls.js and require PASS.

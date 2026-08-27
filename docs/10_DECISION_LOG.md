@@ -76,6 +76,8 @@
 - 기존 `minjaeimnydaa/tteumsae`는 upstream 원본으로 유지한다.
 - 직접 관리하고 배포할 기준 저장소는 `Newrred/tteumsae` 포크로 이전한다.
 - 진행 중인 통합 브랜치는 `agent/new-route-flow-ui`이며, Vercel 백엔드의 Git 루트는 `backend/`로 설정한다.
+- Vercel 프로젝트 `tteumsae-backend`는 `Newrred/tteumsae`와 연결하고, 통합이 끝날 때까지 `agent/new-route-flow-ui`를 Production Branch로 사용한다.
+- CLI 배포 시 Android 산출물이나 로컬 작업물이 전송되지 않도록 저장소 루트 `.vercelignore`를 유지한다.
 
 이유:
 
@@ -195,6 +197,6 @@
   사용자에게만 제안한다.
 - 공개 프로필 DB에는 이메일을 복제하지 않고 닉네임·이미지와 선택 연령대·성별만
   저장한다. 연령대·성별은 현재 추천에 사용하지 않는다.
-- 운영자 표기는 `신홍`, 문의 메일은 `gburgundy@gmail.com`을 사용한다.
+- 운영자 표기는 `신홍`, 문의 메일은 `godburgundy@gmail.com`을 사용한다.
 - 계정 삭제는 검증된 토큰 ID만 사용하고 Auth 사용자 삭제 cascade로 프로필과
   원격 저장 행을 함께 삭제한다.

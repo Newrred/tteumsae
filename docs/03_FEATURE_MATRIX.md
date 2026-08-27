@@ -106,10 +106,10 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 위치 권한 | `구현, QA 필요` | 권한 상태를 표시하고 앱 설정으로 이동; `ON_RESUME`에 갱신 | 위치 서비스 자체 상태는 별도 표시하지 않음 | `SettingsTabScreen` |
 | 카카오맵 상태 | `구현, QA 필요` | 설치 여부 확인, 앱 실행 또는 Play Store/웹 설치 경로 | 기기별 intent 처리 QA 필요 | `isKakaoMapAvailable`, `openKakaoMapHome`, `openKakaoMapInstallPage` |
 | 캐시·저장 삭제 | `구현, QA 필요` | 확인 후 이미지 캐시/cacheDir 삭제 또는 Room의 게스트 저장 목록 전체 해제 | 지도 SDK 내부 캐시까지 지운다는 보장은 없음 | `SettingsScreen`, `SavedPlacesRepository.clearGuest`, `clearAppCache` |
-| 문의하기 | `구현, QA 필요` | `gburgundy@gmail.com`으로 앱 버전을 포함한 메일 작성 화면 | 실제 메일 수신·응답 QA 필요 | `CONTACT_EMAIL`, `openContactEmail` |
-| 개인정보처리방침 | `부분 구현/배포 필요` | no-JS 공개 HTML과 `/privacy` rewrite는 구현됨. Android URL은 새 운영 배포 전까지 비어 있음 | Vercel HTTPS 200 확인 후 앱·Play Console URL 연결 | `backend/privacy.html`, `PRIVACY_POLICY_URL` |
+| 문의하기 | `구현, QA 필요` | `godburgundy@gmail.com`으로 앱 버전을 포함한 메일 작성 화면 | 실제 메일 수신·응답 QA 필요 | `CONTACT_EMAIL`, `openContactEmail` |
+| 개인정보처리방침 | `배포 완료/앱 연결 필요` | no-JS 공개 HTML과 `/privacy` rewrite가 Vercel 운영 주소에서 HTTPS 200으로 동작. Android URL은 아직 비어 있음 | 앱 설정·Play Console에 운영 URL 연결 | `backend/privacy.html`, `PRIVACY_POLICY_URL` |
 | 위치기반서비스 약관 | `미구현` | 설정 행은 있으나 URL이 비어 있고 `준비 중` | 법률 검토·공개 문서·동의 정책 필요 | `LOCATION_TERMS_URL` |
-| 선택 로그인·프로필 | `구현 및 코드 검증, 운영 QA 필요` | 게스트 우선, 카카오·Google PKCE, 선택 닉네임·연령대·성별, 로그아웃과 계정 삭제 UI | Supabase/provider 콘솔과 서명 기기 OAuth 미검증. 저장 동기화·푸시는 미구현 | `data/auth`, `data/profile`, `ui/account` |
+| 선택 로그인·프로필 | `구현·provider 연결 완료, 기기 QA 필요` | 게스트 우선, 카카오·Google PKCE, 선택 닉네임·연령대·성별, 로그아웃과 계정 삭제 UI. Supabase에서 Kakao·Google provider 활성화 | 서명 기기 OAuth·앱 복귀 미검증. 저장 동기화·푸시는 미구현 | `data/auth`, `data/profile`, `ui/account` |
 | 계정 삭제 | `구현 및 코드 검증, 운영 QA 필요` | 2단계 영향 확인 후 재로그인, Bearer 전용 `DELETE /api/account`, 성공 시 로컬 세션 제거 | 실제 Auth cascade·재가입은 새 Supabase/Vercel에서 검증 필요 | `AccountDeletionApi`, `AccountViewModel`, `backend/api/account.js` |
 
 ## 10. 릴리스·검증 준비

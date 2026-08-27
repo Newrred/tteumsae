@@ -320,8 +320,14 @@ pnpm exec vercel
 
 ### 7.2 Production 배포
 
+Vercel 프로젝트는 `Newrred/tteumsae`와 연결되어 있다. 현재 통합 기간에는
+`agent/new-route-flow-ui` push가 Production 배포를 생성하며, 통합 후 Production
+Branch를 `main`으로 되돌린다. 저장소 루트 `.vercelignore`는 Android 빌드 산출물,
+`node_modules`, `output/`, `tmp/`가 CLI 업로드에 포함되지 않게 하므로 삭제하지
+않는다.
+
 ```powershell
-pnpm exec vercel --prod
+git push newrred agent/new-route-flow-ui
 ```
 
 운영 기준 주소:
