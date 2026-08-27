@@ -11,6 +11,7 @@ const typeDefaults = {
   38: { category: "SHOPPING", stayMinutes: 40 },
   39: { category: "RESTAURANT", stayMinutes: 40 }
 };
+const CAFE_CAT3_CODES = new Set(["A05020900"]);
 
 function numeric(value, fallback = 0) {
   const parsed = Number(value);
@@ -26,11 +27,17 @@ export function mapTourItem(item, syncedAt = new Date().toISOString()) {
   const longitude = numeric(item.mapx, Number.NaN);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
 
+  const cat1 = String(item.cat1 ?? "").trim() || null;
+  const cat2 = String(item.cat2 ?? "").trim() || null;
+  const cat3 = String(item.cat3 ?? "").trim() || null;
+  const category =
+    contentTypeId === 39 && CAFE_CAT3_CODES.has(cat3) ? "CAFE" : defaults.category;
+
   return {
     content_id: String(item.contentid),
     source: "TOUR_API",
     name: String(item.title).trim(),
-    category: defaults.category,
+    category,
     content_type_id: contentTypeId,
     area_code: numeric(item.areacode, 32),
     sigungu_code: item.sigungucode ? numeric(item.sigungucode) : null,
@@ -40,6 +47,9 @@ export function mapTourItem(item, syncedAt = new Date().toISOString()) {
     image_url: item.firstimage || item.firstimage2 || null,
     tel: item.tel || null,
     default_stay_minutes: defaults.stayMinutes,
+    cat1,
+    cat2,
+    cat3,
     is_active: true,
     source_modified_at: item.modifiedtime || null,
     synced_at: syncedAt,
@@ -123,6 +133,15 @@ export async function fetchTourIntro(contentId, contentTypeId) {
   return items[0] ?? null;
 }
 
+export async function fetchTourCommon(contentId) {
+  const items = await fetchTourDetail("detailCommon2", {
+    contentId: String(contentId),
+    numOfRows: "10",
+    pageNo: "1"
+  });
+  return items[0] ?? null;
+}
+
 export async function fetchTourImages(contentId) {
   return fetchTourDetail("detailImage2", {
     contentId: String(contentId),
@@ -174,13 +193,16 @@ const closedDaysFields = [
 ];
 const negativeTerms = ["없음", "불가", "불가능", "미제공", "해당없음"];
 
+function cleanText(value) {
+  return String(value ?? "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function firstText(item, fields) {
   for (const field of fields) {
-    const value = String(item?.[field] ?? "")
-      .replace(/<br\s*\/?\s*>/gi, " ")
-      .replace(/<[^>]+>/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    const value = cleanText(item?.[field]);
     if (value) return value;
   }
   return null;
@@ -193,19 +215,77 @@ function hasPositiveValue(item, fields) {
   });
 }
 
-export function normalizeTourEnrichment({
-  contentTypeId,
-  intro,
-  images = [],
-  pet
-}) {
+function introTags(intro) {
   const tags = [];
   if (hasPositiveValue(intro, parkingFields)) tags.push("주차 가능");
   if (hasPositiveValue(intro, childFields)) tags.push("아이 동반");
+  return tags;
+}
+
+function parseTourDate(value) {
+  const text = String(value ?? "").trim();
+  if (!/^\d{8}$/.test(text)) return null;
+  const year = Number(text.slice(0, 4));
+  const month = Number(text.slice(4, 6));
+  const day = Number(text.slice(6, 8));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
+}
+
+function normalizeHomepage(value) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const anchorHref = raw.match(/href\s*=\s*(["'])(.*?)\1/i)?.[2];
+  const candidate = (anchorHref ?? cleanText(raw)).replace(/&amp;/gi, "&").trim();
+  try {
+    const url = new URL(candidate);
+    return url.protocol === "http:" || url.protocol === "https:" ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeTourIntro({ contentTypeId, intro, syncedAt }) {
+  return {
+    tags: introTags(intro),
+    openingHours: firstText(intro, openingHoursFields),
+    closedDays: firstText(intro, closedDaysFields),
+    eventStartDate: parseTourDate(intro?.eventstartdate),
+    eventEndDate: parseTourDate(intro?.eventenddate),
+    intro: intro ?? null,
+    syncedAt
+  };
+}
+
+export function normalizeTourCommon({ common, syncedAt }) {
+  return {
+    overview: firstText(common, ["overview"]),
+    homepageUrl: normalizeHomepage(common?.homepage),
+    common: common ?? null,
+    syncedAt
+  };
+}
+
+export function normalizeTourMedia({
+  contentTypeId,
+  intro,
+  images = [],
+  pet,
+  syncedAt
+}) {
+  const tags = introTags(intro);
   if (pet) tags.push("반려동물 동반");
   if (Number(contentTypeId) === 14) tags.push("실내 활동");
 
-  const imageUrls = images
+  const imageItems = Array.isArray(images) ? images : [];
+  const imageUrls = imageItems
     .flatMap((image) => [image.originimgurl, image.smallimageurl])
     .filter(Boolean)
     .filter((url, index, values) => values.indexOf(url) === index);
@@ -213,10 +293,29 @@ export function normalizeTourEnrichment({
   return {
     tags,
     imageUrls,
-    openingHours: firstText(intro, openingHoursFields),
-    closedDays: firstText(intro, closedDaysFields),
-    intro: intro ?? null,
+    images: imageItems,
     pet: pet ?? null,
-    enrichedAt: new Date().toISOString()
+    syncedAt
+  };
+}
+
+export function normalizeTourEnrichment({
+  contentTypeId,
+  intro,
+  images = [],
+  pet
+}) {
+  const syncedAt = new Date().toISOString();
+  const normalizedIntro = normalizeTourIntro({ contentTypeId, intro, syncedAt });
+  const normalizedMedia = normalizeTourMedia({ contentTypeId, intro, images, pet, syncedAt });
+
+  return {
+    tags: normalizedMedia.tags,
+    imageUrls: normalizedMedia.imageUrls,
+    openingHours: normalizedIntro.openingHours,
+    closedDays: normalizedIntro.closedDays,
+    intro: normalizedIntro.intro,
+    pet: normalizedMedia.pet,
+    enrichedAt: syncedAt
   };
 }
