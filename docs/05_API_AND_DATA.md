@@ -662,6 +662,7 @@ numOfRows=100
 
 1. [`001_initial.sql`](../backend/migrations/001_initial.sql)
 2. [`002_detail_sync_state.sql`](../backend/migrations/002_detail_sync_state.sql)
+3. [`003_user_accounts.sql`](../backend/migrations/003_user_accounts.sql)
 
 ### 7.1 `public.places`
 
@@ -700,6 +701,28 @@ numOfRows=100
 두 테이블 모두 RLS가 활성화되어 있고 공개 정책은 마이그레이션에 없다. 서버는
 `SUPABASE_SERVICE_ROLE_KEY`로 PostgREST를 호출해 RLS를 우회한다. service role
 키를 Android, 브라우저, 로그, 문서에 노출하면 안 된다.
+
+### 7.3 `public.profiles`
+
+선택형 로그인 사용자의 비공개 프로필이다. `user_id`는 `auth.users(id)`를
+참조하며 계정 삭제 시 함께 삭제된다. 닉네임은 공백 정리 후 1~40자,
+아바타 URL은 최대 2048자다. `age_group`과 `gender`는 nullable 선택값이며
+현재 추천 요청이나 점수에는 사용하지 않는다.
+
+authenticated 역할은 본인 행만 조회·추가·수정할 수 있다. `user_id`, 생성시각,
+수정시각은 클라이언트가 update할 수 없고 물리 delete 권한도 없다.
+
+### 7.4 `public.user_saved_places`
+
+로그인 사용자의 장소 저장 상태를 `(user_id, place_id)` 복합키로 보관한다.
+`is_saved=false` 행도 남기는 tombstone 구조라 여러 기기의 저장 해제를 동기화할
+수 있다. `place_id`는 `places(content_id)`를 참조하고 사용자나 장소 삭제 시
+연관 행이 함께 삭제된다.
+
+authenticated 역할은 본인 행의 `is_saved`, `saved_at`만 수정할 수 있고 물리
+delete는 할 수 없다. [`verify-user-rls.js`](../backend/scripts/verify-user-rls.js)는
+테스트 프로젝트에서 임시 사용자 2명을 만들어 본인 CRUD와 교차 사용자 차단을
+실제로 확인한다.
 
 ## 8. 변경 시 함께 확인할 파일
 

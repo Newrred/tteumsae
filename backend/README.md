@@ -8,6 +8,7 @@
 
 - Vercel Functions: HTTP API 및 Cron
 - Supabase Postgres: 장소와 동기화 커서 저장
+- Supabase Auth/Postgres: 선택형 로그인 사용자와 본인 프로필·저장 tombstone 보관
 - TourAPI `KorService2`: 강원도 `areaCode=32` 장소 수집
 - 카카오모빌리티 자동차 길찾기 API: 차량 이동시간 계산
 
@@ -88,6 +89,18 @@ Node.js 20 이상:
 ```powershell
 npm test
 npm run check
+node scripts/verify-user-rls.js
+```
+
+`verify-user-rls.js`는 아래 세 테스트 전용 환경변수가 있을 때만 실행됩니다.
+두 임시 사용자의 본인 CRUD와 상대 사용자 차단을 확인하고 생성 데이터를 정리합니다.
+설정이 없으면 누락 변수명을 포함한 `SKIPPED`를 출력하며, 운영 반영 전에는 반드시
+별도 Supabase 테스트 프로젝트에서 `PASS`를 확인해야 합니다.
+
+```text
+SUPABASE_TEST_URL
+SUPABASE_TEST_PUBLISHABLE_KEY
+SUPABASE_TEST_SERVICE_ROLE_KEY
 ```
 
 ## 보안
@@ -95,6 +108,8 @@ npm run check
 - 외부 API 키는 Vercel Functions에서만 사용합니다.
 - 카카오 REST API 키는 Android 앱이나 API 응답에 포함하지 않습니다.
 - Supabase 테이블은 RLS를 활성화하고 클라이언트 공개 정책을 만들지 않습니다.
+- `profiles`, `user_saved_places`는 authenticated 역할에 필요한 열만 허용하고
+  `auth.uid() = user_id`인 본인 행만 조회·추가·수정할 수 있습니다.
 - Cron은 `CRON_SECRET` Bearer 헤더를 검증합니다.
 - 추천은 IP별 분당 12회, 경로는 분당 40회의 인스턴스 메모리 제한을 적용합니다.
   이는 서버리스 best-effort이므로 공개 규모가 커지면 공유 저장소나 Vercel 경계

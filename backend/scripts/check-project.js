@@ -15,6 +15,8 @@ const requiredFiles = [
   "api/cron/tour-detail-sync.js",
   "migrations/001_initial.sql",
   "migrations/002_detail_sync_state.sql",
+  "migrations/003_user_accounts.sql",
+  "scripts/verify-user-rls.js",
   ".env.example",
   "vercel.json"
 ];

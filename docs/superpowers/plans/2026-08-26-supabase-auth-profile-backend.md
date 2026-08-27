@@ -127,7 +127,7 @@ git commit -m "build: Supabase 인증 도구체인 준비"
 - Produces: environment-gated two-user RLS verifier
 - Consumes: auth.users and public.places(content_id)
 
-- [ ] **Step 1: Write a failing migration contract test**
+- [x] **Step 1: Write a failing migration contract test**
 
 ~~~javascript
 test("사용자 테이블은 RLS와 최소 권한을 선언한다", async () => {
@@ -141,7 +141,7 @@ test("사용자 테이블은 RLS와 최소 권한을 선언한다", async () => 
 });
 ~~~
 
-- [ ] **Step 2: Run and confirm failure**
+- [x] **Step 2: Run and confirm failure**
 
 ~~~powershell
 cd C:\app\tteumsae\backend
@@ -149,7 +149,7 @@ $tests=(Get-ChildItem tests -Filter "*.test.js").FullName
 node --test $tests
 ~~~
 
-- [ ] **Step 3: Implement the schema**
+- [x] **Step 3: Implement the schema**
 
 The migration must create:
 - profiles with user_id PK/FK, display_name max 40, avatar_url max 2048, checked age_group and gender, server timestamps;
@@ -247,7 +247,7 @@ age_group in (
 gender in ('FEMALE','MALE','OTHER','PREFER_NOT_TO_SAY')
 ~~~
 
-- [ ] **Step 4: Add the live RLS verifier**
+- [x] **Step 4: Add the live RLS verifier**
 
 verify-user-rls.js runs only when SUPABASE_TEST_URL, SUPABASE_TEST_PUBLISHABLE_KEY, and SUPABASE_TEST_SERVICE_ROLE_KEY exist. It creates two temporary Auth users with random emails, signs each in, verifies own CRUD, verifies cross-user select/update returns no row or 403, deletes both admin users in finally, and exits nonzero on any leak.
 
@@ -262,7 +262,7 @@ node scripts/verify-user-rls.js
 
 Expected: all pass. The live script must print SKIPPED with exact missing variable names when not configured; production rollout requires an actual PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ~~~powershell
 git add backend/migrations/003_user_accounts.sql backend/tests/user-migration.test.js backend/scripts backend/README.md docs/05_API_AND_DATA.md
