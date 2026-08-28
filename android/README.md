@@ -43,7 +43,7 @@ https://tteumsae-backend-one.vercel.app
 
 - Android Studio Ladybug 이상 권장
 - JDK 17
-- Android SDK compile 36 / target 35
+- Android SDK compile 36 / target 36
 
 이 폴더를 Android Studio에서 열고 Gradle Sync 후 `app` 구성을
 실행합니다.
@@ -74,5 +74,5 @@ app/src/main/java/com/tteumsae/app/
 - 고령자 동반·무장애 시설 데이터 연동
 - 개인정보처리방침 및 위치기반서비스 고지
 - 앱 아이콘, 스플래시, 접근성, 다크 모드
-- targetSdk 36 전환과 실제 기기 회귀 테스트 — 공개 Play 제출 전 필수
+- API 36 동작의 실제 기기 회귀 테스트
 - Play App Signing용 릴리스 서명과 AAB 생성

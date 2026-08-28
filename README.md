@@ -16,8 +16,8 @@
 현재 Android는 도착 마감을 입력받지 않고 내부 호환값
 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`를 사용합니다. 따라서 현재 APK는
 새 도착 마감 플로우의 검증본이 아니며 `늦지 않는 추천`을 보장한다고 설명하지 않습니다.
-확인용 APK는 디버그 빌드이므로 Play Store 제출 전에는 targetSdk 36, 릴리스 서명,
-AAB 빌드와 실기기 회귀 검증을 별도로 완료해야 합니다.
+현재 Android는 compileSdk·targetSdk 36을 사용합니다. 확인용 APK는 디버그 빌드이므로
+Play Store 제출 전에는 릴리스 서명, AAB 빌드와 실기기 회귀 검증을 별도로 완료해야 합니다.
 
 ## 저장소 구성
 

@@ -23,7 +23,7 @@
 - [x] 운영 백엔드 주소를 `tteumsae-backend-one.vercel.app`으로 정정
 - [x] 자동 테스트 기준을 Android 73/73, Backend 69/69로 갱신
 - [x] 로그인 화면과 정책의 기기 간 저장 연속성 약속 제거, 개인정보처리방침 URL 연결
-- [ ] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
+- [x] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
 - [ ] 프로세스 복원 payload가 없으면 입력 화면으로 안전 복귀
 - [ ] GitHub CI에서 Backend test/check와 Android unit/lint를 실행
 - [ ] Production Branch 직접 배포 대신 Preview smoke 후 명시적 승격 절차 문서화

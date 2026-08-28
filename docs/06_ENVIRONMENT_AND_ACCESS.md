@@ -94,7 +94,7 @@ SUPABASE_PUBLISHABLE_KEY=Supabase publishable key
 |---|---|
 | 패키지·applicationId | `com.tteumsae.app` |
 | minSdk | 26 |
-| compileSdk / targetSdk | 36 / 35; 공개 Play 제출 전 target 36 필요 |
+| compileSdk / targetSdk | 36 / 36 |
 | API 기준 URL | `android/app/build.gradle.kts`의 `BuildConfig.API_BASE_URL` |
 | 현재 API 기준 URL | `https://tteumsae-backend-one.vercel.app` |
 

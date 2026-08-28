@@ -21,7 +21,7 @@
 
 ### 공개 Play 제출 차단 항목
 
-- 현재 `targetSdk=35`; 2026-08-31부터 신규 앱과 업데이트는 API 36 필요
+- compileSdk·targetSdk 36 자동 검증 완료; API 36 실제 기기 회귀 필요
 - Release signingConfig와 서명된 AAB 없음
 - 개인정보처리방침 URL은 연결됨; 위치 관련 별도 공개 문서 URL은 미설정
 - Release 서명 기기에서 Google·Kakao OAuth와 계정 삭제 미검증

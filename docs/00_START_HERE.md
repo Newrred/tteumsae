@@ -33,7 +33,7 @@ Android 패키지: `com.tteumsae.app`
 [도착 마감 플로우 설계](superpowers/specs/2026-08-26-deadline-aware-route-flow-design.md),
 실행 순서는 [다음 버전 계획](09_NEXT_VERSION_PLAN.md)을 따릅니다.
 
-Play Store 제출 준비는 끝나지 않았습니다. targetSdk 36, 릴리스 서명, AAB,
+Play Store 제출 준비는 끝나지 않았습니다. 릴리스 서명, AAB,
 정책 URL, 스토어 리소스와 실기기 회귀 테스트가 남아 있습니다.
 
 현재 소스 기준 확인용 APK는 `tteumsae-apk.vercel.app`에 배포돼 있습니다. APK는 Git에서 제외되므로 소스가 바뀌면 새 파일명으로 다시 빌드·배포하세요.
@@ -59,7 +59,7 @@ Play Store 제출 준비는 끝나지 않았습니다. targetSdk 36, 릴리스 �
 | Java/JVM | 17 |
 | Compose BOM | 2024.12.01 |
 | Kakao Maps Android SDK | 2.14.0 |
-| Android SDK | min 26 / compile 36 / target 35; Play 제출 전 target 36 필요 |
+| Android SDK | min 26 / compile 36 / target 36 |
 
 ## 3. 저장소 복제 후 보안 원칙
 

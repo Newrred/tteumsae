@@ -32,7 +32,7 @@ android {
     defaultConfig {
         applicationId = "com.tteumsae.app"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 25
         versionName = "0.12.4"
         buildConfigField(

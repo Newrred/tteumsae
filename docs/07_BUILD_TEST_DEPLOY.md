@@ -48,10 +48,10 @@ Android Gradle Plugin 8.7.3
 Kotlin 2.0.21
 Compose BOM 2024.12.01
 Kakao Maps Android SDK 2.14.0
-minSdk 26 / compileSdk 36 / targetSdk 35
+minSdk 26 / compileSdk 36 / targetSdk 36
 
-`targetSdk=35`는 현재 소스 사실이며 2026-08-31 이후 공개 Play 신규 앱·업데이트
-제출 전 36으로 올려야 한다.
+`targetSdk=36` 전환은 2026-08-28 자동 테스트·lint·debug APK 빌드로 검증했다.
+API 36의 실제 기기 회귀와 서명 AAB는 별도 출시 게이트다.
 Java/Kotlin target 17
 ```
 
