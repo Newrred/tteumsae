@@ -643,13 +643,51 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 
 ## 12. 배포 완료 조건
 
-- [ ] Git 작업 트리와 배포 커밋 식별 가능
-- [ ] 비밀값 검사 완료
-- [ ] 백엔드 69개 테스트 및 56개 파일 project check 통과
-- [ ] Android 75개 단위 테스트·lint·APK 빌드 통과
+- [x] Git 작업 트리와 배포 커밋 식별 가능
+- [x] 비밀값 검사 완료
+- [x] 백엔드 143개 테스트 및 88개 파일 project check 통과
+- [x] Android 75개 단위 테스트·lint·APK 빌드 통과
 - [ ] GitHub CI의 Backend·Android 검증 작업 통과
-- [ ] Preview 스모크 테스트 통과
-- [ ] Production API 스모크 테스트 통과
+- [x] 도메인 미연결 Production-target 후보 스모크 테스트 통과
+- [x] Production API 스모크 테스트 통과
 - [ ] 새 버전 APK 직접 링크 200 및 실기기 설치 통과
 - [ ] Kakao 지도·GPS·추천·복수 경유지·최종 목적지 확인
 - [ ] 알려진 문제와 롤백 대상 기록
+
+## 13. Gate 1-B 운영 반영 런북
+
+반영 순서는 다음과 같다.
+
+1. 현재 `places`와 `sync_state`를 export한다.
+2. migration 001~005 적용 상태를 확인하고 누락분을 먼저 적용한다.
+3. migration 006을 적용한 뒤 새 객체와 anon/authenticated 차단을 스모크 테스트한다.
+4. Vercel Production에 `KAKAO_MOBILITY_DAILY_WARNING=7000`,
+   `KAKAO_MOBILITY_DAILY_BUDGET=8000`을 설정한다.
+5. 운영 비밀값을 Preview에 복제하지 않고 `--prod --skip-domain` 후보 배포를 만든다.
+6. 후보 URL에서 health, places, recommendation, route, ops 무인증 차단을 확인한다.
+7. 검수 CSV 100/100을 재검증하고 활성 강릉 ID만 원자 upsert한다.
+8. ops 집계의 curation 100/100과 사용량 집계를 확인한 뒤 동일 배포를 promote한다.
+
+롤백은 마지막 정상 Vercel 배포를 다시 promote하는 방식으로 한다. migration 005~006의
+테이블·컬럼·집계 행은 운영 증거이므로 삭제하지 않는다. 이전 코드는 새 객체를 읽지 않아
+코드 롤백과 공존할 수 있다.
+
+### 13.1 2026-08-28 적용 기록
+
+| 항목 | 결과 |
+|---|---|
+| 적용 브랜치 | `codex/gate-1b-data-trust` |
+| 데이터 커밋 | `9ed9d53` |
+| Vercel 함수 한도 수정 | `abef2f8`, 레거시 `tour-detail-sync` 제거 후 12개 |
+| 운영 백업 | Supabase SQL 결과 `Supabase Snippet Untitled query.csv`, 장소 1,719행과 sync metadata |
+| DB 선행 점검 | migration 005 누락 발견, 005 적용 후 006 재검증 |
+| DB 권한 | anon table/RPC 접근 차단 true, service-role ops RPC 정상 |
+| 후보 배포 | `dpl_FRzg3BSngdtoZJVj8UiGxpecrPVa`, 도메인 미연결 Production-target |
+| 후보 스모크 | health 200, places 200, route 200, recommendations 200/8건, ops 무인증 401 |
+| 검수 import | 100행, 운영시간 VERIFIED 75, 주차 VERIFIED 71 |
+| ops 집계 | curation 100/100, Mobility 예약/성공 10/10, 잔여 7,990 |
+| Production 승격 | `tteumsae-backend-one.vercel.app`, health 200, curation 상세 200 |
+
+`/api/ops/status`의 인증된 HTTP 호출은 운영 `CRON_SECRET` 원문을 로컬에 복제하지 않아
+직접 실행하지 않았다. 같은 집계 RPC의 운영 응답, HTTP 401 경계와 자동화 테스트로
+검증했으며 다음 비밀값 순환 또는 운영자 수동 점검 때 인증된 HTTP 응답을 추가 기록한다.

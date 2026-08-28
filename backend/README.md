@@ -29,9 +29,9 @@
 | POST | `/api/route` | 출발지·경유지 0~5개·목적지 통합 차량 경로 |
 | DELETE | `/api/account` | 검증된 Bearer 사용자의 Supabase 계정 영구 삭제 |
 | GET | `/api/cron/tour-sync` | TourAPI 동기화, Bearer 인증 필요 |
-| GET | `/api/cron/tour-detail-sync` | 이미지·편의 태그 상세 동기화, Bearer 인증 필요 |
 | GET | `/api/cron/tour-catalog-sync` | TourAPI 증분 카탈로그 동기화, Bearer 인증 필요 |
 | GET | `/api/cron/tour-intro-sync` | 운영시간·휴무일 intro 보강, Bearer 인증 필요 |
+| GET | `/api/ops/status` | Gate 1 운영 집계, `CRON_SECRET` Bearer 인증 필요 |
 
 공개 운영 문서는 JavaScript나 로그인 없이 다음 clean URL로 제공합니다.
 
@@ -86,10 +86,11 @@ SUPABASE_PUBLISHABLE_KEY
 SUPABASE_SERVICE_ROLE_KEY
 CRON_SECRET
 TOUR_SYNC_MAX_PAGES=10
-TOUR_DETAIL_SYNC_BATCH_SIZE=10
 TOUR_INTRO_SYNC_BATCH_SIZE=20
 TOUR_SYNC_CONCURRENCY=4
 KAKAO_ROUTE_CANDIDATE_LIMIT=8
+KAKAO_MOBILITY_DAILY_WARNING=7000
+KAKAO_MOBILITY_DAILY_BUDGET=8000
 ```
 
 API 키와 서비스 역할 키, Cron 비밀값은 Sensitive로 저장합니다. 실제
@@ -152,3 +153,22 @@ SUPABASE_TEST_SERVICE_ROLE_KEY
   이는 서버리스 best-effort이므로 공개 규모가 커지면 공유 저장소나 Vercel 경계
   제한으로 교체해야 합니다.
 - 외부 API 또는 DB 오류 본문은 사용자 응답에 노출하지 않습니다.
+
+## Gate 1-B 운영 데이터
+
+Kakao Mobility 호출은 KST 날짜별로 Supabase에 원자 예약한 뒤 실행합니다. 기본값은
+7,000건부터 운영 경고, 8,000건에서 외부 호출 전 차단이며 공식 10,000건 상한보다
+높게 설정할 수 없습니다. 예산 또는 공급자 쿼터가 소진되면 API는 503과
+`Retry-After`를 반환하며 직선거리 경로로 위장하지 않습니다.
+
+강릉 알파 검수 데이터는 TourAPI 원문과 분리된 `place_curations` overlay에 저장되고
+`effective_places`가 검수값을 우선합니다. 다음 명령은 실제 비밀값을 출력하지 않습니다.
+
+```powershell
+node scripts/validate-place-curations.mjs
+node scripts/import-place-curations.mjs
+```
+
+운영 집계는 `Authorization: Bearer {CRON_SECRET}`을 붙인
+`GET /api/ops/status`에서 확인합니다. 응답에는 KST 사용일, 공급자별 예약·성공·오류,
+동기화 작업 상태, 운영시간 보강률과 강릉 검수 100개 달성 여부가 포함됩니다.

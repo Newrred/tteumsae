@@ -10,8 +10,8 @@
 
 - Android 활성 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
 - 시간 입력 없음, 내부 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`
-- Android 75/75, Backend 94/94, lint 오류 0
-- 운영 장소 1,719곳, 이미지 72.8%, 운영시간 0.9%
+- Android 75/75, Backend 143/143, lint 오류 0, debug APK 빌드 성공
+- 운영 장소 1,719곳, 강릉 활성 474곳, 강릉 검수 100곳
 - `ARRIVAL_DEADLINE_V1` 요청 검증만 구현, 실제 최대 체류 계산과 Android 연결은 미구현
 - Release signingConfig·서명 AAB·실기기 전체 회귀 없음
 
@@ -21,7 +21,7 @@
 
 - [x] 현재 구현과 목표 제품 문서 분리
 - [x] 운영 백엔드 주소를 `tteumsae-backend-one.vercel.app`으로 정정
-- [x] 자동 테스트 기준을 Android 75/75, Backend 94/94로 갱신
+- [x] 자동 테스트 기준을 Android 75/75, Backend 143/143으로 갱신
 - [x] 로그인 화면과 정책의 기기 간 저장 연속성 약속 제거, 개인정보처리방침 URL 연결
 - [x] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
 - [x] 프로세스 복원 payload가 없으면 입력 화면 또는 데이터가 있는 이전 화면으로 안전 복귀
@@ -48,10 +48,11 @@
 - [x] 중복 Cron을 막는 90초 DB claim/lease 적용
 - [x] Kakao·TourAPI·Supabase fetch에 요청별 timeout과 전체 요청 deadline 적용
 - [x] 추천 한 건의 정확 Kakao 경로 후보 상한을 8개로 축소
-- [ ] 일일 Kakao 호출 예산, 429/5xx, Cron 마지막 성공과 운영시간 보강률 기록
-- [ ] 운영시간 파서가 평일·주말, 계절, 입장 마감을 확실히 구분하지 못하면 `UNKNOWN`
-- [ ] 지난 축제와 날짜 불완전 축제를 추천에서 제외
-- [ ] 알파용 핵심 장소 100~300개 운영시간·주차·입장 정보 검수
+- [x] 일일 Kakao 호출 예산, 429/5xx와 운영시간 보강률 영속 기록
+- [ ] 다음 예약 Cron 실행 후 마지막 성공·요약이 ops에 쌓이는지 확인
+- [x] 운영시간 파서가 평일·주말, 계절, 입장 마감을 확실히 구분하지 못하면 `UNKNOWN`
+- [x] 지난 축제와 날짜 불완전 축제를 추천에서 제외
+- [x] 강릉 알파 핵심 장소 100개 운영시간·주차·입장 정보 검수
 
 ### 통과 조건
 
@@ -60,6 +61,11 @@
 - 검증되지 않은 운영시간 때문에 닫힌 장소를 `OPEN`으로 확정하지 않는다.
 
 전체 TourAPI 소개·미디어·반려동물 보강은 이 Gate의 완료 조건이 아니다.
+
+2026-08-28 운영 적용으로 migration 005~006, 7,000/8,000 호출 경계, 검수 overlay
+100행과 Production 승격을 확인했다. 후보 배포의 실제 route·recommendations가 성공했고
+ops RPC는 검수 100/100과 Mobility 예약/성공 10/10을 반환했다. 인증된 ops HTTP
+호출과 다음 예약 Cron 결과 확인은 운영 비밀값을 로컬에 복제하지 않는 별도 수동 점검으로 남긴다.
 
 ## Gate 2 — 도착 마감 1곳 핵심 플로우
 

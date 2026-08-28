@@ -80,9 +80,9 @@ Gate 1-A 로컬 자동 검증은 외부 서비스 mock을 사용한다. 다음 �
 
 - [ ] 테스트 Supabase에 migration 001~005 적용
 - [ ] 동시 `claim_sync_job` 두 호출에서 단일 소유자 확인
-- [ ] Production Supabase migration 005 적용
-- [ ] Preview API와 수동 Cron 스모크
-- [ ] 명시적 Production 승격과 Vercel UI의 두 UTC Cron 확인
+- [x] Production Supabase migration 005 적용
+- [x] 도메인 미연결 Production-target 후보 API 스모크
+- [x] 명시적 Production 승격과 Vercel의 두 UTC Cron 설정 확인
 - [ ] 첫 예약 Cron의 성공·부분 처리·실패 요약 확인
 
 ## 3. Android 핵심 스모크 테스트
@@ -335,7 +335,7 @@ Gate 1-A 로컬 자동 검증은 외부 서비스 mock을 사용한다. 다음 �
 - `/api/recommendations` 분당 12회, `/api/route` 분당 40회의 IP 제한을 추가했지만
   Vercel 인스턴스 메모리 기반이라 인스턴스 간 공유되지 않고 IP 헤더가 없으면
   적용되지 않는다.
-- 추천 한 번은 baseRoute 1회와 후보 경로 최대 20회, 이후 선택마다 route 호출을
+- 추천 한 번은 baseRoute 1회와 후보 경로 최대 8회, 이후 선택마다 route 호출을
   만들 수 있어 공유 저장소 또는 Vercel 경계 제한이 여전히 필요하다.
 
 ### P2 — 유지보수·스토어
@@ -356,8 +356,8 @@ Gate 1-A 로컬 자동 검증은 외부 서비스 mock을 사용한다. 다음 �
 
 - 개인정보처리방침 HTML과 Android 운영 URL 연결은 완료됐다. 위치기반서비스 관련
   별도 공개 문서는 아직 준비되지 않았다.
-- 새 Supabase migrations 001~005, 2-user RLS verifier, 카카오·Google provider와
-  release-signed OAuth, 실제 계정 삭제는 아직 라이브 검증하지 않았다.
+- 운영 Supabase에는 migrations 005~006과 검수 100행을 적용했다. 빈 DB 001~006 복구,
+  2-user RLS verifier, release-signed OAuth와 실제 계정 삭제는 아직 라이브 검증하지 않았다.
 - Backend test/check와 Android unit/lint를 수행하는 GitHub CI는 구성했다. 최초 원격 실행,
   branch protection, Preview 스모크와 명시적 Production 승격은 아직 검증하지 않았다.
 - release signing, 업로드 키, AAB, Play App Signing과 자동 배포 체인은 없다.
@@ -369,11 +369,16 @@ Gate 1-A 로컬 자동 검증은 외부 서비스 mock을 사용한다. 다음 �
 - 기존 JSON에서 Room으로의 변환과 원본 보존 규칙은 단위 테스트로 검증했지만,
   실제 이전 버전 APK 위에 덮어 설치하는 QA는 연결 기기가 없어 아직 실행하지 못했다.
 
-#### TourAPI 운영 부채
+#### Gate 1-B 이후 남은 운영 부채
 
-- 일일 Kakao 호출 예산과 429/5xx·Cron 마지막 성공·운영시간 보강률의 영속 관측이 없다.
-- 운영시간 파서가 평일·주말·계절·입장 마감을 충분히 구분하지 못한다.
-- 지난 축제·날짜 불완전 축제 필터와 알파 핵심 장소 100~300개 검수가 남아 있다.
+- Kakao Mobility 7,000 경고·8,000 차단, 공급자 오류 집계와 운영시간 보강률 집계는
+  운영 DB에 적용됐다. IP rate limit은 여전히 서버리스 인스턴스별 best-effort다.
+- 운영시간은 평일·주말·명시 입장 마감·자정 넘김을 판정하고 계절·공휴일·상충
+  문구는 `UNKNOWN`으로 둔다. 복잡한 자연어 일정을 완전히 구조화하지는 않는다.
+- 지난 축제·날짜 불완전 축제는 추천 전후로 제외한다. 강릉 알파 검수는 100곳을
+  적용했으며 300곳 확장은 Gate 3 사용자 검증 뒤 결정한다.
+- 인증된 `/api/ops/status` 운영 HTTP 스모크는 `CRON_SECRET`을 로컬로 복제하지 않아
+  미실행이다. 동일 RPC의 운영 결과와 무인증 401은 확인했다.
 
 ## 6. 회귀 기록 형식
 

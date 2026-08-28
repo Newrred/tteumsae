@@ -26,8 +26,8 @@ Android 앱
                                     └─ Kakao Mobility 출발→경유지 0~5→목적
 
 Vercel Cron
-  ├─ /api/cron/tour-sync ───────> TourAPI areaBasedList2 → Supabase
-  └─ /api/cron/tour-detail-sync > TourAPI 상세 3종 → places.raw._tteumsae
+  ├─ /api/cron/tour-catalog-sync > TourAPI 변경 목록 → Supabase
+  └─ /api/cron/tour-intro-sync ──> TourAPI 운영·휴무 정보 → Supabase
 ```
 
 중요한 경계는 다음과 같다.
@@ -119,7 +119,9 @@ Vercel 경계 정책으로 교체해야 한다.
 | POST | `/api/route` | 없음 | 출발·최종 목적지와 경유지 0~5개의 통합 차량 경로 재계산 |
 | DELETE | `/api/account` | Supabase Bearer | 현재 로그인 사용자의 Auth 계정과 연관 사용자 데이터 영구 삭제 |
 | GET | `/api/cron/tour-sync` | Bearer | TourAPI 기본 장소 페이지 동기화 |
-| GET | `/api/cron/tour-detail-sync` | Bearer | 이미지·편의·운영정보 보강 |
+| GET | `/api/cron/tour-catalog-sync` | Bearer | TourAPI 증분 카탈로그 동기화 |
+| GET | `/api/cron/tour-intro-sync` | Bearer | 운영시간·휴무일 intro 보강 |
+| GET | `/api/ops/status` | Bearer | Gate 1 호출량·동기화·데이터 품질 집계 |
 
 ## 4. 장소 데이터 계약
 
@@ -609,59 +611,14 @@ numOfRows=100
 
 `status`는 전체 순회를 마치면 `completed`, 이어서 처리해야 하면 `partial`이다.
 
-### 6.2 상세 보강 동기화
+### 6.2 운영정보 보강 동기화
 
-경로: `GET /api/cron/tour-detail-sync`
+경로: `GET /api/cron/tour-intro-sync`
 
-장소마다 세 요청을 병렬로 실행한다.
-
-| TourAPI 작업 | 용도 |
-|---|---|
-| `detailIntro2` | 주차·유아·운영시간·휴무일 원문 |
-| `detailImage2` | 원본·썸네일 이미지 최대 20건 |
-| `detailPetTour2` | 반려동물 동반 정보 존재 여부 |
-
-`TOUR_DETAIL_SYNC_BATCH_SIZE`는 기본 10이고 코드상 최대 10이다. 활성 장소를
-`content_id` 오름차순으로 읽고 `sync_state(id='tour_details')`의 페이지를
-이어간다. 세 요청이 모두 실패한 장소는 건너뛰며 `failed`를 증가시킨다. 하나라도
-성공하면 가능한 데이터만 정규화한다.
-
-```json
-{
-  "status": "partial",
-  "page": 12,
-  "processed": 10,
-  "updated": 9,
-  "failed": 1,
-  "nextPage": 13
-}
-```
-
-상세 데이터는 별도 컬럼 추가 없이 기존 `places.raw` 안에 저장한다.
-
-```json
-{
-  "_tteumsae": {
-    "tags": ["주차 가능", "아이 동반", "반려동물 동반"],
-    "imageUrls": ["https://..."],
-    "openingHours": "09:00~18:00",
-    "closedDays": "매주 월요일",
-    "intro": {},
-    "pet": {},
-    "enrichedAt": "ISO-8601"
-  }
-}
-```
-
-현재 태그 규칙:
-
-- 주차 관련 값이 있고 `없음`, `불가`, `불가능`, `미제공`, `해당없음`이 아니면
-  `주차 가능`
-- 유아차·아동시설 관련 긍정 값이 있으면 `아이 동반`
-- `detailPetTour2` 객체가 있으면 `반려동물 동반`
-- 문화시설(`contenttypeid=14`)이면 `실내 활동`
-
-`고령자 동반`, `무장애 시설`은 아직 데이터 연동·정규화가 없다.
+활성 장소의 `detailIntro2`를 제한된 배치와 동시성으로 보강한다. 실패는 기존 정상값을
+지우지 않고 재시도 시각과 오류 요약만 기록한다. 과거
+`/api/cron/tour-detail-sync`는 예약되지 않은 레거시 경로였고 Vercel Hobby 함수
+12개 한도를 지키기 위해 2026-08-28 제거했다.
 
 ### 6.3 Cron 일정
 
@@ -684,6 +641,8 @@ numOfRows=100
 2. [`002_detail_sync_state.sql`](../backend/migrations/002_detail_sync_state.sql)
 3. [`003_user_accounts.sql`](../backend/migrations/003_user_accounts.sql)
 4. [`004_tour_enrichment.sql`](../backend/migrations/004_tour_enrichment.sql)
+5. [`005_sync_runtime_safety.sql`](../backend/migrations/005_sync_runtime_safety.sql)
+6. [`006_gate_1b_data_trust.sql`](../backend/migrations/006_gate_1b_data_trust.sql)
 
 ### 7.1 `public.places`
 
@@ -745,6 +704,21 @@ delete는 할 수 없다. [`verify-user-rls.js`](../backend/scripts/verify-user-
 테스트 프로젝트에서 임시 사용자 2명을 만들어 본인 CRUD와 교차 사용자 차단을
 실제로 확인한다.
 
+### 7.5 Gate 1-B 운영·검수 데이터
+
+- `provider_usage_daily`: KST 날짜·공급자·operation별 예약/성공/오류 집계
+- `place_curations`: 출처 URL과 검수시각을 가진 운영시간·입장·주차 overlay
+- `effective_places`: 원본 장소에 검수값을 우선 적용하는 서버 전용 view
+- `get_gate_1b_ops_status`: 호출량, sync lease 상태, 데이터 품질을 묶는 service-role RPC
+
+Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전에 차단한다. 차단이나
+공급자 429/쿼터 오류는 503과 `Retry-After`로 공개되며 초기화 기준은 KST 자정이다.
+운영시간 파서는 평일·주말·입장 마감·자정 넘김을 보수적으로 판정하고 계절·공휴일·
+상충 문구를 완전히 해석하지 못하면 `OPEN` 대신 `UNKNOWN`을 반환한다.
+
+`GET /api/ops/status`는 공개 health와 분리되어 `CRON_SECRET` Bearer 인증 뒤에만
+집계값을 반환한다. 좌표, 검색어, 사용자 식별자와 외부 응답 전문은 집계하지 않는다.
+
 ## 8. 변경 시 함께 확인할 파일
 
 | 변경 종류 | 백엔드 | Android |
@@ -761,7 +735,8 @@ delete는 할 수 없다. [`verify-user-rls.js`](../backend/scripts/verify-user-
 
 계약 변경에는 반드시 백엔드 Node 테스트와 Android JSON 파서 테스트를 함께
 추가한다. 현재 소스의 `sigunguCode` 검증과 route/baseRoute/corridor를 포함한
-백엔드 테스트는 `2026-08-28` 기준 69/69 통과했다.
+백엔드 테스트 수는 실행 시점에 달라질 수 있으므로 `pnpm test`의 실제 결과를 배포
+기록에 남긴다.
 
 ## 9. 알려진 데이터·API 부채
 
@@ -781,7 +756,7 @@ delete는 할 수 없다. [`verify-user-rls.js`](../backend/scripts/verify-user-
 - 영업시간 파서는 단순 요일·시간 범위만 안전하게 해석한다.
 - TourAPI 원문 변경이나 복잡한 휴무 표현은 `UNKNOWN`으로 남는다.
 - 카페 분류와 무장애·고령자 태그가 없다.
-- 상세 동기화가 모든 장소를 다시 순회하므로 변경분 전용 전략이 없다.
+- 미디어·반려동물 정보의 신규 전용 동기화 경로는 아직 구현하지 않았다.
 - `vercel.json`의 `/downloads/tteumsae-latest-debug.apk` rewrite는 과거
   `v0.4.0` 파일을 가리키는 레거시 설정이다. 현재 APK 다운로드는 별도
   [`download/`](../download/) 프로젝트에서 관리하므로 수정 또는 제거해야 한다.

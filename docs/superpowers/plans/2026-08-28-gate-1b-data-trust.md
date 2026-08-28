@@ -10,6 +10,25 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-28-gate-1b-data-trust-design.md`
 
+## Execution Status — 2026-08-28
+
+| Task | 상태 | 근거 |
+|---|---|---|
+| 1–7 | 완료 | schema, provider tracking, ops API, 보수적 시간·축제 판정, CSV 도구 커밋 |
+| 8 | 완료 | `9ed9d53`, 강릉 검수 100행, validator와 데이터 계약 테스트 통과 |
+| 9 local | 완료 | Backend 143/143, project check 88 files, Android 75/75·lint·assemble 성공 |
+| 9 live | 조건부 완료 | migration 005~006, 예산 env, 100행 import, 후보 smoke, Production promote 완료 |
+
+운영 적용 중 실제 DB에 migration 005가 빠져 006 ops RPC가 `sync_state.last_started_at`
+부재로 실패했다. 005 미적용을 스키마와 함수 존재 여부로 확인한 뒤 005를 먼저 적용했고,
+006 smoke를 재실행했다. Vercel Hobby 함수 12개 제한은 예약되지 않은 레거시
+`tour-detail-sync`를 제거하고 함수 수 테스트를 추가해 해결했다.
+
+운영 증거: 강릉 활성 474곳, 검수 100/100, 운영시간 VERIFIED 75, 주차 VERIFIED 71,
+Mobility 예약/성공 10/10, 후보 배포 route/recommendations 성공, Production health와
+curation 상세 성공. 인증된 `/api/ops/status` HTTP 호출과 다음 예약 Cron 성공 요약은
+비밀값을 로컬에 복제하지 않는 후속 운영 점검으로 남는다.
+
 ## Global Constraints
 
 - Kakao Mobility 길찾기는 7,000건부터 경고하고 8,000건에서 외부 호출 전에 차단한다.

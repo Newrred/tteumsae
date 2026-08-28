@@ -15,7 +15,7 @@ Supabase와 Kakao 연동을 복구하도록 안내한다. 이 문서에는 환�
 | Android 앱 코드 | `android/app/build.gradle.kts` | 백엔드 기준 URL, 앱 버전 |
 | 백엔드 로컬 | `backend/.env.local` | Vercel 환경변수의 로컬 사본 |
 | 백엔드 운영 | Vercel Project Settings | TourAPI, Kakao REST, Supabase, Cron 설정 |
-| 데이터베이스 | Supabase SQL Editor/CLI | 마이그레이션 3개 |
+| 데이터베이스 | Supabase SQL Editor/CLI | 마이그레이션 001~006 순차 적용 |
 | Kakao Android | Kakao Developers 플랫폼 설정 | 패키지명과 빌드 서명 키 해시 |
 
 ## 2. 절대 커밋하지 않는 항목
@@ -170,8 +170,11 @@ Play Store용 릴리스는 디버그 인증서와 서명이 다르다. 출시 �
 | 이름 | 기본값 | 코드상 상한 | 의미 |
 |---|---:|---:|---|
 | `TOUR_SYNC_MAX_PAGES` | 10 | 25 | 기본 동기화 한 실행의 최대 페이지 |
-| `TOUR_DETAIL_SYNC_BATCH_SIZE` | 10 | 10 | 상세 동기화 한 실행의 장소 수 |
-| `KAKAO_ROUTE_CANDIDATE_LIMIT` | 20 | 20 | 차량 경로를 실제 계산할 후보 수 |
+| `KAKAO_ROUTE_CANDIDATE_LIMIT` | 8 | 8 | 차량 경로를 실제 계산할 후보 수 |
+| `TOUR_INTRO_SYNC_BATCH_SIZE` | 20 | 40 | intro 동기화 한 실행의 장소 수 |
+| `TOUR_SYNC_CONCURRENCY` | 4 | 4 | intro 병렬 요청 수 |
+| `KAKAO_MOBILITY_DAILY_WARNING` | 7000 | budget 이하 | KST 일일 운영 경고선 |
+| `KAKAO_MOBILITY_DAILY_BUDGET` | 8000 | 10000 | 외부 호출 전 hard stop |
 
 빈 값, 숫자가 아니거나 0 이하이면 기본값을 사용한다. 한도를 늘리려면 환경변수만
 바꾸면 안 되고 코드의 `Math.min` 상한, Vercel 실행시간, 외부 API 쿼터와 비용을
@@ -212,6 +215,8 @@ pnpm dlx vercel env ls
 2. [`backend/migrations/002_detail_sync_state.sql`](../backend/migrations/002_detail_sync_state.sql)
 3. [`backend/migrations/003_user_accounts.sql`](../backend/migrations/003_user_accounts.sql)
 4. [`backend/migrations/004_tour_enrichment.sql`](../backend/migrations/004_tour_enrichment.sql)
+5. [`backend/migrations/005_sync_runtime_safety.sql`](../backend/migrations/005_sync_runtime_safety.sql)
+6. [`backend/migrations/006_gate_1b_data_trust.sql`](../backend/migrations/006_gate_1b_data_trust.sql)
 
 그다음 새 프로젝트의 URL과 service role 키를 Vercel 환경변수에 설정하고
 카탈로그·소개/운영정보 Cron을 각각 스모크 테스트한다. Hobby 환경에서는 같은 시간대의
@@ -224,6 +229,9 @@ public.places
 public.sync_state
 public.profiles
 public.user_saved_places
+public.provider_usage_daily
+public.place_curations
+public.effective_places
 ```
 
 모든 테이블은 RLS가 활성화되어 있어야 한다. 장소 데이터는 Android나 익명
@@ -278,6 +286,22 @@ tteumsae://auth-callback
 Provider secret, Supabase service role key, OAuth code와 사용자 access token은
 `local.properties`, Android BuildConfig, Git 또는 로그에 넣지 않는다. Android에는
 Project URL과 publishable key만 설정한다.
+
+## 5.3 Gate 1-B 적용 순서
+
+운영 반영은 다음 순서를 바꾸지 않는다.
+
+1. `places`와 `sync_state`를 한 번의 JSON/CSV 결과로 백업한다.
+2. 005가 적용됐는지 `sync_state.last_started_at`과 `claim_sync_job` 존재 여부를 확인한다.
+3. 누락됐다면 005를 먼저 적용하고 006을 적용한다.
+4. anon/authenticated가 새 table/view/RPC에 접근하지 못하는지 확인한다.
+5. Vercel Production에 7,000/8,000 예산값을 등록하고 새 배포를 만든다.
+6. `node scripts/validate-place-curations.mjs`가 100/100을 통과한 파일만 import한다.
+7. ops 집계의 `dataQuality.curation.reviewed=100`을 확인한 후 승격한다.
+
+Preview에 운영 service role key를 복제하지 않는다. 운영 비밀값을 써야 하는 후보 검증은
+`vercel deploy --prod --skip-domain`으로 도메인에 연결되지 않은 Production-target
+배포를 만든 뒤 점검하고, 통과한 동일 배포만 `vercel promote`한다.
 
 ## 6. 서비스 접근권한 전달표
 
