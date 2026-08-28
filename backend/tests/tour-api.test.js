@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as tourApi from "../lib/tour-api.js";
 
 const { mapTourItem, normalizeTourEnrichment } = tourApi;
+const untrackedUsage = async ({ call }) => call();
 
 test("TourAPI 관광지를 DB 행으로 변환한다", () => {
   const result = mapTourItem(
@@ -194,7 +195,7 @@ test("공통 상세 조회는 현재 KorService2 계약과 단일 객체 응답�
   };
 
   try {
-    const result = await tourApi.fetchTourCommon("123");
+    const result = await tourApi.fetchTourCommon("123", { usageTracker: untrackedUsage });
     assert.equal(result.contentid, "123");
     assert.equal(requestUrl.pathname.endsWith("/detailCommon2"), true);
     assert.equal(requestUrl.searchParams.get("contentId"), "123");
@@ -242,13 +243,45 @@ test("TourAPI 목록·상세·증분 요청은 모두 timeout signal을 전달�
   globalThis.fetch = fetchImpl;
 
   try {
-    await tourApi.fetchTourPage(1, 100, { fetchImpl });
-    await tourApi.fetchTourCommon("123", { fetchImpl });
-    await tourApi.fetchTourSyncPage({ pageNo: 1, fetchImpl });
+    await tourApi.fetchTourPage(1, 100, { fetchImpl, usageTracker: untrackedUsage });
+    await tourApi.fetchTourCommon("123", { fetchImpl, usageTracker: untrackedUsage });
+    await tourApi.fetchTourSyncPage({ pageNo: 1, fetchImpl, usageTracker: untrackedUsage });
     assert.equal(signals.length, 3);
     assert.ok(signals.every((signal) => signal instanceof AbortSignal));
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalServiceKey === undefined) delete process.env.TOUR_API_SERVICE_KEY;
+    else process.env.TOUR_API_SERVICE_KEY = originalServiceKey;
+  }
+});
+
+test("TourAPI result code 22는 쿼터 오류로 분류하고 operation을 기록한다", async () => {
+  const originalServiceKey = process.env.TOUR_API_SERVICE_KEY;
+  process.env.TOUR_API_SERVICE_KEY = "service-key";
+  const operations = [];
+  try {
+    await assert.rejects(
+      tourApi.fetchTourCommon("123", {
+        usageTracker: async (input) => {
+          operations.push(`${input.provider}/${input.operation}`);
+          return input.call();
+        },
+        fetchImpl: async () => Response.json({
+          response: {
+            header: { resultCode: "22", resultMsg: "quota secret detail" },
+            body: {}
+          }
+        })
+      }),
+      (error) => {
+        assert.equal(error.code, "UPSTREAM_QUOTA_EXHAUSTED");
+        assert.equal(error.providerCode, "22");
+        assert.doesNotMatch(error.message, /secret detail/);
+        return true;
+      }
+    );
+    assert.deepEqual(operations, ["TOUR_API/detailCommon2"]);
+  } finally {
     if (originalServiceKey === undefined) delete process.env.TOUR_API_SERVICE_KEY;
     else process.env.TOUR_API_SERVICE_KEY = originalServiceKey;
   }

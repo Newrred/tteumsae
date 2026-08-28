@@ -1,5 +1,9 @@
 import { requiredEnv } from "./env.js";
 import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
+import {
+  createProviderResponseError,
+  trackProviderCall
+} from "./provider-usage.js";
 
 const keywordSearchUrl = "https://dapi.kakao.com/v2/local/search/keyword.json";
 const regionSearchUrl = "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json";
@@ -7,26 +11,30 @@ const regionSearchUrl = "https://dapi.kakao.com/v2/local/geo/coord2regioncode.js
 async function fetchKakaoLocalPayload(
   url,
   apiKey,
-  failureLabel,
-  { signal, fetchImpl = fetch } = {}
+  operation,
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
-  const result = await fetchWithTimeout(url, {
-    headers: { authorization: `KakaoAK ${apiKey}` }
-  }, {
+  return usageTracker({
     provider: "KAKAO_LOCAL",
-    timeoutMs: NETWORK_TIMEOUT_MS.KAKAO_LOCAL,
+    operation,
+    budgetLimit: null,
     signal,
-    fetchImpl,
-    consume: async (response) => ({
-      ok: response.ok,
-      status: response.status,
-      payload: response.ok ? await response.json() : null
-    })
+    now,
+    call: async () => {
+      const response = await fetchWithTimeout(url, {
+        headers: { authorization: `KakaoAK ${apiKey}` }
+      }, {
+        provider: "KAKAO_LOCAL",
+        timeoutMs: NETWORK_TIMEOUT_MS.KAKAO_LOCAL,
+        signal,
+        fetchImpl
+      });
+      if (!response.ok) {
+        throw await createProviderResponseError(response, "KAKAO_LOCAL", { now });
+      }
+      return response.json();
+    }
   });
-  if (!result.ok) {
-    throw new Error(`Kakao Local ${failureLabel} request failed (${result.status})`);
-  }
-  return result.payload;
 }
 
 export function parseKakaoPlaces(payload) {
@@ -58,7 +66,9 @@ export async function searchKakaoPlaces(
     longitude,
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
     signal,
-    fetchImpl = fetch
+    fetchImpl = fetch,
+    usageTracker = trackProviderCall,
+    now
   } = {}
 ) {
   const parameters = new URLSearchParams({
@@ -77,8 +87,8 @@ export async function searchKakaoPlaces(
   const payload = await fetchKakaoLocalPayload(
     `${keywordSearchUrl}?${parameters}`,
     apiKey,
-    "keyword",
-    { signal, fetchImpl }
+    "KEYWORD_SEARCH",
+    { signal, fetchImpl, usageTracker, now }
   );
   return parseKakaoPlaces(payload);
 }
@@ -102,7 +112,9 @@ export async function lookupKakaoRegion(
   {
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
     signal,
-    fetchImpl = fetch
+    fetchImpl = fetch,
+    usageTracker = trackProviderCall,
+    now
   } = {}
 ) {
   const parameters = new URLSearchParams({
@@ -112,8 +124,8 @@ export async function lookupKakaoRegion(
   const payload = await fetchKakaoLocalPayload(
     `${regionSearchUrl}?${parameters}`,
     apiKey,
-    "region",
-    { signal, fetchImpl }
+    "REGION",
+    { signal, fetchImpl, usageTracker, now }
   );
   return parseKakaoRegion(payload);
 }

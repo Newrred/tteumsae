@@ -78,6 +78,25 @@ export function serverError(error) {
   const requestId = crypto.randomUUID();
   const message = error instanceof Error ? error.message : String(error);
   console.error(`[${requestId}] ${message}`);
+  if (
+    error?.code === "UPSTREAM_BUDGET_EXHAUSTED" ||
+    error?.code === "UPSTREAM_QUOTA_EXHAUSTED"
+  ) {
+    const headers = Number.isInteger(error.retryAfterSeconds) && error.retryAfterSeconds > 0
+      ? { "retry-after": String(error.retryAfterSeconds) }
+      : {};
+    return json(
+      {
+        error: {
+          code: error.code,
+          message: "오늘 경로 조회 한도에 도달했습니다. 잠시 후 다시 시도해 주세요.",
+          requestId
+        }
+      },
+      503,
+      headers
+    );
+  }
   if (error?.code === "UPSTREAM_TIMEOUT") {
     return json(
       {

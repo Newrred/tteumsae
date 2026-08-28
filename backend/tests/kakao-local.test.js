@@ -21,6 +21,7 @@ const payload = {
     }
   ]
 };
+const untrackedUsage = async ({ call }) => call();
 
 test("카카오 로컬 장소를 앱용 좌표 모델로 변환한다", () => {
   const places = parseKakaoPlaces(payload);
@@ -37,6 +38,7 @@ test("현재 좌표가 있으면 거리순 반경 검색을 사용한다", async
     latitude: 37.75,
     longitude: 128.88,
     apiKey: "test-key",
+    usageTracker: untrackedUsage,
     fetchImpl: async (url, options) => {
       requestedUrl = { url, options };
       return {
@@ -67,6 +69,7 @@ test("좌표 행정구역이 강원특별자치도인지 판정한다", async ()
   assert.equal(parseKakaoRegion(regionPayload).isGangwon, true);
   const region = await lookupKakaoRegion(37.75, 128.88, {
     apiKey: "test-key",
+    usageTracker: untrackedUsage,
     fetchImpl: async (_url, options) => {
       assert.equal(options.headers.authorization, "KakaoAK test-key");
       return { ok: true, async json() { return regionPayload; } };
@@ -86,14 +89,38 @@ test("Kakao Local 검색·행정구역 요청은 caller signal과 timeout을 결
   await searchKakaoPlaces("강릉역", {
     apiKey: "test-key",
     signal: controller.signal,
+    usageTracker: untrackedUsage,
     fetchImpl
   });
   await lookupKakaoRegion(37.75, 128.88, {
     apiKey: "test-key",
     signal: controller.signal,
+    usageTracker: untrackedUsage,
     fetchImpl
   });
 
   assert.equal(signals.length, 2);
   assert.ok(signals.every((signal) => signal instanceof AbortSignal));
+});
+
+test("Kakao Local 검색과 지역 조회는 서로 다른 operation으로 계측한다", async () => {
+  const operations = [];
+  const usageTracker = async (input) => {
+    operations.push(`${input.provider}/${input.operation}`);
+    return input.call();
+  };
+  const fetchImpl = async (url) => {
+    const isRegion = new URL(url).pathname.includes("coord2regioncode");
+    return Response.json(isRegion
+      ? { documents: [{ region_type: "H", region_1depth_name: "강원특별자치도" }] }
+      : { documents: [] });
+  };
+
+  await searchKakaoPlaces("강릉역", { apiKey: "key", fetchImpl, usageTracker });
+  await lookupKakaoRegion(37.75, 128.88, { apiKey: "key", fetchImpl, usageTracker });
+
+  assert.deepEqual(operations, [
+    "KAKAO_LOCAL/KEYWORD_SEARCH",
+    "KAKAO_LOCAL/REGION"
+  ]);
 });

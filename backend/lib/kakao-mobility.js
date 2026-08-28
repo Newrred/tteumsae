@@ -1,6 +1,12 @@
 import { requiredEnv } from "./env.js";
 import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
 import { estimateRoute } from "./routing.js";
+import {
+  createProviderResponseError,
+  mobilityBudgetPolicy,
+  ProviderResponseError,
+  trackProviderCall
+} from "./provider-usage.js";
 
 const directionsUrl = "https://apis-navi.kakaomobility.com/v1/directions";
 
@@ -116,7 +122,9 @@ export async function fetchKakaoRoute(
   {
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
     signal,
-    fetchImpl = fetch
+    fetchImpl = fetch,
+    usageTracker = trackProviderCall,
+    now
   } = {}
 ) {
   const waypoints = normalizeWaypoints(placeOrWaypoints);
@@ -134,35 +142,52 @@ export async function fetchKakaoRoute(
   if (waypoints.length > 0) {
     query.set("waypoints", waypoints.map(coordinateString).join("|"));
   }
-  const result = await fetchWithTimeout(`${directionsUrl}?${query}`, {
-    headers: {
-      authorization: `KakaoAK ${apiKey}`,
-      "content-type": "application/json"
-    }
-  }, {
+  return usageTracker({
     provider: "KAKAO_MOBILITY",
-    timeoutMs: NETWORK_TIMEOUT_MS.KAKAO_MOBILITY,
+    operation: "DIRECTIONS",
+    budgetLimit: mobilityBudgetPolicy().budgetLimit,
     signal,
-    fetchImpl,
-    consume: async (response) => ({
-      ok: response.ok,
-      status: response.status,
-      payload: response.ok ? await response.json() : null
-    })
+    now,
+    call: async () => {
+      const response = await fetchWithTimeout(`${directionsUrl}?${query}`, {
+        headers: {
+          authorization: `KakaoAK ${apiKey}`,
+          "content-type": "application/json"
+        }
+      }, {
+        provider: "KAKAO_MOBILITY",
+        timeoutMs: NETWORK_TIMEOUT_MS.KAKAO_MOBILITY,
+        signal,
+        fetchImpl
+      });
+      if (!response.ok) {
+        throw await createProviderResponseError(response, "KAKAO_MOBILITY", { now });
+      }
+      const route = parseKakaoRoute(
+        await response.json(),
+        start,
+        destination,
+        waypoints
+      );
+      if (!route) throw new ProviderResponseError("KAKAO_MOBILITY", 200);
+      return route;
+    }
   });
-
-  if (!result.ok) {
-    throw new Error(`Kakao Mobility request failed (${result.status})`);
-  }
-
-  return parseKakaoRoute(result.payload, start, destination, waypoints);
 }
 
 export async function fetchKakaoRoutes(
   start,
   destination,
   places,
-  { concurrency = 5, apiKey, signal, fetchImpl = fetch, baseRoute } = {}
+  {
+    concurrency = 5,
+    apiKey,
+    signal,
+    fetchImpl = fetch,
+    baseRoute,
+    usageTracker = trackProviderCall,
+    now
+  } = {}
 ) {
   const routes = new Map();
   let failedCount = 0;
@@ -178,7 +203,9 @@ export async function fetchKakaoRoutes(
         const route = await fetchKakaoRoute(start, destination, place, {
           apiKey,
           signal,
-          fetchImpl
+          fetchImpl,
+          usageTracker,
+          now
         });
         if (route && baseRoute) {
           route.directMinutes = baseRoute.durationMinutes;
@@ -190,6 +217,12 @@ export async function fetchKakaoRoutes(
         if (route) routes.set(String(place.content_id), route);
         else failedCount += 1;
       } catch (error) {
+        if (
+          error?.code === "UPSTREAM_BUDGET_EXHAUSTED" ||
+          error?.code === "UPSTREAM_QUOTA_EXHAUSTED"
+        ) {
+          throw error;
+        }
         failedCount += 1;
         if (error?.code === "UPSTREAM_TIMEOUT") timeoutError ??= error;
       }

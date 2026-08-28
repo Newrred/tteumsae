@@ -5,6 +5,20 @@ import recommendationsApi from "../api/recommendations.js";
 const start = { latitude: 37.75, longitude: 128.87 };
 const destination = { latitude: 37.75, longitude: 128.9 };
 
+function providerUsageResponse(url) {
+  if (url.pathname.endsWith("/rpc/reserve_provider_usage")) {
+    return Response.json([{
+      allowed: true,
+      reserved_count: 1,
+      remaining_count: 7_999
+    }]);
+  }
+  if (url.pathname.endsWith("/rpc/record_provider_usage_result")) {
+    return new Response(null, { status: 204 });
+  }
+  return null;
+}
+
 test("순수 여유시간으로 자동차 추천의 유효 마감과 corridor를 계산한다", async () => {
   const originalFetch = globalThis.fetch;
   process.env.KAKAO_REST_API_KEY = "test-key";
@@ -12,6 +26,8 @@ test("순수 여유시간으로 자동차 추천의 유효 마감과 corridor를
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
   globalThis.fetch = async (url) => {
     const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
     if (parsed.hostname === "supabase.test") {
       return {
         ok: true,
@@ -124,6 +140,8 @@ test("자동차 추천은 Kakao 후보 경로를 최대 8개만 요청한다", a
   globalThis.fetch = async (url, options = {}) => {
     seenSignals.push(options.signal);
     const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
     if (parsed.hostname === "supabase.test") {
       return {
         ok: true,
@@ -219,6 +237,8 @@ test("근처 자동차 탐색은 출발지와 같은 목적지의 기본 경로�
   let directRouteRequestCount = 0;
   globalThis.fetch = async (url) => {
     const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
     if (parsed.hostname === "supabase.test") {
       return {
         ok: true,

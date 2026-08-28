@@ -6,6 +6,10 @@ import {
   parseKakaoRoute
 } from "../lib/kakao-mobility.js";
 import { UpstreamTimeoutError } from "../lib/fetch-policy.js";
+import {
+  ProviderBudgetExhaustedError,
+  ProviderResponseError
+} from "../lib/provider-usage.js";
 
 const start = { latitude: 37.7519, longitude: 128.8761 };
 const destination = { latitude: 37.7644, longitude: 128.8996 };
@@ -14,6 +18,7 @@ const place = {
   latitude: 37.758,
   longitude: 128.887
 };
+const untrackedUsage = async ({ call }) => call();
 
 const successPayload = {
   routes: [
@@ -84,6 +89,7 @@ test("자동차 길찾기 요청에 경유지와 REST API 키를 적용한다", 
   let request;
   const route = await fetchKakaoRoute(start, destination, place, {
     apiKey: "test-key",
+    usageTracker: untrackedUsage,
     fetchImpl: async (url, options) => {
       request = { url, options };
       return {
@@ -123,10 +129,15 @@ test("직행 요청은 waypoints 파라미터를 보내지 않고 여러 경유�
       }
     };
   };
-  await fetchKakaoRoute(start, destination, [], { apiKey: "test-key", fetchImpl });
+  await fetchKakaoRoute(start, destination, [], {
+    apiKey: "test-key",
+    fetchImpl,
+    usageTracker: untrackedUsage
+  });
   await fetchKakaoRoute(start, destination, [place, { ...place, longitude: 128.888 }], {
     apiKey: "test-key",
-    fetchImpl
+    fetchImpl,
+    usageTracker: untrackedUsage
   });
 
   assert.equal(urls[0].searchParams.has("waypoints"), false);
@@ -144,6 +155,7 @@ test("후보별 실패는 제외하고 성공한 경로만 반환한다", async 
   const result = await fetchKakaoRoutes(start, destination, places, {
     concurrency: 2,
     apiKey: "test-key",
+    usageTracker: untrackedUsage,
     fetchImpl: async (url) => {
       if (new URL(url).searchParams.get("waypoints").startsWith("128.888")) {
         return { ok: false, status: 403 };
@@ -165,6 +177,7 @@ test("후보별 실패는 제외하고 성공한 경로만 반환한다", async 
 test("Kakao Mobility 요청은 timeout signal을 전달한다", async () => {
   const route = await fetchKakaoRoute(start, destination, place, {
     apiKey: "test-key",
+    usageTracker: untrackedUsage,
     fetchImpl: async (_url, options) => {
       assert.ok(options.signal instanceof AbortSignal);
       return Response.json(successPayload);
@@ -178,8 +191,72 @@ test("후보 경로가 모두 timeout이면 정규화 오류를 보존한다", a
   await assert.rejects(
     fetchKakaoRoutes(start, destination, [place], {
       apiKey: "test-key",
+      usageTracker: untrackedUsage,
       fetchImpl: async () => { throw timeout; }
     }),
     (error) => error === timeout
   );
+});
+
+test("Kakao HTTP 400 code -10은 응답 전문 없이 쿼터 오류로 보존한다", async () => {
+  await assert.rejects(
+    fetchKakaoRoute(start, destination, [], {
+      apiKey: "test-key",
+      usageTracker: untrackedUsage,
+      fetchImpl: async () => Response.json(
+        { code: -10, msg: "quota secret detail" },
+        { status: 400 }
+      )
+    }),
+    (error) => {
+      assert.ok(error instanceof ProviderResponseError);
+      assert.equal(error.code, "UPSTREAM_QUOTA_EXHAUSTED");
+      assert.equal(error.providerCode, -10);
+      assert.doesNotMatch(error.message, /quota secret detail/);
+      return true;
+    }
+  );
+});
+
+test("Kakao 429와 5xx는 각각 quota와 server 오류 상태를 보존한다", async () => {
+  await assert.rejects(
+    fetchKakaoRoute(start, destination, [], {
+      apiKey: "test-key",
+      usageTracker: untrackedUsage,
+      fetchImpl: async () => new Response("rate", {
+        status: 429,
+        headers: { "retry-after": "120" }
+      })
+    }),
+    (error) =>
+      error.code === "UPSTREAM_QUOTA_EXHAUSTED" &&
+      error.retryAfterSeconds === 120
+  );
+
+  await assert.rejects(
+    fetchKakaoRoute(start, destination, [], {
+      apiKey: "test-key",
+      usageTracker: untrackedUsage,
+      fetchImpl: async () => new Response("down", { status: 503 })
+    }),
+    (error) => error.code === "UPSTREAM_ERROR" && error.status === 503
+  );
+});
+
+test("Mobility 예산 거부는 실제 HTTP 호출 전에 전파된다", async () => {
+  let providerCalls = 0;
+  await assert.rejects(
+    fetchKakaoRoute(start, destination, [], {
+      apiKey: "test-key",
+      usageTracker: async () => {
+        throw new ProviderBudgetExhaustedError("KAKAO_MOBILITY", "DIRECTIONS", 60);
+      },
+      fetchImpl: async () => {
+        providerCalls += 1;
+        return Response.json(successPayload);
+      }
+    }),
+    { code: "UPSTREAM_BUDGET_EXHAUSTED" }
+  );
+  assert.equal(providerCalls, 0);
 });

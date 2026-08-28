@@ -80,6 +80,61 @@ export class ProviderResponseError extends Error {
   }
 }
 
+async function boundedResponseText(response, maxBytes = 2_048) {
+  if (response?.body?.getReader) {
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+      while (size < maxBytes) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const remaining = maxBytes - size;
+        const chunk = value.subarray(0, remaining);
+        chunks.push(chunk);
+        size += chunk.length;
+        if (value.length > remaining) break;
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return new TextDecoder().decode(bytes);
+  }
+  if (typeof response?.text === "function") {
+    return String(await response.text()).slice(0, maxBytes);
+  }
+  return "";
+}
+
+export async function createProviderResponseError(
+  response,
+  provider,
+  { now } = {}
+) {
+  const status = Number(response?.status) || 0;
+  let providerCode = null;
+  try {
+    const text = await boundedResponseText(response);
+    if (text) providerCode = JSON.parse(text)?.code ?? null;
+  } catch {
+    providerCode = null;
+  }
+  const retryHeader = Number.parseInt(response?.headers?.get?.("retry-after") ?? "", 10);
+  const quota = status === 429 || Number(providerCode) === -10 || String(providerCode) === "22";
+  const retryAfterSeconds = Number.isInteger(retryHeader) && retryHeader > 0
+    ? retryHeader
+    : quota
+      ? secondsUntilNextKstMidnight(currentTime(now))
+      : undefined;
+  return new ProviderResponseError(provider, status, providerCode, { retryAfterSeconds });
+}
+
 export function classifyProviderResult(error) {
   if (
     error?.code === "UPSTREAM_QUOTA_EXHAUSTED" ||

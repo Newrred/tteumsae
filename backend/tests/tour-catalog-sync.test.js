@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import * as tourApi from "../lib/tour-api.js";
 
 const fixedNow = new Date("2026-08-28T00:00:00.000Z");
+const untrackedUsage = async ({ call }) => call();
 
 function restoreEnv(name, value) {
   if (value === undefined) delete process.env[name];
@@ -63,7 +64,8 @@ test("증분 목록은 modifiedtime을 보내고 표출·비표출 항목을 모
     const result = await tourApi.fetchTourSyncPage({
       pageNo: 2,
       numOfRows: 50,
-      modifiedTime: "20260827"
+      modifiedTime: "20260827",
+      usageTracker: untrackedUsage
     });
 
     assert.equal(requestUrl.pathname.endsWith("/areaBasedSyncList2"), true);

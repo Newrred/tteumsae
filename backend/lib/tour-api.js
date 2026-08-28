@@ -1,5 +1,10 @@
 import { requiredEnv } from "./env.js";
 import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
+import {
+  createProviderResponseError,
+  ProviderResponseError,
+  trackProviderCall
+} from "./provider-usage.js";
 
 const endpoint = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2";
 const serviceBaseUrl = "https://apis.data.go.kr/B551011/KorService2";
@@ -21,26 +26,35 @@ function numeric(value, fallback = 0) {
 
 async function fetchTourPayload(
   url,
-  failureLabel,
-  { signal, fetchImpl = fetch } = {}
+  operation,
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
-  const result = await fetchWithTimeout(url, {
-    headers: { accept: "application/json" }
-  }, {
+  return usageTracker({
     provider: "TOUR_API",
-    timeoutMs: NETWORK_TIMEOUT_MS.TOUR_API,
+    operation,
+    budgetLimit: null,
     signal,
-    fetchImpl,
-    consume: async (response) => ({
-      ok: response.ok,
-      status: response.status,
-      payload: response.ok ? await response.json() : null
-    })
+    now,
+    call: async () => {
+      const response = await fetchWithTimeout(url, {
+        headers: { accept: "application/json" }
+      }, {
+        provider: "TOUR_API",
+        timeoutMs: NETWORK_TIMEOUT_MS.TOUR_API,
+        signal,
+        fetchImpl
+      });
+      if (!response.ok) {
+        throw await createProviderResponseError(response, "TOUR_API", { now });
+      }
+      const payload = await response.json();
+      const resultCode = payload?.response?.header?.resultCode;
+      if (resultCode != null && String(resultCode) !== "0000") {
+        throw new ProviderResponseError("TOUR_API", 200, String(resultCode));
+      }
+      return payload;
+    }
   });
-  if (!result.ok) {
-    throw new Error(`TourAPI ${failureLabel} request failed (${result.status})`);
-  }
-  return result.payload;
 }
 
 export function mapTourItem(item, syncedAt = new Date().toISOString()) {
@@ -85,7 +99,7 @@ export function mapTourItem(item, syncedAt = new Date().toISOString()) {
 export async function fetchTourPage(
   pageNo,
   numOfRows = 100,
-  { signal, fetchImpl = fetch } = {}
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
   const query = new URLSearchParams({
     serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
@@ -100,7 +114,7 @@ export async function fetchTourPage(
   const payload = await fetchTourPayload(
     `${endpoint}?${query}`,
     "areaBasedList2",
-    { signal, fetchImpl }
+    { signal, fetchImpl, usageTracker, now }
   );
   const { body, items } = parseTourListPayload(payload, "areaBasedList2");
   const syncedAt = new Date().toISOString();
@@ -117,7 +131,7 @@ export async function fetchTourPage(
 async function fetchTourDetail(
   path,
   parameters,
-  { signal, fetchImpl = fetch } = {}
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
   const query = new URLSearchParams({
     serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
@@ -129,7 +143,7 @@ async function fetchTourDetail(
   const payload = await fetchTourPayload(
     `${serviceBaseUrl}/${path}?${query}`,
     path,
-    { signal, fetchImpl }
+    { signal, fetchImpl, usageTracker, now }
   );
   const header = payload?.response?.header;
   if (!header || String(header.resultCode) !== "0000") {
@@ -144,32 +158,32 @@ async function fetchTourDetail(
 export async function fetchTourIntro(
   contentId,
   contentTypeId,
-  { signal, fetchImpl = fetch } = {}
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
   const items = await fetchTourDetail("detailIntro2", {
     contentId: String(contentId),
     contentTypeId: String(contentTypeId),
     numOfRows: "10",
     pageNo: "1"
-  }, { signal, fetchImpl });
+  }, { signal, fetchImpl, usageTracker, now });
   return items[0] ?? null;
 }
 
 export async function fetchTourCommon(
   contentId,
-  { signal, fetchImpl = fetch } = {}
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
   const items = await fetchTourDetail("detailCommon2", {
     contentId: String(contentId),
     numOfRows: "10",
     pageNo: "1"
-  }, { signal, fetchImpl });
+  }, { signal, fetchImpl, usageTracker, now });
   return items[0] ?? null;
 }
 
 export async function fetchTourImages(
   contentId,
-  { signal, fetchImpl = fetch } = {}
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
   return fetchTourDetail("detailImage2", {
     contentId: String(contentId),
@@ -177,18 +191,18 @@ export async function fetchTourImages(
     subImageYN: "Y",
     numOfRows: "20",
     pageNo: "1"
-  }, { signal, fetchImpl });
+  }, { signal, fetchImpl, usageTracker, now });
 }
 
 export async function fetchPetTourDetail(
   contentId,
-  { signal, fetchImpl = fetch } = {}
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
 ) {
   const items = await fetchTourDetail("detailPetTour2", {
     contentId: String(contentId),
     numOfRows: "10",
     pageNo: "1"
-  }, { signal, fetchImpl });
+  }, { signal, fetchImpl, usageTracker, now });
   return items[0] ?? null;
 }
 
@@ -300,7 +314,9 @@ export async function fetchTourSyncPage({
   numOfRows = 100,
   modifiedTime,
   signal,
-  fetchImpl = fetch
+  fetchImpl = fetch,
+  usageTracker = trackProviderCall,
+  now
 } = {}) {
   const query = new URLSearchParams({
     serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
@@ -318,7 +334,7 @@ export async function fetchTourSyncPage({
   const payload = await fetchTourPayload(
     `${serviceBaseUrl}/areaBasedSyncList2?${query}`,
     "areaBasedSyncList2",
-    { signal, fetchImpl }
+    { signal, fetchImpl, usageTracker, now }
   );
   const { body, items } = parseTourListPayload(payload, "areaBasedSyncList2");
   const syncedAt = new Date().toISOString();
