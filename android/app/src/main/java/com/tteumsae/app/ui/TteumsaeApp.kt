@@ -222,6 +222,7 @@ import com.tteumsae.app.ui.navigation.previousDestination
 import com.tteumsae.app.ui.navigation.safeRestoredDestination
 import com.tteumsae.app.ui.route.RouteFlowViewModel
 import com.tteumsae.app.ui.route.RouteLocationScreen
+import com.tteumsae.app.ui.route.RouteResultsScreen
 import com.tteumsae.app.ui.route.RouteStage
 import com.tteumsae.app.ui.saved.SavedPlacesScreen
 import com.tteumsae.app.ui.saved.SavedPlaceImage
@@ -271,7 +272,7 @@ private val RouteFocusBlue = Color(0xFF2F6FE4)
 private data class MapCandidate(
     val id: String,
     val coordinates: Coordinates,
-    val category: PlaceCategory,
+    val detourMinutes: Int,
     val selectedOrder: Int?,
     val isFocused: Boolean,
 )
@@ -335,14 +336,10 @@ fun TteumsaeApp() {
     var recommendationWarning by remember { mutableStateOf("") }
     var baseRoute by remember { mutableStateOf<RouteSummary?>(null) }
     var corridorRadiusMeters by remember { mutableStateOf(1_600) }
-    var selectedWaypointIds by remember { mutableStateOf(emptyList<String>()) }
     var selected by remember { mutableStateOf<SafeRecommendation?>(null) }
-    var detailRouteChecking by remember { mutableStateOf(false) }
     var activeCriteria by remember { mutableStateOf<SearchCriteria?>(null) }
     var locationChecking by remember { mutableStateOf(false) }
     var currentLocationTarget by remember { mutableStateOf<RequestedMapLocation?>(null) }
-    var routeSummaryExpanded by rememberSaveable { mutableStateOf(true) }
-    var focusedResultPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
     var catalogPlaces by remember { mutableStateOf(emptyList<PlaceCandidate>()) }
     var catalogLoading by remember { mutableStateOf(false) }
     var catalogLoadingMore by remember { mutableStateOf(false) }
@@ -455,7 +452,6 @@ fun TteumsaeApp() {
                 showHomeIntro = false
             },
             onStart = { coordinates ->
-                selectedWaypointIds = emptyList()
                 routeViewModel.startNewSearch()
                 routeViewModel.updateStart(
                     coordinates?.let { RouteLocation("현재 위치", it) },
@@ -669,55 +665,35 @@ fun TteumsaeApp() {
             },
         )
 
-        AppDestination.RESULTS -> ResultsScreen(
+        AppDestination.RESULTS -> RouteResultsScreen(
             criteria = criteria,
             recommendations = routeState.recommendations,
-            warning = routeState.warning,
             baseRoute = routeState.baseRoute,
             corridorRadiusMeters = routeState.corridorRadiusMeters,
-            currentLocationTarget = currentLocationTarget,
-            onCurrentLocationTargetChange = { currentLocationTarget = it },
-            summaryExpanded = routeSummaryExpanded,
-            onSummaryExpandedChange = { routeSummaryExpanded = it },
-            focusedPlaceId = focusedResultPlaceId,
-            onFocusedPlaceIdChange = { focusedResultPlaceId = it },
-            selectedIds = selectedWaypointIds,
-            onSelectedIdsChange = { selectedWaypointIds = it },
-            calculateRoute = { waypoints ->
-                val start = requireNotNull(criteria.startCoordinates)
-                val destination = requireNotNull(criteria.endCoordinates)
-                api.route(start, destination, waypoints)
-            },
+            selectedPlaceId = routeState.selectedPlaceId,
+            warning = routeState.warning,
+            isRefreshing = routeState.isRefreshing,
+            onSelectPlace = routeViewModel::selectPlace,
+            onClearSelection = routeViewModel::clearSelection,
+            onRefresh = routeViewModel::refresh,
             onBack = {
                 routeViewModel.startNewSearch()
                 screen = AppDestination.LOCATION
             },
-            onClearConditions = {
-                routeViewModel.updateFilters(emptySet())
-                routeViewModel.search()
-            },
-            onSearchOtherPlace = {
+            onNewSearch = {
                 routeViewModel.startNewSearch()
                 screen = AppDestination.LOCATION
             },
-            onOpenRoute = openRoute,
-            onSelect = {
-                selected = it
+            onNavigate = { recommendation ->
+                openRoute(listOfNotNull(recommendation))
+            },
+            onDetail = { recommendation ->
+                selected = recommendation
                 screen = AppDestination.DETAIL
             },
         )
 
         AppDestination.DETAIL -> selected?.let {
-            val selectedRecommendations = selectedWaypointIds.mapNotNull { selectedId ->
-                routeState.recommendations.find { recommendation -> recommendation.place.id == selectedId }
-            }
-            val isReplacingLastWaypoint = it.place.id !in selectedWaypointIds &&
-                selectedRecommendations.size >= MAX_KAKAO_WAYPOINTS
-            val detailRoute = if (isReplacingLastWaypoint) {
-                selectedRecommendations.dropLast(1) + it
-            } else {
-                (selectedRecommendations + it).distinctBy { recommendation -> recommendation.place.id }
-            }
             DetailScreen(
                 criteria = criteria,
                 recommendation = it,
@@ -728,64 +704,10 @@ fun TteumsaeApp() {
                         savedPlacesRepository.toggleGuest(it.place, System.currentTimeMillis())
                     }
                 },
-                isOpeningRoute = detailRouteChecking,
-                onOpenRoute = openDetailRoute@{
-                    if (detailRouteChecking) return@openDetailRoute
-                    detailRouteChecking = true
-                    appScope.launch {
-                        try {
-                            val resolved = criteria
-                            val start = resolved.startCoordinates
-                            val destination = resolved.endCoordinates
-                            if (start == null || destination == null) {
-                                Toast.makeText(
-                                    context,
-                                    "경로 좌표를 확인할 수 없어요.",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                return@launch
-                            }
-                            val calculated = runCatching {
-                                api.route(start, destination, detailRoute.map { recommendation -> recommendation.place })
-                            }
-                            val detailRouteSummary = calculated.getOrElse {
-                                Toast.makeText(
-                                    context,
-                                    "실시간 경로를 확인하지 못해 예상 경로로 판단해요.",
-                                    Toast.LENGTH_SHORT,
-                                ).show()
-                                fallbackRouteSummary(resolved, detailRoute)
-                            }
-                            val directRoute = routeState.baseRoute
-                                ?: fallbackBaseRouteSummary(resolved, routeState.recommendations)
-                            val isWithinBudget = isRouteWithinExtraTimeBudget(
-                                baseDrivingMinutes = directRoute.totalDrivingMinutes,
-                                extraTimeMinutes = resolved.deadlineMinutesFromNow,
-                                selectedDrivingMinutes = detailRouteSummary.totalDrivingMinutes,
-                                selectedStayMinutes = detailRoute.sumOf { recommendation -> recommendation.place.stayMinutes },
-                                safetyBufferMinutes = resolved.safetyBufferMinutes,
-                            )
-                            if (!isWithinBudget) {
-                                Toast.makeText(
-                                    context,
-                                    "이 경로는 추천 가능한 범위를 초과해요. 다른 장소를 골라주세요.",
-                                    Toast.LENGTH_LONG,
-                                ).show()
-                                return@launch
-                            }
-                            if (isReplacingLastWaypoint) {
-                                Toast.makeText(
-                                    context,
-                                    "마지막으로 추가한 경유지를 이 장소로 바꿔 안내해요.",
-                                    Toast.LENGTH_LONG,
-                                ).show()
-                            }
-                            selectedWaypointIds = detailRoute.map { recommendation -> recommendation.place.id }
-                            openRoute(detailRoute)
-                        } finally {
-                            detailRouteChecking = false
-                        }
-                    }
+                isOpeningRoute = false,
+                onOpenRoute = {
+                    routeViewModel.selectPlace(it.place.id)
+                    openRoute(listOf(it))
                 },
                 onBack = { screen = AppDestination.RESULTS },
             )
@@ -2812,12 +2734,13 @@ private fun DetailScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         DetailMetric(
                             icon = Icons.Default.Info,
-                            text = "평균 머무름 ${formatMinutes(recommendation.place.stayMinutes)}",
+                            text = recommendation.maximumStayMinutes?.let { "최대 체류 약 ${it}분" }
+                                ?: "체류시간 확인 필요",
                             modifier = Modifier.weight(0.9f),
                         )
                         DetailMetric(
                             icon = Icons.Default.DirectionsCar,
-                            text = "${criteria.startName.ifBlank { "출발지" }}에서 ${recommendation.place.firstLegMinutes}분  |  목적지까지 +${recommendation.place.detourMinutes}분",
+                            text = "${criteria.startName.ifBlank { "출발지" }}에서 ${recommendation.place.firstLegMinutes}분  |  추가 이동 +${recommendation.place.detourMinutes}분",
                             modifier = Modifier.weight(1.4f),
                         )
                     }
@@ -3256,7 +3179,7 @@ private fun MapPlaceholder(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun RouteMap(
+internal fun RouteMap(
     modifier: Modifier = Modifier,
     criteria: SearchCriteria,
     recommendation: SafeRecommendation?,
@@ -3290,7 +3213,7 @@ private fun RouteMap(
                 MapCandidate(
                     id = candidate.place.id,
                     coordinates = Coordinates(latitude, longitude),
-                    category = candidate.place.category,
+                    detourMinutes = candidate.place.detourMinutes,
                     selectedOrder = selectedIds.indexOf(candidate.place.id).takeIf { it >= 0 }?.plus(1),
                     isFocused = candidate.place.id == focusedPlaceId,
                 )
@@ -3543,7 +3466,7 @@ private fun KakaoMapSurface(
                         .setStyles(
                             createCandidateMarkerBitmap(
                                 context,
-                                candidate.category,
+                                candidate.detourMinutes,
                                 selectedOrder = null,
                                 isFocused = false,
                             ),
@@ -3588,7 +3511,7 @@ private fun KakaoMapSurface(
                         .setStyles(
                             createCandidateMarkerBitmap(
                                 context,
-                                candidate.category,
+                                candidate.detourMinutes,
                                 candidate.selectedOrder,
                                 candidate.isFocused,
                             ),
@@ -3672,22 +3595,22 @@ private fun createRouteStopBitmap(context: Context, text: String): Bitmap {
 
 private fun createCandidateMarkerBitmap(
     context: Context,
-    category: PlaceCategory,
+    detourMinutes: Int,
     selectedOrder: Int?,
     isFocused: Boolean,
 ): Bitmap {
     val density = context.resources.displayMetrics.density
-    val size = 48f * density
-    return Bitmap.createBitmap(size.roundToInt(), size.roundToInt(), Bitmap.Config.ARGB_8888).also { bitmap ->
+    val width = 68f * density
+    val height = 40f * density
+    return Bitmap.createBitmap(width.roundToInt(), height.roundToInt(), Bitmap.Config.ARGB_8888).also { bitmap ->
         val canvas = android.graphics.Canvas(bitmap)
-        val center = size / 2f
         val isSelected = selectedOrder != null
         val markerColor = if (isSelected) TteumRed else RouteFocusBlue
         if (isFocused) {
             val halo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
                 color = RouteFocusBlue.copy(alpha = 0.18f).toArgb()
             }
-            canvas.drawCircle(center, center, 22f * density, halo)
+            canvas.drawRoundRect(0f, 0f, width, height, 20f * density, 20f * density, halo)
         }
         val background = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = android.graphics.Color.WHITE
@@ -3701,29 +3624,17 @@ private fun createCandidateMarkerBitmap(
             style = android.graphics.Paint.Style.STROKE
             strokeWidth = (if (isFocused || isSelected) 2.5f else 1.25f) * density
         }
-        val outerRadius = (if (isFocused || isSelected) 19f else 15f) * density
-        canvas.drawCircle(center, center, outerRadius, background)
-        canvas.drawCircle(center, center, outerRadius, border)
-
-        val iconBackground = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        val inset = if (isFocused) 2f * density else 5f * density
+        canvas.drawRoundRect(inset, inset, width - inset, height - inset, 18f * density, 18f * density, background)
+        canvas.drawRoundRect(inset, inset, width - inset, height - inset, 18f * density, 18f * density, border)
+        val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
             color = markerColor.toArgb()
+            textSize = 14f * density
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
         }
-        canvas.drawCircle(center, center, (if (isFocused || isSelected) 13f else 10.5f) * density, iconBackground)
-        drawCategoryMarkerIcon(canvas, category, center, center, density)
-
-        selectedOrder?.let { order ->
-            val badgeCenter = 38f * density
-            canvas.drawCircle(badgeCenter, 10f * density, 9f * density, background)
-            canvas.drawCircle(badgeCenter, 10f * density, 8f * density, iconBackground)
-            val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-                color = android.graphics.Color.WHITE
-                textSize = 10f * density
-                textAlign = android.graphics.Paint.Align.CENTER
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-            }
-            val baseline = 10f * density - (textPaint.ascent() + textPaint.descent()) / 2f
-            canvas.drawText(order.toString(), badgeCenter, baseline, textPaint)
-        }
+        val baseline = height / 2f - (textPaint.ascent() + textPaint.descent()) / 2f
+        canvas.drawText("+${detourMinutes}분", width / 2f, baseline, textPaint)
     }
 }
 

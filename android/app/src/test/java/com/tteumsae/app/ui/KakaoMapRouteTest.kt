@@ -18,6 +18,7 @@ import com.tteumsae.app.domain.route.selectedRouteEstimate
 import com.tteumsae.app.platform.buildKakaoMapMultiRouteUrl
 import com.tteumsae.app.platform.buildKakaoMapRouteQuery
 import com.tteumsae.app.ui.common.compactTags
+import com.tteumsae.app.ui.route.productNavigationRecommendations
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -51,6 +52,40 @@ class KakaoMapRouteTest {
                 Coordinates(37.4, 127.4),
             ),
         )
+    }
+
+    @Test
+    fun `제품 선택은 한 곳만 넘기고 저수준 링크는 여러 경유지를 계속 지원한다`() {
+        fun recommendation(id: String) = SafeRecommendation(
+            place = PlaceCandidate(
+                id = id,
+                name = id,
+                category = PlaceCategory.CAFE,
+                stayMinutes = 0,
+                firstLegMinutes = 10,
+                secondLegMinutes = 10,
+                detourMinutes = 5,
+                reason = "",
+                tags = emptyList(),
+            ),
+            totalMinutes = 20,
+            marginMinutes = 20,
+            safetyLevel = SafetyLevel.AVAILABLE,
+        )
+        val recommendations = (1..5).map { recommendation("place-$it") }
+
+        assertEquals(
+            listOf("place-3"),
+            productNavigationRecommendations("place-3", recommendations).map { it.place.id },
+        )
+        val lowLevelUrl = buildKakaoMapMultiRouteUrl(
+            "출발",
+            Coordinates(37.1, 127.1),
+            (1..5).map { "경유-$it" to Coordinates(37.1 + it / 100.0, 127.1 + it / 100.0) },
+            "도착",
+            Coordinates(37.9, 127.9),
+        )
+        assertEquals(5, Regex("%EA%B2%BD%EC%9C%A0-").findAll(lowLevelUrl).count())
     }
 
     @Test
