@@ -8,11 +8,11 @@
 
 ## 현재 기준선
 
-- Android 활성 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
-- 시간 입력 없음, 내부 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`
-- Android 75/75, Backend 143/143, lint 오류 0, debug APK 빌드 성공
+- Android 활성 흐름: `HOME → LOCATION → LOADING → RESULTS → DETAIL`
+- LOCATION에서 절대 도착 마감과 선택 관심 필터 입력
+- Gate 2 전체 자동 검증 수치는 최종 실행 후 QA 문서에 기록
 - 운영 장소 1,719곳, 강릉 활성 474곳, 강릉 검수 100곳
-- `ARRIVAL_DEADLINE_V1` 요청 검증만 구현, 실제 최대 체류 계산과 Android 연결은 미구현
+- `ARRIVAL_DEADLINE_V1`, 최대 체류 계산, 한 곳 선택과 선택형 출발 알림까지 코드 구현
 - Release signingConfig·서명 AAB·실기기 전체 회귀 없음
 
 ## Gate 0 — 사실·출시 안전 정리
@@ -72,23 +72,23 @@ Cron 수동 실행에서 catalog와 intro 모두 200/completed였고 intro 20건
 
 ### Backend
 
-- [ ] 신규 요청은 절대 `arrivalDeadlineEpochMillis`를 사용
-- [ ] 서버 수신시각 기준 남은 시간을 내림 계산
-- [ ] 이동시간은 분 올림, 최대 체류시간은 5분 단위 내림
-- [ ] 최소 체류 15분, 내부 안전여유 10분 적용
-- [ ] `maximumStayMinutes`, `latestDepartureAt`, `detourMinutes` 반환
-- [ ] 기존 `extraTimeMinutes` 클라이언트 회귀 유지
+- [x] 신규 요청은 절대 `arrivalDeadlineEpochMillis`를 사용
+- [x] 서버 수신시각 기준 남은 시간을 내림 계산
+- [x] 이동시간은 분 올림, 최대 체류시간은 5분 단위 내림
+- [x] 최소 체류 15분, 내부 안전여유 10분 적용
+- [x] `maximumStayMinutes`, `latestDepartureEpochMillis`, `detourMinutes` 반환
+- [x] 기존 `extraTimeMinutes` 클라이언트 회귀 유지
 
 ### Android
 
-- [ ] `RouteFlowViewModel + SavedStateHandle`로 경로 상태 이동
-- [ ] `LOCATION`에서 목적지와 도착 마감을 함께 입력
-- [ ] 별도 필수 CONDITIONS 단계를 제거하고 관심 조건을 선택 필터로 전환
-- [ ] 추천 핀에 `+N분` 추가 이동시간 표시
-- [ ] 결과는 한 곳 선택을 기본 완료 경로로 제공
-- [ ] 선택 후 `이동 기준 최대 약 N분`, `H시 M분까지 출발` 표시
-- [ ] 고정 로컬 출발 알림을 opt-in으로 제공
-- [ ] 카카오맵 실행과 앱 복귀 시 현재 교통 기준 재조회
+- [x] `RouteFlowViewModel + SavedStateHandle`로 경로 상태 이동
+- [x] `LOCATION`에서 목적지와 도착 마감을 함께 입력
+- [x] 별도 필수 CONDITIONS 단계를 제거하고 관심 조건을 선택 필터로 전환
+- [x] 추천 핀에 `+N분` 추가 이동시간 표시
+- [x] 결과는 한 곳 선택을 기본 완료 경로로 제공
+- [x] 선택 후 `이동 기준 최대 약 N분`, `H시 M분까지 출발` 표시
+- [x] 고정 로컬 출발 알림을 opt-in으로 제공
+- [ ] 앱 복귀 자동 재조회 — 현재 명시적 `현재 교통으로 다시 확인`만 구현
 
 ### 구조 원칙
 

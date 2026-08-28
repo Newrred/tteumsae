@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.platform.savedImageCache
 import com.tteumsae.app.ui.common.compactTags
-import com.tteumsae.app.ui.common.formatMinutes
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
@@ -144,12 +143,6 @@ internal fun SavedPlaceCard(
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(place.category.label, color = Color(0xFF55585F), fontSize = 14.sp)
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "평균 머무름 ${formatMinutes(place.stayMinutes)}",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                )
                 Spacer(Modifier.height(8.dp))
                 val compactItems = visibleTags + if (hiddenTagCount > 0) listOf("+ $hiddenTagCount") else emptyList()
                 compactItems.chunked(2).forEach { rowTags ->

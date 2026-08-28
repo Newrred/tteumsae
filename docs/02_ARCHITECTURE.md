@@ -47,15 +47,19 @@ Android에는 카카오 네이티브 지도 키와 Supabase Project URL·publish
 | `android/app/src/main/java/com/tteumsae/app/ui/saved/` | 틈새 발견·저장 목록과 카탈로그 상세 UI |
 | `android/app/src/main/java/com/tteumsae/app/ui/settings/` | 설정 UI와 기기 로컬 저장 안내 |
 | `android/app/src/main/java/com/tteumsae/app/ui/account/` | 로그인 시트, 프로필 편집, 탈퇴 확인과 AccountViewModel |
-| `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt` | 루트 화면 조립, 추천 상태, 지도 흐름 |
+| `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt` | 루트 화면 조립, 홈·상세·공용 지도 연결 |
+| `android/app/src/main/java/com/tteumsae/app/ui/route/` | 경로 입력·결과 UI와 `RouteFlowViewModel` 상태 소유권 |
+| `android/app/src/main/java/com/tteumsae/app/domain/route/` | 도착 마감 검증·표시 계산·경로 입력 모델 |
+| `android/app/src/main/java/com/tteumsae/app/data/route/` | 신규 추천 계약을 감싼 `RouteGateway` |
+| `android/app/src/main/java/com/tteumsae/app/reminder/` | 선택형 출발 알림 저장·예약·수신 |
 | `android/app/src/main/java/com/tteumsae/app/ui/CurrentLocation.kt` | 위치 권한 이후 좌표 취득 |
 | `android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt` | 백엔드 HTTP 호출과 JSON 파싱 |
 | `android/app/src/main/java/com/tteumsae/app/domain/Models.kt` | 앱 도메인 모델 |
 | `android/app/src/main/java/com/tteumsae/app/ui/theme/Theme.kt` | 브랜드 색상과 Compose 테마 |
 
-현재 `TteumsaeApp.kt`는 약 3,882줄이며 저장·설정·계정 화면과 각 데이터 계층은
-분리됐지만 추천 상태와 지도 화면 대부분은 여전히 함께 관리합니다. 다음 단계에서도
-기능을 크게 갈아엎지 않고 상태 소유권을 순차적으로 분리해야 합니다.
+Gate 2에서 경로 입력, 결과와 상태를 `ui/route`로 분리하고 `TteumsaeApp.kt`의
+기존 조건·복수 선택 화면을 제거했습니다. 공용 Kakao 지도 구현과 홈·상세 조립은
+아직 루트 파일에 남아 있으므로 이후에도 수정하는 화면부터 점진 분리합니다.
 
 ### `backend/`
 
@@ -97,12 +101,10 @@ stateDiagram-v2
     HOME --> SETTINGS: "설정 탭"
     SETTINGS --> PROFILE: "프로필 관리"
     PROFILE --> SETTINGS: "뒤로"
-    LOCATION --> CONDITIONS: "유효한 위치 확인"
-    CONDITIONS --> LOCATION: "뒤로"
-    CONDITIONS --> LOADING: "추천 시작"
+    LOCATION --> LOADING: "위치·도착 마감 확인"
     LOADING --> RESULTS: "추천 성공"
-    LOADING --> CONDITIONS: "오류 후 돌아가기"
-    RESULTS --> CONDITIONS: "뒤로"
+    LOADING --> LOCATION: "취소 또는 오류"
+    RESULTS --> LOCATION: "뒤로 또는 새 검색"
     RESULTS --> DETAIL: "상세 보기"
     DETAIL --> RESULTS: "뒤로"
     RESULTS --> LOCATION: "다른 장소 검색"
@@ -111,9 +113,11 @@ stateDiagram-v2
     SETTINGS --> HOME
 ```
 
-상태는 `TteumsaeApp()`의 Compose `remember`와 `rememberSaveable` 변수로 관리합니다. ViewModel, Navigation Compose와 DI는 사용하지 않습니다.
-
-일부 객체는 `remember`만 사용하므로 프로세스가 종료된 뒤 화면 enum만 복원되고 좌표·추천 결과가 사라지는 상태 불일치가 발생할 수 있습니다.
+화면 enum은 루트가 관리하지만 경로 입력과 선택 ID는 `RouteFlowViewModel`과
+`SavedStateHandle`이 소유합니다. 출발·목적 좌표, 절대 도착 마감, 이동수단,
+선택 필터와 선택 장소 ID를 복원합니다. 추천 결과 payload는 재요청이 필요한
+네트워크 결과라 영구 복원하지 않으며, payload 없는 RESULTS/DETAIL은 안전한 입력
+화면으로 되돌립니다. Navigation Compose는 아직 사용하지 않습니다.
 
 ## 4. 추천 요청 흐름
 
@@ -125,7 +129,7 @@ sequenceDiagram
     participant D as "Supabase"
     participant K as "Kakao Mobility"
 
-    U->>A: "출발지·목적지·관심 조건 입력"
+    U->>A: "출발지·목적지·절대 도착 마감 입력"
     A->>B: "POST /api/recommendations"
     B->>K: "출발→목적 직행 baseRoute 계산"
     K-->>B: "기본 시간·거리·통행료·path"
@@ -134,9 +138,9 @@ sequenceDiagram
     B->>B: "거리 기반 1차 필터"
     B->>K: "차량 후보 최대 20개 경로 계산"
     K-->>B: "두 구간 시간·거리·경로"
-    B->>B: "우회+머무름+안전 여유 필터"
-    B-->>A: "추천·예상시간·경로·경고"
-    A-->>U: "지도 핀과 카드"
+    B->>B: "수신시각 기준 최대 체류·출발 마감 계산"
+    B-->>A: "추천·최대 체류·출발 마감·경로"
+    A-->>U: "+N분 핀과 한 곳 선택 카드"
 ```
 
 도보 모드는 Kakao Mobility가 아닌 직선거리 기반 추정값을 사용하고 경고문을 응답합니다.
@@ -164,43 +168,39 @@ Vercel Cron 설정은 UTC `18:20`, `18:40`이며 한국시간으로 다음 날 �
 
 ## 6. 시간 안전 계산
 
-한 장소의 기본 판단:
+`ARRIVAL_DEADLINE_V1` 한 장소의 기본 판단:
 
 ```text
-effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
-detourMinutes = candidateRouteMinutes - baseRouteMinutes
-추천 조건 = detourMinutes + stayMinutes + safetyBufferMinutes <= extraTimeMinutes
+remainingMinutes = floor((arrivalDeadlineEpochMillis - serverReceivedAt) / 60초)
+maximumStayMinutes = floor5(remainingMinutes - firstLegMinutes - secondLegMinutes - 10)
+추천 조건 = maximumStayMinutes >= 15
+latestDepartureAt = arrivalDeadline - secondLegMinutes - 10분
 ```
 
 차량 모드:
 
 - 출발→목적 직행 `baseRoute`와 출발→후보→목적 경로 모두 Kakao Mobility
   응답을 사용합니다.
-- 활성 Android 흐름에는 시간 입력 화면이 없습니다. 추천 API 호환을 위해
-  `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`를 내부 고정값으로
-  전송합니다. 백엔드의 `deadlineMinutes`는 이전 클라이언트 호환용입니다.
-- 따라서 이 값은 사용자의 실제 도착 마감이나 남은 시간이 아니며 현재 앱을
-  `늦지 않음 보장`으로 설명하면 안 됩니다.
+- Android는 사용자가 고른 절대 epoch와 `timeModel=ARRIVAL_DEADLINE_V1`만 보내며
+  안전여유를 입력받거나 전송하지 않습니다. 서버가 10분을 고정 적용합니다.
+- 운영시간이 명확하면 최대 체류를 영업 종료에 맞춰 줄이고, 해석 불가
+  `UNKNOWN`은 후보로 유지해 확인 필요 상태를 표시합니다.
+- 교통과 외부 내비 재계산이 달라질 수 있으므로 정시 도착을 보장한다고 표현하지 않습니다.
 
 도보 모드:
 
 - 직선거리와 보수적인 속도 가정으로 계산합니다.
 - 실제 보행 경로, 횡단보도와 고도 차이는 반영하지 않습니다.
 
-## 7. 복수 경유지 선택
+## 7. 한 곳 선택과 하위 호환
 
-추천 단계에서는 후보 하나씩의 경로를 평가합니다. 결과에서 사용자가 경유지를
-선택하면 다음 방식으로 전체 경로를 갱신합니다.
+추천 단계는 후보 하나씩 출발→후보→목적 경로를 평가합니다. 활성 결과 UI는
+선택 없음 또는 한 곳만 허용하며 같은 장소를 다시 누르면 해제하고 다른 장소를
+누르면 교체합니다. 카카오맵에는 선택한 한 곳과 최종 목적지를 전달합니다.
 
-1. 선택 0개는 직행 `baseRoute`를 유지합니다.
-2. 1~5개는 사용자가 추가한 순서를 유지해 `POST /api/route`로 보냅니다.
-3. 백엔드는 출발지→선택 경유지→목적지 전체를 Kakao Mobility로 계산해
-   시간·거리·통행료·legs·path를 반환합니다.
-4. 요청 실패 시에만 Android가 단일 후보 우회값을 합친 예상 fallback을
-   표시합니다.
-5. 최대 5개 경유지와 최종 목적지를 같은 순서로 카카오맵 URL에 전달합니다.
-
-앱의 통합 경로와 별개로 최종 안내 경로는 카카오맵이 열린 후 다시 계산합니다.
+`POST /api/route`와 Android 저수준 route wrapper의 0~5개 경유지 계약은 기존
+클라이언트 회귀를 막기 위해 유지합니다. 신규 화면은 이 복수 선택 기능을 호출하지
+않습니다. 앱 계산과 별개로 최종 안내 경로는 카카오맵에서 다시 계산됩니다.
 
 ## 8. 붉은 후보 영역
 
@@ -208,8 +208,8 @@ detourMinutes = candidateRouteMinutes - baseRouteMinutes
 
 - 직행 `baseRoute.path`를 기준선으로 사용합니다.
 - 경로상의 여러 원을 겹쳐 영역처럼 표시합니다.
-- 반경은 `extraTimeMinutes × 20m`, 최소 800m, 최대 8km입니다. 현재 내부값은
-  1,440분이므로 활성 흐름에서는 최대 8km가 됩니다.
+- 반경은 `(남은 분 - 직행 분) × 20m`, 최소 800m, 최대 8km입니다. 신규 흐름의
+  남은 분은 서버 수신시각과 절대 도착 마감으로 계산합니다.
 
 다음 버전에서 실제 corridor API나 서버의 경로 거리 조건으로 교체하기 전까지 `탐색 후보 범위` 수준으로만 설명해야 합니다.
 
@@ -220,7 +220,9 @@ detourMinutes = candidateRouteMinutes - baseRouteMinutes
 - 로그인 사용자의 원격 `user_saved_places` 테이블과 RLS는 준비됐지만 Room과의
   동기화는 별도 후속 계획이며, 현재 설정 UI가 이를 완료된 기능처럼 표시하지 않습니다.
 - 저장 해제와 전체 비우기는 행을 즉시 삭제하지 않고 `desired_saved=false` tombstone으로 남깁니다.
-- 저장 스냅샷에는 장소명, 분류, 평균 머무름, 주소, 좌표, 이미지 URL, 태그, 운영시간과 휴무일을 포함하고 추천 시점의 경로 시간·거리는 저장하지 않습니다.
+- 저장 스냅샷에는 장소명, 분류, 내부 기본 체류값, 주소, 좌표, 이미지 URL, 태그,
+  운영시간과 휴무일을 포함합니다. 기본 체류값은 호환 데이터로 보관하지만 사용자
+  UI에는 평균 체류로 표시하지 않습니다. 추천 시점의 경로 시간·거리는 저장하지 않습니다.
 - 앱 업데이트 시 기존 `saved_places/entries` JSON은 Room 트랜잭션 성공 후 한 번만 이전·제거합니다.
 - SharedPreferences는 홈 안내 날짜 등 단순 기기 설정에만 계속 사용합니다.
 - 이미지는 앱에서 직접 내려받아 메모리 `LruCache`에 보관합니다.
@@ -243,7 +245,8 @@ detourMinutes = candidateRouteMinutes - baseRouteMinutes
 
 다음 Android 코드는 현재 운영 흐름에 연결되지 않습니다.
 
-- `ui/TteumsaeApp.kt`의 `TimeScreen`, `TimeSliderThumb`, `ModeSelector`
+- `SearchMode.NEARBY`, 도보 추천과 legacy 상대시간 직렬화 경로
+- 저수준 `/api/route` 복수 경유지 호환 wrapper
 - `data/DataContracts.kt`의 저장소·경로 인터페이스와 샘플 구현
 - `data/SamplePlaces.kt`
 - `domain/TimeSafeEngine.kt`

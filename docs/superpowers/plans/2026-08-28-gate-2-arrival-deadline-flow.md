@@ -54,7 +54,7 @@
 - Consumes: raw recommendation JSON and injected `nowEpochMillis`
 - Produces: `parseRecommendationRequest(value, { nowEpochMillis })` with internal `deadlineMinutes`, fixed buffer 10, and preserved absolute epoch
 
-- [ ] **Step 1: Write failing validation tests**
+- [x] **Step 1: Write failing validation tests**
 
 Add cases proving that V1 accepts only this shape:
 
@@ -77,13 +77,13 @@ Also assert rejection of missing/unsafe/float epochs, past values, 14m59s, and a
 Reject unknown models and V1 combined with `deadlineMinutes`, `extraTimeMinutes`, or
 `safetyBufferMinutes`.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run: `node --test tests/validation.test.js` from `backend/`.
 
 Expected: failures because the parser still requires relative minutes.
 
-- [ ] **Step 3: Implement the minimal parser branch**
+- [x] **Step 3: Implement the minimal parser branch**
 
 Use:
 
@@ -98,11 +98,11 @@ const remainingWholeMinutes = Math.floor(
 
 V1 validates `15 <= remainingWholeMinutes <= 1440`, returns the absolute epoch plus internal `deadlineMinutes`, and never trusts a client buffer. Leave the legacy branch byte-compatible.
 
-- [ ] **Step 4: Run validation tests and verify GREEN**
+- [x] **Step 4: Run validation tests and verify GREEN**
 
 Run: `node --test tests/validation.test.js`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/lib/validation.js backend/tests/validation.test.js
@@ -123,7 +123,7 @@ git commit -m "feat: 절대 도착 마감 요청 검증"
 - Consumes: Task 1 normalized V1 criteria and Kakao leg minutes
 - Produces: `minimumStayMinutes`, `maximumStayMinutes`, `latestDepartureEpochMillis`, `route.detourMinutes`, and V1 meta
 
-- [ ] **Step 1: Write failing pure calculation tests**
+- [x] **Step 1: Write failing pure calculation tests**
 
 Pin these formulas with injected `now`:
 
@@ -136,19 +136,19 @@ latestDepartureEpochMillis = arrivalDeadlineEpochMillis
 
 Assert 15 minutes is included, 14 is excluded, route seconds already rounded to leg minutes stay conservative, 39 raw minutes becomes 35, and legacy results still expose `stayMinutes` without V1-only fields.
 
-- [ ] **Step 2: Add failing operating-window cap tests**
+- [x] **Step 2: Add failing operating-window cap tests**
 
 For a clearly parsed schedule, find the longest 5-minute departure window accepted by `evaluateOperatingWindow`. Cap maximum stay at that value; exclude if the cap is below 15. Keep `UNKNOWN` candidates and label them `operationStatus="UNKNOWN"`.
 
-- [ ] **Step 3: Run focused tests and verify RED**
+- [x] **Step 3: Run focused tests and verify RED**
 
 Run: `node --test tests/time-safe.test.js tests/recommendations.test.js`.
 
-- [ ] **Step 4: Implement the V1 branch without changing legacy math**
+- [x] **Step 4: Implement the V1 branch without changing legacy math**
 
 Use `MINIMUM_STAY_MINUTES=15`, floor the available stay to a 5-minute boundary, evaluate departure at the capped stay, and select route candidates with 15 minutes instead of `default_stay_minutes` for V1.
 
-- [ ] **Step 5: Freeze request time before parsing and return meta**
+- [x] **Step 5: Freeze request time before parsing and return meta**
 
 `recommendations.js` creates `requestNow` before parsing and passes its epoch into Task 1. V1 meta contains:
 
@@ -164,7 +164,7 @@ Use `MINIMUM_STAY_MINUTES=15`, floor the available stay to a 5-minute boundary, 
 
 Do not return client-relative `extraTimeMinutes` for V1.
 
-- [ ] **Step 6: Verify GREEN and full backend regression**
+- [x] **Step 6: Verify GREEN and full backend regression**
 
 Run:
 
@@ -174,7 +174,7 @@ pnpm test
 pnpm check
 ```
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add backend/lib/time-safe.js backend/api/recommendations.js backend/tests/time-safe.test.js backend/tests/recommendations.test.js
@@ -187,6 +187,11 @@ Deploy the committed Backend as a Vercel Preview. Verify one literal V1 request,
 `extraTimeMinutes` request, a 14m59s rejection, unauthenticated ops 401, and health 200. Promote
 that exact deployment only if every check passes, then repeat V1 and legacy smoke through
 `tteumsae-backend-one.vercel.app`. Record only non-secret request summaries in the deployment doc.
+
+2026-08-28 실행 기록: 새 Preview 두 건이 Vercel API에서 `BLOCKED/UNKNOWN`으로
+빌드를 시작하지 못했다. 기존 Ready Preview의 health 200은 확인했지만 Preview에는
+Supabase·Kakao 환경변수가 없고 배포 코드도 V1 이전 버전이라 유효 V1 smoke로
+대체할 수 없다. Production은 승격하거나 변경하지 않았으며 이 단계는 미완료로 남긴다.
 
 ---
 
@@ -202,11 +207,11 @@ that exact deployment only if every check passes, then repeat V1 and legacy smok
 - Consumes: KST clock choice, current epoch, route legs
 - Produces: deadline validity, immutable V1 criteria fields, and selected-stop timing
 
-- [ ] **Step 1: Write failing policy tests**
+- [x] **Step 1: Write failing policy tests**
 
 Cover same-day selection, passed clock rolling to next day, exactly 15 minutes, 14m59s invalid, exactly 24 hours, more than 24 hours, and no implicit selected time.
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -214,11 +219,11 @@ Run:
 .\gradlew.bat testDebugUnitTest --tests "com.tteumsae.app.domain.route.ArrivalDeadlinePolicyTest"
 ```
 
-- [ ] **Step 3: Implement pure constants and functions**
+- [x] **Step 3: Implement pure constants and functions**
 
 Create `resolveArrivalDeadline`, `remainingWholeMinutes`, `isValidArrivalDeadline`, `floorToFiveMinutes`, and `selectedStopTiming`. Use `java.time` and no Android `Context`.
 
-- [ ] **Step 4: Evolve models additively**
+- [x] **Step 4: Evolve models additively**
 
 Add nullable `arrivalDeadlineEpochMillis` to `SearchCriteria` while the legacy UI still compiles. Add nullable V1 fields to `SafeRecommendation`:
 
@@ -228,9 +233,9 @@ val maximumStayMinutes: Int? = null
 val latestDepartureEpochMillis: Long? = null
 ```
 
-- [ ] **Step 5: Run focused and existing domain tests**
+- [x] **Step 5: Run focused and existing domain tests**
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/domain android/app/src/test/java/com/tteumsae/app/domain
@@ -250,17 +255,17 @@ git commit -m "feat: 도착 마감 경로 도메인 추가"
 - Consumes: `SearchCriteria.arrivalDeadlineEpochMillis`
 - Produces: `RouteGateway.recommendations(criteria)` and `calculateRoute(...)`
 
-- [ ] **Step 1: Write failing serialization tests**
+- [x] **Step 1: Write failing serialization tests**
 
 Expose `internal fun recommendationRequestBody(criteria): JSONObject`. V1 must contain `arrivalDeadlineEpochMillis` and `timeModel`, and must omit `deadlineMinutes`, `extraTimeMinutes`, and `safetyBufferMinutes`. Legacy criteria must serialize exactly as before.
 
-- [ ] **Step 2: Write failing parser tests**
+- [x] **Step 2: Write failing parser tests**
 
 Parse a literal V1 fixture and require all V1 fields. A malformed V1 item is an `ApiException`; legacy items keep safe defaults.
 
-- [ ] **Step 3: Run `TteumsaeApiTest` and verify RED**
+- [x] **Step 3: Run `TteumsaeApiTest` and verify RED**
 
-- [ ] **Step 4: Add `RouteGateway` and implement it in `TteumsaeApi`**
+- [x] **Step 4: Add `RouteGateway` and implement it in `TteumsaeApi`**
 
 Keep the existing 0~5 `route` method as a compatibility wrapper. Add a waypoint value type so ViewModel does not depend on `PlaceCandidate` serialization details.
 
@@ -275,15 +280,15 @@ interface RouteGateway {
 }
 ```
 
-- [ ] **Step 5: Return response meta in `RecommendationResult`**
+- [x] **Step 5: Return response meta in `RecommendationResult`**
 
 Carry `calculatedAtEpochMillis`, absolute deadline, minimum stay, base route, and corridor radius into the domain result.
 
-- [ ] **Step 6: Run focused tests and compile**
+- [x] **Step 6: Run focused tests and compile**
 
 Run `TteumsaeApiTest`, then `compileDebugKotlin`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/data android/app/src/test/java/com/tteumsae/app/data
@@ -306,19 +311,19 @@ git commit -m "feat: Android 도착 마감 API 연결"
 - Consumes: Task 4 `RouteGateway`
 - Produces: single-source route state, one selected ID, search/refresh/select events
 
-- [ ] **Step 1: Write failing ViewModel transition tests**
+- [x] **Step 1: Write failing ViewModel transition tests**
 
 Test valid search, loading success, empty results, failure, one selection replacing the previous selection, deselection, new search clearing selection, and refresh retaining the last safe result on failure.
 
-- [ ] **Step 2: Write failing SavedStateHandle tests**
+- [x] **Step 2: Write failing SavedStateHandle tests**
 
 Persist only location names/coordinates, deadline, filter names, and selected place ID. When recommendations payload is absent after process recreation, state returns to LOCATION and never exposes empty RESULTS/DETAIL.
 
-- [ ] **Step 3: Verify RED**
+- [x] **Step 3: Verify RED**
 
 Run focused ViewModel and navigation tests.
 
-- [ ] **Step 4: Implement state and factory**
+- [x] **Step 4: Implement state and factory**
 
 Use `viewModelFactory { initializer { RouteFlowViewModel(createSavedStateHandle(), gateway) } }`. Do not put `Context` in the ViewModel.
 
@@ -327,13 +332,13 @@ The public event surface is `updateStart`, `updateDestination`, `updateDeadline`
 owns input values, `RouteStage`, recommendations, base route, selected place ID, calculation time,
 warning, and error; Compose does not duplicate those mutable values.
 
-- [ ] **Step 5: Remove `CONDITIONS` from active navigation**
+- [x] **Step 5: Remove `CONDITIONS` from active navigation**
 
 `previousDestination(LOADING/RESULTS)` returns LOCATION. Restore fallbacks with locations but no payload also return LOCATION.
 
-- [ ] **Step 6: Verify GREEN and compile**
+- [x] **Step 6: Verify GREEN and compile**
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/AppContainer.kt android/app/src/main/java/com/tteumsae/app/ui/navigation android/app/src/main/java/com/tteumsae/app/ui/route android/app/src/test/java/com/tteumsae/app/ui
@@ -353,29 +358,29 @@ git commit -m "feat: 한 곳 경로 상태와 복원 구현"
 - Consumes: Task 5 state/events
 - Produces: valid start/destination/deadline and optional filter selection
 
-- [ ] **Step 1: Extract current location UI without behavior changes and compile**
+- [x] **Step 1: Extract current location UI without behavior changes and compile**
 
 Move `LocationScreen`, its search field, and permission/settings dialogs. Keep theme tokens passed explicitly or `internal`; do not move unrelated HOME/SAVED/SETTINGS code.
 
-- [ ] **Step 2: Write failing continue-policy tests**
+- [x] **Step 2: Write failing continue-policy tests**
 
 Start, destination, and a 15~1,440-minute deadline are required. Manual location search remains valid without location permission.
 
-- [ ] **Step 3: Verify RED**
+- [x] **Step 3: Verify RED**
 
-- [ ] **Step 4: Add an unselected-by-default Material time picker row**
+- [x] **Step 4: Add an unselected-by-default Material time picker row**
 
 The picker may open at a convenient clock value, but state changes only after confirmation. Show next-day date explicitly after rollover. Do not add a time-only screen.
 
-- [ ] **Step 5: Place optional intent/filter chips on LOCATION**
+- [x] **Step 5: Place optional intent/filter chips on LOCATION**
 
 Default is `아무거나`; no filter is required to search. The existing `ConditionsScreen` is no longer navigated.
 
-- [ ] **Step 6: Wire LOCATION directly to LOADING and verify**
+- [x] **Step 6: Wire LOCATION directly to LOADING and verify**
 
 Run focused tests, full unit tests, and `compileDebugKotlin`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt android/app/src/main/java/com/tteumsae/app/ui/route android/app/src/test/java/com/tteumsae/app/ui/route
@@ -398,33 +403,33 @@ git commit -m "feat: 위치 화면에 도착 마감 입력 추가"
 - Consumes: Task 5 state and Task 4 result fields
 - Produces: one-stop selection summary, direct fallback, refresh, and external navigation
 
-- [ ] **Step 1: Extract map/result components and compile before behavior changes**
+- [x] **Step 1: Extract map/result components and compile before behavior changes**
 
-- [ ] **Step 2: Write failing result policy tests**
+- [x] **Step 2: Write failing result policy tests**
 
 Pins use `+N분`; only one selected ID exists; selection exposes `maximumStayMinutes` and formatted latest departure; navigation receives at most one product waypoint while the low-level helper remains 0~5 compatible.
 
-- [ ] **Step 3: Verify RED**
+- [x] **Step 3: Verify RED**
 
-- [ ] **Step 4: Implement the selected and empty states**
+- [x] **Step 4: Implement the selected and empty states**
 
 Before selection, emphasize detour only. After selection show `이동 기준 최대 약 N분` and `H시 M분까지 출발하면 돼요`. Remove average-stay and five-waypoint copy.
 
 If no candidate is eligible, keep the destination navigation CTA. If base route plus buffer already misses the deadline, show the stronger immediate-departure warning.
 
-- [ ] **Step 5: Add lifecycle-safe manual refresh**
+- [x] **Step 5: Add lifecycle-safe manual refresh**
 
 On app resume show `현재 교통으로 다시 확인`; refresh through ViewModel. Failure preserves the last result and adds a non-blocking stale warning.
 
-- [ ] **Step 6: Keep DETAIL as secondary place information**
+- [x] **Step 6: Keep DETAIL as secondary place information**
 
 `상세보기` may open DETAIL, but `이곳 들르기` and `길 안내 시작` remain the primary one-stop completion path.
 
-- [ ] **Step 7: Verify GREEN**
+- [x] **Step 7: Verify GREEN**
 
 Run focused tests, all Android unit tests, compile, and lint.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/ui android/app/src/test/java/com/tteumsae/app/ui
@@ -454,29 +459,29 @@ git commit -m "feat: 한 곳 도착 마감 결과 UI 적용"
 - Consumes: one selected stop and `latestDepartureEpochMillis`
 - Produces: expiring local trip snapshot and best-effort reminder 5 minutes before departure
 
-- [ ] **Step 1: Write failing storage and policy tests**
+- [x] **Step 1: Write failing storage and policy tests**
 
 Cover JSON round-trip, replacement, deadline+2h expiry, reminder trigger, immediate warning when trigger passed but departure has not, skip after departure, and rescheduling only valid trips.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
-- [ ] **Step 3: Implement storage without location history**
+- [x] **Step 3: Implement storage without location history**
 
 Store only confirmed start/destination/one stop coordinates, absolute deadline, latest departure, navigation URL, and expiry. Do not store background samples.
 
-- [ ] **Step 4: Implement inexact alarms**
+- [x] **Step 4: Implement inexact alarms**
 
 Use `AlarmManager.setAndAllowWhileIdle(RTC_WAKEUP, ...)`, immutable/update-current `PendingIntent`, and a short receiver. Add `POST_NOTIFICATIONS` and `RECEIVE_BOOT_COMPLETED`; do not add exact-alarm or background-location permission.
 
-- [ ] **Step 5: Add contextual opt-in**
+- [x] **Step 5: Add contextual opt-in**
 
 The RESULTS row says `출발 5분 전에 알려드릴까요?`, defaults off, and requests Android 13+ notification permission only when enabled. Denial leaves navigation enabled.
 
-- [ ] **Step 6: Verify GREEN**
+- [x] **Step 6: Verify GREEN**
 
 Run reminder tests, full unit tests, `lintDebug`, and `assembleDebug`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add android/app/src/main android/app/src/test
@@ -502,11 +507,11 @@ git commit -m "feat: 출발 마감 로컬 알림 추가"
 - Consumes: all prior tasks
 - Produces: no active legacy product flow and evidence-backed Gate 2 status
 
-- [ ] **Step 1: Remove transitional route state**
+- [x] **Step 1: Remove transitional route state**
 
 Delete `DEFAULT_EXTRA_TIME_MINUTES`, user-editable buffer, product five-waypoint selection, `CONDITIONS` UI navigation, and deadline-relative new-flow math. Keep legacy API compatibility code and tests.
 
-- [ ] **Step 2: Search for stale active copy**
+- [x] **Step 2: Search for stale active copy**
 
 Run:
 
@@ -516,7 +521,7 @@ rg -n "평균 머무름|경유지는 최대 5곳|DEFAULT_EXTRA_TIME_MINUTES|AppD
 
 Classify historical decision/plan mentions separately; active UI must contain none.
 
-- [ ] **Step 3: Run complete local verification**
+- [x] **Step 3: Run complete local verification**
 
 Backend:
 
@@ -531,11 +536,11 @@ Android:
 .\gradlew.bat testDebugUnitTest lintDebug assembleDebug
 ```
 
-- [ ] **Step 4: Update documents with only verified implementation**
+- [x] **Step 4: Update documents with only verified implementation**
 
 Record request/response examples, file ownership, notification fallback, process restoration, test counts, and any unverified device-only cases. Do not mark device QA complete without a device.
 
-- [ ] **Step 5: Commit and push**
+- [x] **Step 5: Commit and push**
 
 ```powershell
 git add android backend docs
@@ -545,15 +550,15 @@ git push -u newrred codex/gate-2-arrival-deadline-flow
 
 ## Acceptance Checklist
 
-- [ ] LOCATION 한 화면에서 출발지·목적지·도착 마감과 선택 필터를 정한다.
-- [ ] 신규 Android는 절대 마감만 전송하고 서버는 수신시각으로 남은 분을 내림 계산한다.
-- [ ] 모든 후보가 내부 여유 10분 뒤 최소 15분을 확보한다.
-- [ ] 핀에는 추가 이동시간, 한 곳 선택 후에는 최대 체류시간과 출발 권장시각이 보인다.
-- [ ] 후보 없음과 직행도 빠듯한 상태 모두 외부 내비 CTA를 제공한다.
-- [ ] 위치·알림 권한 거부가 추천과 길 안내를 막지 않는다.
-- [ ] 새 검색·프로세스 복원·새로고침이 잘못된 선택 또는 빈 RESULTS를 노출하지 않는다.
-- [ ] 기존 `extraTimeMinutes` 추천과 `/api/route` 0~5곳 테스트가 계속 통과한다.
-- [ ] Backend·Android 자동 검증이 통과하고 실기기 미검증 항목은 문서에 남는다.
+- [x] LOCATION 한 화면에서 출발지·목적지·도착 마감과 선택 필터를 정한다.
+- [x] 신규 Android는 절대 마감만 전송하고 서버는 수신시각으로 남은 분을 내림 계산한다.
+- [x] 모든 후보가 내부 여유 10분 뒤 최소 15분을 확보한다.
+- [x] 핀에는 추가 이동시간, 한 곳 선택 후에는 최대 체류시간과 출발 권장시각이 보인다.
+- [x] 후보 없음과 직행도 빠듯한 상태 모두 외부 내비 CTA를 제공한다.
+- [x] 위치·알림 권한 거부가 추천과 길 안내를 막지 않는다.
+- [x] 새 검색·프로세스 복원·새로고침이 잘못된 선택 또는 빈 RESULTS를 노출하지 않는다.
+- [x] 기존 `extraTimeMinutes` 추천과 `/api/route` 0~5곳 테스트가 계속 통과한다.
+- [x] Backend·Android 자동 검증이 통과하고 실기기 미검증 항목은 문서에 남는다.
 
 ## Official Platform Constraints Rechecked — 2026-08-28
 

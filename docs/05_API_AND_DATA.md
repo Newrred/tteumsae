@@ -22,7 +22,10 @@ Android 앱
   │                                 ├─ Kakao Mobility 출발→목적 baseRoute
   │                                 ├─ baseRoute corridor의 Supabase 후보 조회
   │                                 └─ 후보별 출발→후보→목적 경로
-  └─ 경유지 변경 ────────────> POST /api/route
+  └─ 길 안내 ────────────────> 카카오맵 직행 또는 경유지 1곳
+
+Legacy client
+  └─ 복수 경유지 재계산 ─────> POST /api/route
                                     └─ Kakao Mobility 출발→경유지 0~5→목적
 
 Vercel Cron
@@ -40,12 +43,11 @@ Vercel Cron
 - Android에는 Supabase publishable key만 있고 service role key는 없다.
 - 추천 API는 직행 `baseRoute`를 먼저 계산한 뒤 그 경로 주변에서 후보를 찾고,
   후보 한 곳을 경유하는 경로를 장소별로 계산한다.
-- 결과 화면에서 경유지를 추가·제거할 때 Android가 `POST /api/route`를 호출한다.
-  선택 순서의 0~5개 경유지를 포함한 통합 시간·거리·통행료·path를 Kakao
-  Mobility에서 다시 계산한다.
-- 현재 활성 UI에는 시간 입력 단계가 없다. Android는 넓은 경로 주변 후보 탐색을
-  위한 내부 호환값 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`를 보낸다.
-  이는 사용자의 실제 도착 마감이나 보장 시간이 아니다.
+- 활성 결과 UI는 경유지 없음 또는 한 곳만 카카오맵에 전달한다. `POST /api/route`의
+  0~5개 계약은 이전 클라이언트 호환용으로 유지하며 신규 화면에서는 호출하지 않는다.
+- 활성 UI는 LOCATION에서 절대 도착 마감을 입력한다. Android는
+  `timeModel=ARRIVAL_DEADLINE_V1`과 `arrivalDeadlineEpochMillis`를 보내며,
+  서버가 고정 안전여유 10분과 최소 체류 15분을 적용한다.
 
 ## 2. 공통 HTTP 규칙
 
@@ -336,6 +338,54 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
 
 요청은 반드시 `Content-Type: application/json`이어야 한다.
 
+#### 활성 `ARRIVAL_DEADLINE_V1` 계약
+
+```json
+{
+  "mode": "ON_THE_WAY",
+  "start": { "latitude": 37.7519, "longitude": 128.8761 },
+  "destination": { "latitude": 37.7644, "longitude": 128.8996 },
+  "arrivalDeadlineEpochMillis": 1787907600000,
+  "timeModel": "ARRIVAL_DEADLINE_V1",
+  "transport": "CAR",
+  "categories": ["ATTRACTION", "CULTURE"]
+}
+```
+
+도착 마감은 서버가 요청을 수신한 시각부터 정확히 15분 이상 24시간 이하여야 한다.
+epoch는 안전한 정수여야 하며 `deadlineMinutes`, `extraTimeMinutes`,
+`safetyBufferMinutes`를 함께 보내면 400이다. 서버는 수신시각을 한 번 고정하고
+남은 분을 내림 계산하며 안전여유 10분을 주입한다.
+
+V1 추천 항목에는 다음 필드가 반드시 포함된다.
+
+```json
+{
+  "minimumStayMinutes": 15,
+  "maximumStayMinutes": 35,
+  "latestDepartureEpochMillis": 1787906400000,
+  "operationStatus": "OPEN"
+}
+```
+
+응답 `meta`에는 `timeModel`, `calculatedAtEpochMillis`,
+`arrivalDeadlineEpochMillis`, `minimumStayMinutes=15`, `safetyBufferMinutes=10`이
+포함된다. Android V1 파서는 이 값이나 추천별 최대 체류·출발 마감이 없으면 정상
+결과로 조용히 대체하지 않고 계약 오류로 처리한다.
+
+```text
+maximumStayMinutes = floor5(
+  floor((arrivalDeadline - serverReceivedAt) / 60초)
+  - firstLegMinutes - secondLegMinutes - 10
+)
+latestDepartureAt = arrivalDeadline - secondLegMinutes - 10분
+```
+
+최대 체류 15분 미만은 제외한다. 영업 종료가 명확하면 최대 체류를 더 짧게 제한하고,
+운영시간 해석이 불가능한 `UNKNOWN`은 후보로 남긴다.
+
+#### Legacy 상대시간 계약
+
 ```json
 {
   "mode": "ON_THE_WAY",
@@ -359,9 +409,8 @@ Kakao Local 좌표→행정구역 응답에서 행정동(`region_type=H`)을 우
 | `transport` | `CAR` 또는 `WALK` |
 | `categories` | 내부 카테고리 배열. 생략/빈 배열이면 전체 |
 
-`deadlineMinutes`와 `extraTimeMinutes`는 정확히 하나만 보내야 한다. 현재 Android
-활성 흐름은 `ON_THE_WAY`, `CAR`, 사용자가 입력한 `extraTimeMinutes`, 안전여유와
-선택 카테고리를 보낸다.
+`deadlineMinutes`와 `extraTimeMinutes`는 legacy 요청에서 정확히 하나만 보내야 한다.
+현재 Android 활성 흐름은 이 형식을 보내지 않는다.
 
 응답 예시:
 
@@ -451,7 +500,7 @@ totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한�
 `corridorCandidateCount`는 path 거리 필터 후 개수다. 둘 다 DB 전체 개수가
 아니다.
 
-#### 시간 공식
+#### Legacy 시간 공식
 
 ```text
 effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
@@ -476,7 +525,7 @@ effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
 
 `marginMinutes`는 위 식의 `남는 순수 여유`이며 사용자가 입력한 시간에서
 우회와 머무름을 제외하고 남은 값이다. 교통과 실제 체류시간이 바뀔 수 있으므로
-여전히 `100% 도착 보장`으로 표현하지 않는다.
+V1과 legacy 모두 교통·외부 내비 차이 때문에 `100% 도착 보장`으로 표현하지 않는다.
 
 #### 자동차 경로의 현재 한계
 
@@ -500,8 +549,9 @@ effectiveDeadlineMinutes = baseRouteMinutes + extraTimeMinutes
 
 ### 5.7 `POST /api/route`
 
-결과 화면에서 경유지를 추가하거나 제거할 때 호출하는 차량 전용 통합 경로
-계산 API다.
+이전 클라이언트가 경유지를 추가하거나 제거할 때 호출하는 차량 전용 통합 경로
+계산 API다. 신규 Gate 2 제품 UI는 이 API를 호출하지 않지만 0~5개 호환 계약과
+테스트는 유지한다.
 
 ```json
 {
@@ -729,7 +779,8 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 | 추천 요청 변경 | `lib/validation.js`, `api/recommendations.js` | `data/TteumsaeApi.kt` |
 | 추천 응답 변경 | `lib/time-safe.js`, 경로 provider | `toRecommendation()` |
 | 기준 경로/corridor 변경 | `api/recommendations.js`, `lib/routing.js`, `lib/kakao-mobility.js` | `RecommendationResult`, `RouteMap` |
-| 복수 경유 경로 변경 | `api/route.js`, `parseRouteRequest`, `fetchKakaoRoute` | `TteumsaeApi.route`, `RouteSummary`, `ResultsScreen` |
+| legacy 복수 경유 계약 변경 | `api/route.js`, `parseRouteRequest`, `fetchKakaoRoute` | `TteumsaeApi.route`, `RouteSummary` |
+| Gate 2 한 곳 결과 변경 | `lib/time-safe.js`, `api/recommendations.js` | `ui/route/ResultsScreen.kt`, `RouteFlowViewModel` |
 | 운영시간 규칙 변경 | `lib/time-safe.js`, `lib/tour-api.js` | 카드 상태 문구 |
 | Cron 변경 | `vercel.json`, `api/cron/*` | 해당 없음 |
 

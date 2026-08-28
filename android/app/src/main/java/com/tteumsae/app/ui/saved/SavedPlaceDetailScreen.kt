@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.PlaceCandidate
-import com.tteumsae.app.ui.common.formatMinutes
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 
@@ -94,12 +93,6 @@ internal fun SavedPlaceDetailScreen(
                         Spacer(Modifier.height(6.dp))
                         Text(place.address, color = TteumMuted)
                     }
-                    Spacer(Modifier.height(18.dp))
-                    Text(
-                        "평균 머무름 ${formatMinutes(place.stayMinutes)}",
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
                     Spacer(Modifier.height(14.dp))
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(place.tags) { tag ->

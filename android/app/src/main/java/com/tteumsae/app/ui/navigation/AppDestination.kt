@@ -6,7 +6,6 @@ enum class AppDestination {
     SETTINGS,
     PROFILE,
     LOCATION,
-    CONDITIONS,
     LOADING,
     RESULTS,
     DETAIL,
@@ -26,7 +25,6 @@ fun previousDestination(current: AppDestination): AppDestination = when (current
 
     AppDestination.PROFILE -> AppDestination.SETTINGS
 
-    AppDestination.CONDITIONS -> AppDestination.LOCATION
     AppDestination.LOADING,
     AppDestination.RESULTS,
     -> AppDestination.LOCATION
@@ -41,7 +39,6 @@ fun safeRestoredDestination(
     hasResults: Boolean,
     hasDetail: Boolean,
 ): AppDestination = when (current) {
-    AppDestination.CONDITIONS,
     AppDestination.LOADING,
     -> AppDestination.LOCATION
 
