@@ -21,6 +21,7 @@ const requiredFiles = [
   "migrations/003_user_accounts.sql",
   "migrations/004_tour_enrichment.sql",
   "migrations/005_sync_runtime_safety.sql",
+  "migrations/006_gate_1b_data_trust.sql",
   "scripts/verify-user-rls.js",
   "lib/supabase-auth.js",
   "lib/fetch-policy.js",
