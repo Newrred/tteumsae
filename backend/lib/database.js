@@ -358,3 +358,73 @@ export async function finishSyncJob({
     signal
   }));
 }
+
+export async function reserveProviderUsage({
+  provider,
+  operation,
+  usageDate,
+  budgetLimit = null,
+  units = 1,
+  signal
+}) {
+  const result = await databaseRequest("rpc/reserve_provider_usage", {
+    method: "POST",
+    body: {
+      p_provider: provider,
+      p_operation: operation,
+      p_usage_date: usageDate,
+      p_budget_limit: budgetLimit,
+      p_units: units
+    },
+    signal
+  });
+  const row = Array.isArray(result) ? result[0] : result;
+  if (!row || typeof row.allowed !== "boolean") {
+    throw new Error("Provider usage reservation returned an invalid response");
+  }
+  return {
+    allowed: row.allowed,
+    reservedCount: Number(row.reserved_count) || 0,
+    remainingCount: row.remaining_count == null
+      ? null
+      : Math.max(0, Number(row.remaining_count) || 0)
+  };
+}
+
+export async function recordProviderUsageResult({
+  provider,
+  operation,
+  usageDate,
+  resultKind,
+  units = 1,
+  signal
+}) {
+  await databaseRequest("rpc/record_provider_usage_result", {
+    method: "POST",
+    body: {
+      p_provider: provider,
+      p_operation: operation,
+      p_usage_date: usageDate,
+      p_result_kind: resultKind,
+      p_units: units
+    },
+    signal
+  });
+}
+
+export async function getGate1bOpsStatus({
+  usageDate,
+  sigunguCode = 1,
+  curationTarget = 100,
+  signal
+}) {
+  return databaseRequest("rpc/get_gate_1b_ops_status", {
+    method: "POST",
+    body: {
+      p_usage_date: usageDate,
+      p_sigungu_code: sigunguCode,
+      p_curation_target: curationTarget
+    },
+    signal
+  });
+}

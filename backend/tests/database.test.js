@@ -1,6 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { claimSyncJob, finishSyncJob, listPlaces } from "../lib/database.js";
+import {
+  claimSyncJob,
+  finishSyncJob,
+  getGate1bOpsStatus,
+  listPlaces,
+  recordProviderUsageResult,
+  reserveProviderUsage
+} from "../lib/database.js";
 
 test("새 Supabase secret 키는 PostgREST Bearer 토큰으로 보내지 않는다", async () => {
   process.env.SUPABASE_URL = "https://supabase.test";
@@ -169,6 +176,95 @@ test("동기화 작업 finish는 소유 token과 결과 요약을 보낸다", as
     });
     assert.ok(request.init.signal instanceof AbortSignal);
     assert.equal(finished, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
+
+test("공급자 사용량 예약 RPC 결과를 서버 필드명으로 정규화한다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return Response.json([{
+      allowed: true,
+      reserved_count: 7_000,
+      remaining_count: 1_000
+    }]);
+  };
+  try {
+    const reservation = await reserveProviderUsage({
+      provider: "KAKAO_MOBILITY",
+      operation: "DIRECTIONS",
+      usageDate: "2026-08-28",
+      budgetLimit: 8_000
+    });
+    assert.match(request.url, /\/rpc\/reserve_provider_usage$/);
+    assert.deepEqual(JSON.parse(request.init.body), {
+      p_provider: "KAKAO_MOBILITY",
+      p_operation: "DIRECTIONS",
+      p_usage_date: "2026-08-28",
+      p_budget_limit: 8_000,
+      p_units: 1
+    });
+    assert.deepEqual(reservation, {
+      allowed: true,
+      reservedCount: 7_000,
+      remainingCount: 1_000
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
+
+test("공급자 결과와 운영 상태는 대응 RPC 인자를 그대로 보낸다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), body: JSON.parse(init.body) });
+    if (String(url).endsWith("record_provider_usage_result")) {
+      return new Response(null, { status: 204 });
+    }
+    return Response.json({ usage: [], syncJobs: [], dataQuality: {} });
+  };
+  try {
+    await recordProviderUsageResult({
+      provider: "KAKAO_LOCAL",
+      operation: "REGION",
+      usageDate: "2026-08-28",
+      resultKind: "success"
+    });
+    const status = await getGate1bOpsStatus({ usageDate: "2026-08-28" });
+
+    assert.deepEqual(requests[0].body, {
+      p_provider: "KAKAO_LOCAL",
+      p_operation: "REGION",
+      p_usage_date: "2026-08-28",
+      p_result_kind: "success",
+      p_units: 1
+    });
+    assert.deepEqual(requests[1].body, {
+      p_usage_date: "2026-08-28",
+      p_sigungu_code: 1,
+      p_curation_target: 100
+    });
+    assert.deepEqual(status, { usage: [], syncJobs: [], dataQuality: {} });
   } finally {
     globalThis.fetch = originalFetch;
     if (originalUrl === undefined) delete process.env.SUPABASE_URL;
