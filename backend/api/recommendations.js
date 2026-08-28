@@ -37,6 +37,7 @@ export default {
       );
     }
 
+    const requestNow = new Date();
     const deadline = createDeadline(NETWORK_TIMEOUT_MS.RECOMMENDATION);
     try {
       let bounds = createSearchBounds(
@@ -51,7 +52,7 @@ export default {
           criteria.start,
           criteria.destination,
           [],
-          { signal: deadline.signal }
+          { signal: deadline.signal, now: requestNow }
         );
         if (!baseRoute) {
           throw new Error("Kakao Mobility could not calculate the base route");
@@ -110,13 +111,14 @@ export default {
         const routeCandidates = selectRouteCandidates(
           effectiveCriteria,
           candidates,
-          routeLimit
+          routeLimit,
+          requestNow
         );
         const routeResult = await fetchKakaoRoutes(
           criteria.start,
           criteria.destination,
           routeCandidates,
-          { baseRoute, signal: deadline.signal }
+          { baseRoute, signal: deadline.signal, now: requestNow }
         );
         routeCandidateCount = routeCandidates.length;
         routeFailureCount = routeResult.failedCount;
@@ -125,14 +127,20 @@ export default {
           effectiveCriteria,
           routeCandidates,
           (_start, _destination, place) =>
-            routeResult.routes.get(String(place.content_id))
+            routeResult.routes.get(String(place.content_id)),
+          requestNow
         ).slice(0, 20);
       } else {
         routeProvider = "ESTIMATE";
         routeCandidateCount = candidates.length;
         warning =
           "도보 이동시간은 직선거리 기반 예상값이에요. 실제 길과 신호에 따라 더 오래 걸릴 수 있으니 여유 있게 출발해 주세요.";
-        recommendations = recommendPlaces(effectiveCriteria, candidates).slice(0, 20);
+        recommendations = recommendPlaces(
+          effectiveCriteria,
+          candidates,
+          estimateRoute,
+          requestNow
+        ).slice(0, 20);
       }
 
       return json({

@@ -112,3 +112,26 @@ test("도착 후 체류 중 문을 닫는 장소는 제외한다", () => {
     "OPEN"
   );
 });
+
+test("정확 경로 도착이 KST 자정을 넘으면 끝난 축제를 다시 제외한다", () => {
+  const festival = {
+    ...place,
+    category: "FESTIVAL",
+    content_type_id: 15,
+    event_start_date: "2026-08-28",
+    event_end_date: "2026-08-28"
+  };
+  const crossingRoute = () => ({
+    ...fixedRoute(),
+    firstLegMinutes: 20
+  });
+
+  const result = recommendPlaces(
+    { ...criteria, deadlineMinutes: 80 },
+    [festival],
+    crossingRoute,
+    new Date("2026-08-28T14:50:00.000Z")
+  );
+
+  assert.deepEqual(result, []);
+});

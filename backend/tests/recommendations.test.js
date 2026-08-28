@@ -303,3 +303,116 @@ test("근처 자동차 탐색은 출발지와 같은 목적지의 기본 경로�
     globalThis.fetch = originalFetch;
   }
 });
+
+test("날짜가 유효한 축제만 Kakao 후보 경로를 요청한다", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.KAKAO_REST_API_KEY = "test-key";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  const candidateRouteRequests = [];
+  const festivals = [
+    {
+      content_id: "active",
+      source: "TOUR_API",
+      name: "진행 축제",
+      category: "FESTIVAL",
+      content_type_id: 15,
+      event_start_date: "2000-01-01",
+      event_end_date: "2999-12-31",
+      latitude: 37.75,
+      longitude: 128.88,
+      default_stay_minutes: 20
+    },
+    {
+      content_id: "past",
+      source: "TOUR_API",
+      name: "지난 축제",
+      category: "FESTIVAL",
+      content_type_id: 15,
+      event_start_date: "2000-01-01",
+      event_end_date: "2000-01-02",
+      latitude: 37.75,
+      longitude: 128.881,
+      default_stay_minutes: 20
+    },
+    {
+      content_id: "future",
+      source: "TOUR_API",
+      name: "미래 축제",
+      category: "FESTIVAL",
+      content_type_id: 15,
+      event_start_date: "2999-01-01",
+      event_end_date: "2999-12-31",
+      latitude: 37.75,
+      longitude: 128.882,
+      default_stay_minutes: 20
+    },
+    {
+      content_id: "incomplete",
+      source: "TOUR_API",
+      name: "날짜 누락 축제",
+      category: "FESTIVAL",
+      content_type_id: 15,
+      event_start_date: null,
+      event_end_date: "2999-12-31",
+      latitude: 37.75,
+      longitude: 128.883,
+      default_stay_minutes: 20
+    }
+  ];
+
+  globalThis.fetch = async (url) => {
+    const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
+    if (parsed.hostname === "supabase.test") return Response.json(festivals);
+
+    const waypoints = parsed.searchParams.get("waypoints");
+    if (waypoints) candidateRouteRequests.push(waypoints);
+    const waypointCount = waypoints?.split("|").length ?? 0;
+    return Response.json({
+      routes: [{
+        result_code: 0,
+        summary: {
+          distance: waypointCount ? 3_500 : 3_000,
+          duration: waypointCount ? 720 : 600,
+          fare: { toll: 0 }
+        },
+        sections: Array.from({ length: waypointCount + 1 }, () => ({
+          distance: waypointCount ? 1_750 : 3_000,
+          duration: waypointCount ? 360 : 600,
+          roads: [{ vertexes: [128.87, 37.75, 128.9, 37.75] }]
+        }))
+      }]
+    });
+  };
+
+  try {
+    const response = await recommendationsApi.fetch(new Request(
+      "https://example.test/api/recommendations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "ON_THE_WAY",
+          start,
+          destination,
+          extraTimeMinutes: 90,
+          safetyBufferMinutes: 10,
+          transport: "CAR",
+          categories: []
+        })
+      }
+    ));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.meta.corridorCandidateCount, 4);
+    assert.equal(body.meta.routeCandidateCount, 1);
+    assert.equal(candidateRouteRequests.length, 1);
+    assert.match(candidateRouteRequests[0], /^128\.88,37\.75$/);
+    assert.deepEqual(body.data.map((item) => item.place.content_id), ["active"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

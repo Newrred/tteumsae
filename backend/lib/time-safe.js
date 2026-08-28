@@ -1,5 +1,6 @@
 import { estimateRoute } from "./routing.js";
 import { evaluateOperatingWindow } from "./operating-hours.js";
+import { isFestivalVisitEligible } from "./festival-eligibility.js";
 
 export function safetyLevel(marginMinutes) {
   if (marginMinutes >= 20) return "COMFORTABLE";
@@ -22,7 +23,12 @@ export function operationStatus(place, arrival = new Date()) {
   }).status;
 }
 
-export function selectRouteCandidates(criteria, places, limit = 20) {
+export function selectRouteCandidates(
+  criteria,
+  places,
+  limit = 20,
+  now = new Date()
+) {
   return places
     .filter((place) => matchesCategories(criteria, place))
     .map((place) => {
@@ -34,6 +40,10 @@ export function selectRouteCandidates(criteria, places, limit = 20) {
       );
       return {
         place,
+        eligible: isFestivalVisitEligible(
+          place,
+          new Date(now.getTime() + route.firstLegMinutes * 60_000)
+        ),
         estimatedTotalMinutes:
           route.firstLegMinutes +
           place.default_stay_minutes +
@@ -41,6 +51,7 @@ export function selectRouteCandidates(criteria, places, limit = 20) {
         estimatedDetourMinutes: route.detourMinutes
       };
     })
+    .filter((item) => item.eligible)
     .sort(
       (left, right) =>
         left.estimatedDetourMinutes - right.estimatedDetourMinutes ||
@@ -67,6 +78,7 @@ export function recommendPlaces(
       );
       if (!route) return null;
       const arrival = new Date(now.getTime() + route.firstLegMinutes * 60_000);
+      if (!isFestivalVisitEligible(place, arrival)) return null;
       const departure = new Date(
         arrival.getTime() + Math.max(0, place.default_stay_minutes) * 60_000
       );
