@@ -45,27 +45,119 @@ test("순수 여유시간을 받고 기존 전체시간과 동시에 입력하�
   );
 });
 
-test("도착 마감 V1 모델은 deadlineMinutes와 함께만 허용한다", () => {
+test("도착 마감 V1은 절대시각으로 서버 기준 남은 분과 고정 여유를 계산한다", () => {
+  const nowEpochMillis = Date.parse("2026-08-28T03:00:00.000Z");
   const v1Request = {
-    ...valid,
-    safetyBufferMinutes: 10,
+    mode: "ON_THE_WAY",
+    start: valid.start,
+    destination: valid.destination,
+    arrivalDeadlineEpochMillis: nowEpochMillis + 45 * 60_000,
+    transport: "CAR",
+    categories: [],
     timeModel: "ARRIVAL_DEADLINE_V1"
   };
-  assert.deepEqual(parseRecommendationRequest(v1Request), v1Request);
+
+  assert.deepEqual(
+    parseRecommendationRequest(v1Request, { nowEpochMillis }),
+    {
+      ...v1Request,
+      deadlineMinutes: 45,
+      safetyBufferMinutes: 10
+    }
+  );
+});
+
+test("도착 마감 V1은 상대시간과 사용자 안전여유의 혼용을 거부한다", () => {
+  const nowEpochMillis = Date.parse("2026-08-28T03:00:00.000Z");
+  const base = {
+    mode: "ON_THE_WAY",
+    start: valid.start,
+    destination: valid.destination,
+    arrivalDeadlineEpochMillis: nowEpochMillis + 45 * 60_000,
+    transport: "CAR",
+    categories: [],
+    timeModel: "ARRIVAL_DEADLINE_V1"
+  };
+
+  for (const forbidden of [
+    { deadlineMinutes: 45 },
+    { extraTimeMinutes: 45 },
+    { safetyBufferMinutes: 10 }
+  ]) {
+    assert.throws(
+      () => parseRecommendationRequest({ ...base, ...forbidden }, { nowEpochMillis }),
+      /함께 입력할 수 없습니다/
+    );
+  }
 
   assert.throws(
     () => parseRecommendationRequest({ ...valid, timeModel: "UNKNOWN" }),
     /timeModel/
   );
 
-  const { deadlineMinutes: _deadlineMinutes, ...withoutDeadline } = valid;
   assert.throws(
     () => parseRecommendationRequest({
-      ...withoutDeadline,
-      extraTimeMinutes: 90,
-      timeModel: "ARRIVAL_DEADLINE_V1"
-    }),
-    /deadlineMinutes/
+      ...valid,
+      arrivalDeadlineEpochMillis: nowEpochMillis + 45 * 60_000
+    }, { nowEpochMillis }),
+    /ARRIVAL_DEADLINE_V1에서만/
+  );
+});
+
+test("도착 마감 V1은 정확한 15분부터 24시간까지만 허용한다", () => {
+  const nowEpochMillis = Date.parse("2026-08-28T03:00:00.000Z");
+  const request = (arrivalDeadlineEpochMillis) => ({
+    mode: "ON_THE_WAY",
+    start: valid.start,
+    destination: valid.destination,
+    arrivalDeadlineEpochMillis,
+    transport: "CAR",
+    categories: [],
+    timeModel: "ARRIVAL_DEADLINE_V1"
+  });
+
+  assert.equal(
+    parseRecommendationRequest(
+      request(nowEpochMillis + 15 * 60_000),
+      { nowEpochMillis }
+    ).deadlineMinutes,
+    15
+  );
+  assert.equal(
+    parseRecommendationRequest(
+      request(nowEpochMillis + 24 * 60 * 60_000),
+      { nowEpochMillis }
+    ).deadlineMinutes,
+    1440
+  );
+  assert.throws(
+    () => parseRecommendationRequest(
+      request(nowEpochMillis + 15 * 60_000 - 1),
+      { nowEpochMillis }
+    ),
+    /15분 이상/
+  );
+  assert.throws(
+    () => parseRecommendationRequest(
+      request(nowEpochMillis + 24 * 60 * 60_000 + 1),
+      { nowEpochMillis }
+    ),
+    /24시간 이내/
+  );
+  assert.throws(
+    () => parseRecommendationRequest(request(nowEpochMillis - 1), { nowEpochMillis }),
+    /15분 이상/
+  );
+  assert.throws(
+    () => parseRecommendationRequest(request(1.5), { nowEpochMillis }),
+    /정수/
+  );
+  assert.throws(
+    () => parseRecommendationRequest(
+      request(Number.MAX_SAFE_INTEGER + 1),
+      { nowEpochMillis }
+    ),
+    /안전한 정수/
   );
 });
 
