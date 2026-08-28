@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { listPlaces } from "../lib/database.js";
+import { claimSyncJob, finishSyncJob, listPlaces } from "../lib/database.js";
 
 test("새 Supabase secret 키는 PostgREST Bearer 토큰으로 보내지 않는다", async () => {
   process.env.SUPABASE_URL = "https://supabase.test";
@@ -101,5 +101,79 @@ test("상세 컬럼 마이그레이션 전에는 레거시 장소 조회로 폴�
     assert.equal("raw" in place, false);
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test("동기화 작업 claim은 service-role RPC에 원자 lease 인자를 보낸다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return Response.json(true);
+  };
+  try {
+    const claimed = await claimSyncJob({
+      jobId: "tour_intro",
+      token: "run-1",
+      now: "2026-08-28T00:00:00.000Z",
+      leaseSeconds: 90
+    });
+    assert.match(request.url, /\/rest\/v1\/rpc\/claim_sync_job$/);
+    assert.deepEqual(JSON.parse(request.init.body), {
+      p_id: "tour_intro",
+      p_token: "run-1",
+      p_now: "2026-08-28T00:00:00.000Z",
+      p_lease_seconds: 90
+    });
+    assert.ok(request.init.signal instanceof AbortSignal);
+    assert.equal(claimed, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
+
+test("동기화 작업 finish는 소유 token과 결과 요약을 보낸다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return Response.json(false);
+  };
+  try {
+    const finished = await finishSyncJob({
+      jobId: "tour_intro",
+      token: "run-1",
+      status: "partial",
+      summary: { processed: 4, failed: 1 },
+      finishedAt: "2026-08-28T00:00:30.000Z"
+    });
+    assert.match(request.url, /\/rest\/v1\/rpc\/finish_sync_job$/);
+    assert.deepEqual(JSON.parse(request.init.body), {
+      p_id: "tour_intro",
+      p_token: "run-1",
+      p_status: "partial",
+      p_summary: { processed: 4, failed: 1 },
+      p_finished_at: "2026-08-28T00:00:30.000Z"
+    });
+    assert.ok(request.init.signal instanceof AbortSignal);
+    assert.equal(finished, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
   }
 });

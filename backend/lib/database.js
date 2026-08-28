@@ -1,4 +1,5 @@
 import { requiredEnv } from "./env.js";
+import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
 import { supabaseApiHeaders } from "./supabase-auth.js";
 
 const basePublicColumns = [
@@ -61,7 +62,7 @@ function toPublicPlace(row) {
   };
 }
 
-async function databaseRequest(path, { method = "GET", body, prefer } = {}) {
+async function databaseRequest(path, { method = "GET", body, prefer, signal } = {}) {
   const baseUrl = requiredEnv("SUPABASE_URL").replace(/\/$/, "");
   const serviceKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
   const headers = supabaseApiHeaders(serviceKey, serviceKey, {
@@ -69,15 +70,24 @@ async function databaseRequest(path, { method = "GET", body, prefer } = {}) {
   });
   if (prefer) headers.prefer = prefer;
 
-  const response = await fetch(`${baseUrl}/rest/v1/${path}`, {
+  const result = await fetchWithTimeout(`${baseUrl}/rest/v1/${path}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body)
+  }, {
+    provider: "SUPABASE",
+    timeoutMs: NETWORK_TIMEOUT_MS.SUPABASE,
+    signal,
+    consume: async (response) => ({
+      status: response.status,
+      ok: response.ok,
+      text: response.status === 204 ? "" : await response.text()
+    })
   });
-  if (!response.ok) {
-    const detail = await response.text();
-    const error = new Error(`Database request failed (${response.status}): ${detail.slice(0, 300)}`);
-    error.status = response.status;
+  if (!result.ok) {
+    const detail = result.text;
+    const error = new Error(`Database request failed (${result.status}): ${detail.slice(0, 300)}`);
+    error.status = result.status;
     try {
       const databaseError = JSON.parse(detail);
       error.code = databaseError.code;
@@ -88,21 +98,20 @@ async function databaseRequest(path, { method = "GET", body, prefer } = {}) {
     }
     throw error;
   }
-  if (response.status === 204) return null;
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
+  if (result.status === 204) return null;
+  return result.text ? JSON.parse(result.text) : null;
 }
 
-async function requestPublicPlaceRows(query) {
+async function requestPublicPlaceRows(query, signal) {
   try {
-    return await databaseRequest(`places?${query}`);
+    return await databaseRequest(`places?${query}`, { signal });
   } catch (error) {
     const missingEnrichmentColumn =
       error.code === "42703" &&
       enrichmentPublicColumns.some((column) => error.databaseMessage?.includes(`places.${column}`));
     if (!missingEnrichmentColumn) throw error;
     query.set("select", legacyPublicColumns);
-    return databaseRequest(`places?${query}`);
+    return databaseRequest(`places?${query}`, { signal });
   }
 }
 
@@ -114,7 +123,8 @@ export async function listPlaces({
   minLatitude,
   maxLatitude,
   minLongitude,
-  maxLongitude
+  maxLongitude,
+  signal
 } = {}) {
   const query = new URLSearchParams({
     select: publicColumns,
@@ -130,22 +140,22 @@ export async function listPlaces({
   if (Number.isFinite(minLongitude)) query.set("longitude", `gte.${minLongitude}`);
   if (Number.isFinite(maxLongitude)) query.append("longitude", `lte.${maxLongitude}`);
 
-  const rows = await requestPublicPlaceRows(query);
+  const rows = await requestPublicPlaceRows(query, signal);
   return rows.map(toPublicPlace);
 }
 
-export async function getPlace(contentId) {
+export async function getPlace(contentId, { signal } = {}) {
   const query = new URLSearchParams({
     select: publicColumns,
     content_id: `eq.${contentId}`,
     is_active: "eq.true",
     limit: "1"
   });
-  const rows = await requestPublicPlaceRows(query);
+  const rows = await requestPublicPlaceRows(query, signal);
   return rows?.[0] ? toPublicPlace(rows[0]) : null;
 }
 
-export async function upsertPlaces(rows) {
+export async function upsertPlaces(rows, { signal } = {}) {
   if (rows.length === 0) return;
   const chunkSize = 100;
   for (let index = 0; index < rows.length; index += chunkSize) {
@@ -153,12 +163,13 @@ export async function upsertPlaces(rows) {
     await databaseRequest("places?on_conflict=content_id", {
       method: "POST",
       body: chunk,
-      prefer: "resolution=merge-duplicates,return=minimal"
+      prefer: "resolution=merge-duplicates,return=minimal",
+      signal
     });
   }
 }
 
-export async function listPlacesForEnrichment({ limit = 5, offset = 0 } = {}) {
+export async function listPlacesForEnrichment({ limit = 5, offset = 0, signal } = {}) {
   const query = new URLSearchParams({
     select: "content_id,content_type_id,image_url,raw",
     is_active: "eq.true",
@@ -166,10 +177,10 @@ export async function listPlacesForEnrichment({ limit = 5, offset = 0 } = {}) {
     limit: String(Math.min(Math.max(limit, 1), 20)),
     offset: String(Math.max(offset, 0))
   });
-  return databaseRequest(`places?${query}`);
+  return databaseRequest(`places?${query}`, { signal });
 }
 
-export async function updatePlaceEnrichment(place, enrichment) {
+export async function updatePlaceEnrichment(place, enrichment, { signal } = {}) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
     method: "PATCH",
     body: {
@@ -179,13 +190,14 @@ export async function updatePlaceEnrichment(place, enrichment) {
         _tteumsae: enrichment
       }
     },
-    prefer: "return=minimal"
+    prefer: "return=minimal",
+    signal
   });
 }
 
 const introOwnedTags = new Set(["주차 가능", "아이 동반"]);
 
-export async function listPlacesForIntroSync({ limit = 20, now = new Date() } = {}) {
+export async function listPlacesForIntroSync({ limit = 20, now = new Date(), signal } = {}) {
   const dueAt = now instanceof Date ? now : new Date(now);
   if (Number.isNaN(dueAt.getTime())) throw new Error("Invalid intro sync reference time");
   const query = new URLSearchParams({
@@ -196,10 +208,10 @@ export async function listPlacesForIntroSync({ limit = 20, now = new Date() } = 
     order: "next_enrichment_at.asc.nullsfirst,content_id.asc",
     limit: String(Math.min(Math.max(Number.parseInt(limit, 10) || 1, 1), 40))
   });
-  return databaseRequest(`places?${query}`);
+  return databaseRequest(`places?${query}`, { signal });
 }
 
-export async function savePlaceIntro(place, enrichment) {
+export async function savePlaceIntro(place, enrichment, { signal } = {}) {
   const body = {
     enrichment_raw: {
       ...(place.enrichment_raw ?? {}),
@@ -226,11 +238,17 @@ export async function savePlaceIntro(place, enrichment) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
     method: "PATCH",
     body,
-    prefer: "return=minimal"
+    prefer: "return=minimal",
+    signal
   });
 }
 
-export async function recordPlaceEnrichmentFailure(place, error, now = new Date()) {
+export async function recordPlaceEnrichmentFailure(
+  place,
+  error,
+  now = new Date(),
+  { signal } = {}
+) {
   const failedAt = now instanceof Date ? now : new Date(now);
   if (Number.isNaN(failedAt.getTime())) throw new Error("Invalid enrichment failure time");
   const attempts = Math.max(Number.parseInt(place.enrichment_attempts, 10) || 0, 0) + 1;
@@ -246,11 +264,12 @@ export async function recordPlaceEnrichmentFailure(place, error, now = new Date(
       enrichment_last_error: message,
       next_enrichment_at: nextAttemptAt.toISOString()
     },
-    prefer: "return=minimal"
+    prefer: "return=minimal",
+    signal
   });
 }
 
-export async function resetPlaceEnrichment(contentId) {
+export async function resetPlaceEnrichment(contentId, { signal } = {}) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(contentId)}`, {
     method: "PATCH",
     body: {
@@ -261,25 +280,27 @@ export async function resetPlaceEnrichment(contentId) {
       enrichment_last_error: null,
       next_enrichment_at: null
     },
-    prefer: "return=minimal"
+    prefer: "return=minimal",
+    signal
   });
 }
 
-export async function setPlaceActive(contentId, active) {
+export async function setPlaceActive(contentId, active, { signal } = {}) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(contentId)}`, {
     method: "PATCH",
     body: { is_active: Boolean(active) },
-    prefer: "return=minimal"
+    prefer: "return=minimal",
+    signal
   });
 }
 
-export async function getSyncState(id = "tour_api") {
+export async function getSyncState(id = "tour_api", { signal } = {}) {
   const query = new URLSearchParams({
     select: "*",
     id: `eq.${id}`,
     limit: "1"
   });
-  const rows = await databaseRequest(`sync_state?${query}`);
+  const rows = await databaseRequest(`sync_state?${query}`, { signal });
   return (
     rows?.[0] ?? {
       id,
@@ -291,7 +312,7 @@ export async function getSyncState(id = "tour_api") {
   );
 }
 
-export async function saveSyncState(state) {
+export async function saveSyncState(state, { signal } = {}) {
   await databaseRequest("sync_state?on_conflict=id", {
     method: "POST",
     body: {
@@ -299,6 +320,41 @@ export async function saveSyncState(state) {
       ...state,
       updated_at: new Date().toISOString()
     },
-    prefer: "resolution=merge-duplicates,return=minimal"
+    prefer: "resolution=merge-duplicates,return=minimal",
+    signal
   });
+}
+
+export async function claimSyncJob({ jobId, token, now, leaseSeconds = 90, signal }) {
+  return Boolean(await databaseRequest("rpc/claim_sync_job", {
+    method: "POST",
+    body: {
+      p_id: jobId,
+      p_token: token,
+      p_now: now,
+      p_lease_seconds: leaseSeconds
+    },
+    signal
+  }));
+}
+
+export async function finishSyncJob({
+  jobId,
+  token,
+  status,
+  summary,
+  finishedAt,
+  signal
+}) {
+  return Boolean(await databaseRequest("rpc/finish_sync_job", {
+    method: "POST",
+    body: {
+      p_id: jobId,
+      p_token: token,
+      p_status: status,
+      p_summary: summary,
+      p_finished_at: finishedAt
+    },
+    signal
+  }));
 }
