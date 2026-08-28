@@ -57,6 +57,8 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 예약 | `실기기 QA 필요` | `setAndAllowWhileIdle`; exact alarm·백그라운드 위치 권한 없음 | 절전 모드에서는 전달 지연 가능 |
 | 복원 | `코드 검증` | 재부팅/패키지 교체 후 유효한 여행만 재예약; 도착 마감+2시간 뒤 만료 | 실제 재부팅 QA 필요 |
 | 저장 범위 | `코드 검증` | 경로·선택 장소·마감·안내에 필요한 최소 스냅샷만 기기 로컬 저장 | 서버 위치 이력 저장 없음 |
+| 수명주기 | `코드 검증` | 새 검색·선택 해제는 이전 알림을 취소하고, 재조회는 선택이 사라지면 취소·남으면 새 출발 마감으로 교체 | `DepartureReminderCoordinator` |
+| 백업 제외 | `코드 검증` | 활성 여행·인증 세션이 포함될 수 있는 SharedPreferences를 cloud backup/device transfer에서 제외 | `backup_rules.xml`, `data_extraction_rules.xml` |
 
 ## 5. 기존 앱 기능
 

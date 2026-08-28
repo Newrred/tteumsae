@@ -98,7 +98,7 @@ APK 위치:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-2026-08-28 Gate 2 작업 경로에서 `testDebugUnitTest` 107/107,
+2026-08-28 Gate 2 작업 경로에서 `testDebugUnitTest` 116/116,
 `lintDebug` 오류 0과 debug APK 빌드를 확인했습니다. 자동 테스트는 실제 지도,
 OAuth, 카카오맵 복귀와 알림 실기기 QA를 대신하지 않습니다.
 

@@ -77,6 +77,42 @@ class TteumsaeApiTest {
         assertNull(result.calculatedAtEpochMillis)
     }
 
+    @Test
+    fun `구조화 오류는 상태 코드와 요청 식별자와 재시도 시간을 보존한다`() {
+        val error = parseApiErrorResponse(
+            status = 503,
+            responseText = """
+                {"error":{"code":"UPSTREAM_BUDGET_EXHAUSTED","message":"잠시 후 다시 시도해 주세요.","requestId":"req-123"}}
+            """.trimIndent(),
+            retryAfterHeader = "120",
+            operation = "/api/recommendations",
+        )
+
+        assertEquals("잠시 후 다시 시도해 주세요.", error.message)
+        assertEquals(503, error.status)
+        assertEquals("UPSTREAM_BUDGET_EXHAUSTED", error.code)
+        assertEquals("req-123", error.requestId)
+        assertEquals(120L, error.retryAfterSeconds)
+        assertEquals("/api/recommendations", error.operation)
+    }
+
+    @Test
+    fun `잘못된 오류 본문도 HTTP 문맥을 잃지 않는다`() {
+        val error = parseApiErrorResponse(
+            status = 504,
+            responseText = "not-json",
+            retryAfterHeader = "invalid",
+            operation = "/api/route",
+        )
+
+        assertEquals("서버 요청에 실패했습니다.", error.message)
+        assertEquals(504, error.status)
+        assertNull(error.code)
+        assertNull(error.requestId)
+        assertNull(error.retryAfterSeconds)
+        assertEquals("/api/route", error.operation)
+    }
+
     private fun criteria(arrivalDeadlineEpochMillis: Long? = null) = SearchCriteria(
         mode = SearchMode.ON_THE_WAY,
         startName = "강릉역",

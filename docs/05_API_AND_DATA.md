@@ -95,9 +95,10 @@ Cache-Control: no-store
 ```
 
 실제 오류 메시지는 Vercel Function 로그에서 같은 `requestId`로 확인한다.
-Android는 비정상 HTTP 응답의 `error.message`를 우선 표시하고, JSON 해석에
-실패하면 `서버 요청에 실패했습니다.`를 표시한다. 연결·타임아웃 등
-`IOException`은 `네트워크 연결을 확인해주세요.`로 바뀐다.
+Android는 비정상 HTTP 응답의 status, `error.code`, `error.message`, `requestId`,
+`Retry-After`와 요청 path를 `ApiException`에 보존한다. UI에는 message를 우선
+표시하고 JSON 해석에 실패하면 `서버 요청에 실패했습니다.`를 표시한다.
+연결·타임아웃 등 `IOException`은 `네트워크 연결을 확인해주세요.`로 바뀐다.
 
 ### 2.3 공개 범위
 

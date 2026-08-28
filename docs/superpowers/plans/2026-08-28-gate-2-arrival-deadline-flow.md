@@ -550,6 +550,12 @@ git push -u newrred codex/gate-2-arrival-deadline-flow
 
 ## Acceptance Checklist
 
+독립 코드 리뷰에서 확인된 알림 수명주기, SharedPreferences 백업 제외, Android
+구조화 오류 보존을 추가 구현했다. 구간별 분 올림 합계 기준 우회시간과 알림 탭 QA
+문구도 함께 수정했다. 권한 응답이나 재조회 시점에 출발 권장시각이 지난 알림은
+저장·활성화하지 않고 기존 상태도 정리한다. 전체 회귀는 Backend 151/151, Android 116/116,
+lint 오류 0과 debug APK 빌드로 다시 확인했다.
+
 - [x] LOCATION 한 화면에서 출발지·목적지·도착 마감과 선택 필터를 정한다.
 - [x] 신규 Android는 절대 마감만 전송하고 서버는 수신시각으로 남은 분을 내림 계산한다.
 - [x] 모든 후보가 내부 여유 10분 뒤 최소 15분을 확보한다.

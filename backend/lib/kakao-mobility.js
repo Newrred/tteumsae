@@ -211,7 +211,9 @@ export async function fetchKakaoRoutes(
           route.directMinutes = baseRoute.durationMinutes;
           route.detourMinutes = Math.max(
             0,
-            route.durationMinutes - baseRoute.durationMinutes
+            route.firstLegMinutes +
+              route.secondLegMinutes -
+              baseRoute.durationMinutes
           );
         }
         if (route) routes.set(String(place.content_id), route);

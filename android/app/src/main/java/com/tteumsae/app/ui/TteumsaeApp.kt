@@ -288,8 +288,11 @@ fun TteumsaeApp() {
         },
     )
     val routeState by routeViewModel.uiState.collectAsStateWithLifecycle()
+    val reminderCoordinator = remember(application) {
+        application.container.departureReminderCoordinator
+    }
     var reminderEnabledPlaceId by rememberSaveable {
-        mutableStateOf(application.container.activeTripStore.loadValid()?.stopId)
+        mutableStateOf(reminderCoordinator.currentEnabledStopId())
     }
     var pendingReminderTrip by remember { mutableStateOf<ActiveTrip?>(null) }
     var pendingReminderPlaceId by remember { mutableStateOf<String?>(null) }
@@ -299,9 +302,14 @@ fun TteumsaeApp() {
         val trip = pendingReminderTrip
         val placeId = pendingReminderPlaceId
         if (granted && trip != null && placeId != null) {
-            application.container.activeTripStore.save(trip)
-            application.container.departureReminderScheduler.schedule(trip)
-            reminderEnabledPlaceId = placeId
+            reminderEnabledPlaceId = reminderCoordinator.enable(trip)
+            if (reminderEnabledPlaceId == null) {
+                Toast.makeText(
+                    context,
+                    "출발 권장시각이 지나 알림을 설정할 수 없어요.",
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
         } else if (!granted) {
             Toast.makeText(
                 context,
@@ -343,6 +351,16 @@ fun TteumsaeApp() {
     var catalogLoadAttempt by rememberSaveable { mutableStateOf(0) }
     var showHomeIntro by rememberSaveable { mutableStateOf(shouldShowHomeIntro(context)) }
     val appScope = rememberCoroutineScope()
+    val clearDepartureReminder: () -> Unit = {
+        reminderCoordinator.clear()
+        reminderEnabledPlaceId = null
+        pendingReminderTrip = null
+        pendingReminderPlaceId = null
+    }
+    val startNewRouteSearch: () -> Unit = {
+        clearDepartureReminder()
+        routeViewModel.startNewSearch()
+    }
 
     val hasRouteLocations = routeState.input.start != null &&
         routeState.input.destination != null
@@ -379,7 +397,7 @@ fun TteumsaeApp() {
 
     BackHandler(enabled = screen != AppDestination.HOME) {
         if (screen == AppDestination.LOADING || screen == AppDestination.RESULTS) {
-            routeViewModel.startNewSearch()
+            startNewRouteSearch()
             screen = AppDestination.LOCATION
         } else {
             screen = previousDestination(screen)
@@ -416,6 +434,29 @@ fun TteumsaeApp() {
         endCoordinates = routeState.input.destination?.coordinates,
         arrivalDeadlineEpochMillis = routeState.input.arrivalDeadlineEpochMillis,
     )
+    LaunchedEffect(
+        routeState.stage,
+        routeState.calculatedAtEpochMillis,
+        routeState.selectedPlaceId,
+    ) {
+        if (
+            routeState.stage != RouteStage.RESULTS ||
+            routeState.calculatedAtEpochMillis == null
+        ) {
+            return@LaunchedEffect
+        }
+        val enabledStopId = reminderCoordinator.currentEnabledStopId()
+            ?: run {
+                reminderEnabledPlaceId = null
+                return@LaunchedEffect
+            }
+        val refreshedRecommendation = routeState.recommendations.firstOrNull {
+            it.place.id == routeState.selectedPlaceId && it.place.id == enabledStopId
+        }
+        reminderEnabledPlaceId = reminderCoordinator.reconcile(
+            refreshedRecommendation?.let { activeTripFor(criteria, it) },
+        )
+    }
     val openRoute: (List<SafeRecommendation>) -> Unit = { routeRecommendations ->
         val resolved = criteria
         openKakaoMapMultiRoute(
@@ -444,7 +485,7 @@ fun TteumsaeApp() {
                 showHomeIntro = false
             },
             onStart = { coordinates ->
-                routeViewModel.startNewSearch()
+                startNewRouteSearch()
                 routeViewModel.updateStart(
                     coordinates?.let { RouteLocation("현재 위치", it) },
                 )
@@ -616,7 +657,10 @@ fun TteumsaeApp() {
             onDeadlineSelected = routeViewModel::updateDeadline,
             onFiltersChanged = routeViewModel::updateFilters,
             isChecking = locationChecking,
-            onBack = { screen = AppDestination.HOME },
+            onBack = {
+                startNewRouteSearch()
+                screen = AppDestination.HOME
+            },
             onNext = {
                 if (!locationChecking) {
                     locationChecking = true
@@ -630,6 +674,7 @@ fun TteumsaeApp() {
                                     Toast.LENGTH_LONG,
                                 ).show()
                             } else {
+                                clearDepartureReminder()
                                 routeViewModel.search()
                             }
                         } catch (error: Exception) {
@@ -648,7 +693,7 @@ fun TteumsaeApp() {
 
         AppDestination.LOADING -> LoadingScreen(
             onBack = {
-                routeViewModel.startNewSearch()
+                startNewRouteSearch()
                 screen = AppDestination.LOCATION
             },
         )
@@ -664,72 +709,42 @@ fun TteumsaeApp() {
             reminderEnabled = reminderEnabledPlaceId == routeState.selectedPlaceId,
             onSelectPlace = { placeId ->
                 if (reminderEnabledPlaceId != null && reminderEnabledPlaceId != placeId) {
-                    application.container.departureReminderScheduler.cancel()
-                    application.container.activeTripStore.clear()
-                    reminderEnabledPlaceId = null
+                    clearDepartureReminder()
                 }
                 routeViewModel.selectPlace(placeId)
             },
             onClearSelection = {
-                application.container.departureReminderScheduler.cancel()
-                application.container.activeTripStore.clear()
-                reminderEnabledPlaceId = null
+                clearDepartureReminder()
                 routeViewModel.clearSelection()
             },
             onRefresh = routeViewModel::refresh,
             onReminderChanged = reminder@{ recommendation, enabled ->
                 if (!enabled) {
-                    application.container.departureReminderScheduler.cancel()
-                    application.container.activeTripStore.clear()
-                    reminderEnabledPlaceId = null
+                    clearDepartureReminder()
                     return@reminder
                 }
-                val start = criteria.startCoordinates
-                val destination = criteria.endCoordinates
-                val deadline = criteria.arrivalDeadlineEpochMillis
-                val stopLatitude = recommendation.place.latitude
-                val stopLongitude = recommendation.place.longitude
-                val latestDeparture = recommendation.latestDepartureEpochMillis
-                if (
-                    start == null || destination == null || deadline == null ||
-                    stopLatitude == null || stopLongitude == null || latestDeparture == null
-                ) {
+                val trip = activeTripFor(criteria, recommendation)
+                if (trip == null) {
                     Toast.makeText(context, "알림에 필요한 경로 정보가 부족해요.", Toast.LENGTH_SHORT).show()
                     return@reminder
                 }
-                if (latestDeparture <= System.currentTimeMillis()) {
+                if (trip.latestDepartureEpochMillis <= System.currentTimeMillis()) {
                     Toast.makeText(context, "출발 권장시각이 지나 알림을 설정할 수 없어요.", Toast.LENGTH_SHORT).show()
                     return@reminder
                 }
-                val stop = Coordinates(stopLatitude, stopLongitude)
-                val navigationUrl = buildKakaoMapMultiRouteUrl(
-                    startName = criteria.startName,
-                    start = start,
-                    waypoints = listOf(recommendation.place.name to stop),
-                    destinationName = criteria.endName,
-                    destination = destination,
-                )
-                val trip = ActiveTrip(
-                    startName = criteria.startName,
-                    start = start,
-                    destinationName = criteria.endName,
-                    destination = destination,
-                    stopId = recommendation.place.id,
-                    stopName = recommendation.place.name,
-                    stop = stop,
-                    arrivalDeadlineEpochMillis = deadline,
-                    latestDepartureEpochMillis = latestDeparture,
-                    navigationUrl = navigationUrl,
-                    expiresAtEpochMillis = activeTripExpiryEpochMillis(deadline),
-                )
                 val hasNotificationPermission =
                     Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                         context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
                         PackageManager.PERMISSION_GRANTED
                 if (hasNotificationPermission) {
-                    application.container.activeTripStore.save(trip)
-                    application.container.departureReminderScheduler.schedule(trip)
-                    reminderEnabledPlaceId = recommendation.place.id
+                    reminderEnabledPlaceId = reminderCoordinator.enable(trip)
+                    if (reminderEnabledPlaceId == null) {
+                        Toast.makeText(
+                            context,
+                            "출발 권장시각이 지나 알림을 설정할 수 없어요.",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                 } else {
                     pendingReminderTrip = trip
                     pendingReminderPlaceId = recommendation.place.id
@@ -737,11 +752,11 @@ fun TteumsaeApp() {
                 }
             },
             onBack = {
-                routeViewModel.startNewSearch()
+                startNewRouteSearch()
                 screen = AppDestination.LOCATION
             },
             onNewSearch = {
-                routeViewModel.startNewSearch()
+                startNewRouteSearch()
                 screen = AppDestination.LOCATION
             },
             onNavigate = { recommendation ->
@@ -775,6 +790,38 @@ fun TteumsaeApp() {
             screen = AppDestination.RESULTS
         }
     }
+}
+
+private fun activeTripFor(
+    criteria: SearchCriteria,
+    recommendation: SafeRecommendation,
+): ActiveTrip? {
+    val start = criteria.startCoordinates ?: return null
+    val destination = criteria.endCoordinates ?: return null
+    val deadline = criteria.arrivalDeadlineEpochMillis ?: return null
+    val stopLatitude = recommendation.place.latitude ?: return null
+    val stopLongitude = recommendation.place.longitude ?: return null
+    val latestDeparture = recommendation.latestDepartureEpochMillis ?: return null
+    val stop = Coordinates(stopLatitude, stopLongitude)
+    return ActiveTrip(
+        startName = criteria.startName,
+        start = start,
+        destinationName = criteria.endName,
+        destination = destination,
+        stopId = recommendation.place.id,
+        stopName = recommendation.place.name,
+        stop = stop,
+        arrivalDeadlineEpochMillis = deadline,
+        latestDepartureEpochMillis = latestDeparture,
+        navigationUrl = buildKakaoMapMultiRouteUrl(
+            startName = criteria.startName,
+            start = start,
+            waypoints = listOf(recommendation.place.name to stop),
+            destinationName = criteria.endName,
+            destination = destination,
+        ),
+        expiresAtEpochMillis = activeTripExpiryEpochMillis(deadline),
+    )
 }
 
 @Composable

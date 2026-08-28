@@ -258,7 +258,7 @@ pnpm run check
 
 ```text
 Node 테스트: 94개 통과, 0개 실패
-Project check: 82개 파일 통과
+Project check: 83개 파일 통과
 ```
 
 테스트 범위:

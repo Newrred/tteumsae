@@ -51,7 +51,7 @@ Android에는 카카오 네이티브 지도 키와 Supabase Project URL·publish
 | `android/app/src/main/java/com/tteumsae/app/ui/route/` | 경로 입력·결과 UI와 `RouteFlowViewModel` 상태 소유권 |
 | `android/app/src/main/java/com/tteumsae/app/domain/route/` | 도착 마감 검증·표시 계산·경로 입력 모델 |
 | `android/app/src/main/java/com/tteumsae/app/data/route/` | 신규 추천 계약을 감싼 `RouteGateway` |
-| `android/app/src/main/java/com/tteumsae/app/reminder/` | 선택형 출발 알림 저장·예약·수신 |
+| `android/app/src/main/java/com/tteumsae/app/reminder/` | 선택형 출발 알림 저장·예약·수신과 새 검색/재조회 수명주기 조정 |
 | `android/app/src/main/java/com/tteumsae/app/ui/CurrentLocation.kt` | 위치 권한 이후 좌표 취득 |
 | `android/app/src/main/java/com/tteumsae/app/data/TteumsaeApi.kt` | 백엔드 HTTP 호출과 JSON 파싱 |
 | `android/app/src/main/java/com/tteumsae/app/domain/Models.kt` | 앱 도메인 모델 |
@@ -225,6 +225,8 @@ latestDepartureAt = arrivalDeadline - secondLegMinutes - 10분
   UI에는 평균 체류로 표시하지 않습니다. 추천 시점의 경로 시간·거리는 저장하지 않습니다.
 - 앱 업데이트 시 기존 `saved_places/entries` JSON은 Room 트랜잭션 성공 후 한 번만 이전·제거합니다.
 - SharedPreferences는 홈 안내 날짜 등 단순 기기 설정에만 계속 사용합니다.
+- 활성 여행 좌표와 인증 세션이 들어갈 수 있는 SharedPreferences 전체는 cloud backup과
+  device transfer에서 제외합니다. Room 저장 장소는 이 제외 대상과 별개입니다.
 - 이미지는 앱에서 직접 내려받아 메모리 `LruCache`에 보관합니다.
 - 이미지가 없거나 실패하면 앱이 그린 기본 장소 이미지를 표시합니다.
 

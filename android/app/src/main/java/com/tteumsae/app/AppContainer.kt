@@ -21,6 +21,7 @@ import com.tteumsae.app.data.saved.SavedPlacesRepository
 import com.tteumsae.app.reminder.ActiveTripStore
 import com.tteumsae.app.reminder.AlarmManagerDepartureReminderScheduler
 import com.tteumsae.app.reminder.DepartureReminderScheduler
+import com.tteumsae.app.reminder.DepartureReminderCoordinator
 import com.tteumsae.app.reminder.SharedPreferencesActiveTripPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,11 @@ class AppContainer(context: Context) {
 
     val departureReminderScheduler: DepartureReminderScheduler =
         AlarmManagerDepartureReminderScheduler(context.applicationContext)
+
+    val departureReminderCoordinator = DepartureReminderCoordinator(
+        store = activeTripStore,
+        scheduler = departureReminderScheduler,
+    )
 
     val savedPlacePreferencesMigration = SavedPlacePreferencesMigration(
         preferences = SharedPreferencesSavedPlaceMigrationPreferences(context.applicationContext),

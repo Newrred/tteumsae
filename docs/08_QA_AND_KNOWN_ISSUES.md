@@ -7,11 +7,11 @@
 
 | 대상 | 상태 | 주의 |
 |---|---|---|
-| Android `testDebugUnitTest` | 107/107 성공 | 도착 마감 경계, V1 직렬화/파싱, ViewModel 복원·취소, 단일 선택, 알림 정책 포함 |
+| Android `testDebugUnitTest` | 116/116 성공 | 도착 마감 경계, V1 직렬화/파싱, ViewModel 복원·취소, 단일 선택, 만료 알림·백업·오류 계약 포함 |
 | Android `lintDebug` | 오류 0 | 경고 35개; deprecated 아이콘·API 등은 후속 정리 |
-| Android `assembleDebug` | 성공 | APK SHA-256 `490CB6356AED16BE200764174BC7B75D815B7AD5DA55E6C9DC21A9FBB3913E16` |
-| Backend `pnpm test` | 150/150 성공 | V1·legacy·운영시간·route 호환 포함 |
-| Backend `pnpm check` | 82개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
+| Android `assembleDebug` | 성공 | APK SHA-256 `12E3D987C82417D928A0B7D07E01A9FCA837E5D5D614F8C14CE1F4B2CCC82B93` |
+| Backend `pnpm test` | 151/151 성공 | V1·legacy·운영시간·route 호환과 보수적 우회시간 포함 |
+| Backend `pnpm check` | 83개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
 | 실기기 회귀 | 미실행 | 지도, GPS, 카카오맵, 알림, OAuth는 기기 확인 필요 |
 
 ## 2. 로컬 자동 검증
@@ -65,7 +65,9 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - [ ] 장소를 선택했을 때만 출발 5분 전 알림 토글이 보인다.
 - [ ] Android 13+에서 토글을 켤 때만 알림 권한을 요청한다.
 - [ ] 권한 거부 후에도 카카오맵 안내가 동작한다.
-- [ ] 알림이 예상 시각에 오고 탭하면 앱으로 돌아온다.
+- [ ] 알림이 예상 시각에 오고 탭하면 저장된 카카오 경로 URL이 열린다.
+- [ ] 새 검색·선택 해제는 기존 알림을 취소한다.
+- [ ] 재조회에서 선택이 사라지면 알림 취소, 남으면 새 출발 마감으로 재예약된다.
 - [ ] 재부팅/앱 업데이트 뒤 유효한 알림만 재예약된다.
 - [ ] 절전 모드에서 inexact 알림이 지연될 수 있음을 제품 문구가 과장하지 않는다.
 

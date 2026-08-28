@@ -85,6 +85,29 @@ test("직행과 경유지 5개 응답을 같은 형식으로 변환한다", () =
   assert.equal(withFive.tollFare, 0);
 });
 
+test("후보 우회시간은 구간별 올림 합계에서 직행시간을 뺀다", async () => {
+  const result = await fetchKakaoRoutes(start, destination, [place], {
+    apiKey: "test-key",
+    baseRoute: { durationMinutes: 1 },
+    usageTracker: untrackedUsage,
+    fetchImpl: async () => Response.json({
+      routes: [{
+        result_code: 0,
+        summary: { distance: 2, duration: 2 },
+        sections: [
+          { distance: 1, duration: 1 },
+          { distance: 1, duration: 1 }
+        ]
+      }]
+    })
+  });
+
+  assert.equal(result.routes.get("100").durationMinutes, 1);
+  assert.equal(result.routes.get("100").firstLegMinutes, 1);
+  assert.equal(result.routes.get("100").secondLegMinutes, 1);
+  assert.equal(result.routes.get("100").detourMinutes, 1);
+});
+
 test("자동차 길찾기 요청에 경유지와 REST API 키를 적용한다", async () => {
   let request;
   const route = await fetchKakaoRoute(start, destination, place, {

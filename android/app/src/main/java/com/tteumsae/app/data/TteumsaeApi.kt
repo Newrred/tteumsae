@@ -155,10 +155,12 @@ class TteumsaeApi(
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream
             val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
             if (status !in 200..299) {
-                val message = runCatching {
-                    JSONObject(text).getJSONObject("error").getString("message")
-                }.getOrDefault("서버 요청에 실패했습니다.")
-                throw ApiException(message)
+                throw parseApiErrorResponse(
+                    status = status,
+                    responseText = text,
+                    retryAfterHeader = connection.getHeaderField("Retry-After"),
+                    operation = path,
+                )
             }
             JSONObject(text)
         } catch (error: ApiException) {
@@ -259,7 +261,33 @@ data class PlacePage(
 class ApiException(
     override val message: String,
     cause: Throwable? = null,
+    val status: Int? = null,
+    val code: String? = null,
+    val requestId: String? = null,
+    val retryAfterSeconds: Long? = null,
+    val operation: String? = null,
 ) : Exception(message, cause)
+
+internal fun parseApiErrorResponse(
+    status: Int,
+    responseText: String,
+    retryAfterHeader: String?,
+    operation: String,
+): ApiException {
+    val error = runCatching {
+        JSONObject(responseText).optJSONObject("error")
+    }.getOrNull()
+    return ApiException(
+        message = error?.optString("message")
+            ?.takeIf(String::isNotBlank)
+            ?: "서버 요청에 실패했습니다.",
+        status = status,
+        code = error?.optString("code")?.takeIf(String::isNotBlank),
+        requestId = error?.optString("requestId")?.takeIf(String::isNotBlank),
+        retryAfterSeconds = retryAfterHeader?.toLongOrNull()?.takeIf { it >= 0 },
+        operation = operation,
+    )
+}
 
 private fun Coordinates.toJson() = JSONObject()
     .put("latitude", latitude)
