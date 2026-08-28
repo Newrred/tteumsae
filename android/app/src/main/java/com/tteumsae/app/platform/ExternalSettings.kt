@@ -10,7 +10,7 @@ import android.widget.Toast
 import com.tteumsae.app.BuildConfig
 
 internal const val CONTACT_EMAIL = "godburgundy@gmail.com"
-internal const val PRIVACY_POLICY_URL = ""
+internal val PRIVACY_POLICY_URL = "${BuildConfig.API_BASE_URL}/privacy"
 internal const val LOCATION_TERMS_URL = ""
 
 internal val savedImageCache = object : LruCache<String, Bitmap>(16 * 1024) {

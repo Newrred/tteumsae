@@ -37,9 +37,9 @@ internal fun LoginSheet(
                 .padding(horizontal = 24.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("로그인해서 저장을 이어가세요", color = TteumInk, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(LOGIN_SHEET_TITLE, color = TteumInk, fontSize = 22.sp, fontWeight = FontWeight.Bold)
             Text(
-                "다른 기기에서도 프로필과 저장한 장소를 이어 쓸 수 있어요. 로그인하지 않아도 현재 기능은 그대로 사용할 수 있습니다.",
+                LOGIN_SHEET_DESCRIPTION,
                 color = TteumMuted,
                 fontSize = 14.sp,
             )

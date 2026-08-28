@@ -66,7 +66,7 @@ private fun GuestAccountCard(state: AccountUiState, onLogin: () -> Unit) {
     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("계정 없이 사용 중", color = TteumInk, fontWeight = FontWeight.Bold, fontSize = 17.sp)
         Text(
-            "로그인은 선택사항이에요. 로그인하면 여러 기기에서 프로필과 저장한 장소를 이어갈 수 있어요.",
+            GUEST_ACCOUNT_DESCRIPTION,
             color = TteumMuted,
             fontSize = 13.sp,
         )
@@ -145,7 +145,7 @@ internal fun AccountDeletionDialogs(
         AccountDeletionStep.NONE -> Unit
         AccountDeletionStep.FIRST_CONFIRMATION -> DeletionDialog(
             title = "계정을 삭제할까요?",
-            message = "프로필과 계정에 동기화된 저장한 장소가 모두 삭제되며 복구할 수 없습니다. 기기에만 저장된 게스트 데이터는 이 단계에서 삭제하지 않습니다.",
+            message = ACCOUNT_DELETION_IMPACT,
             confirmText = "영향 확인",
             onConfirm = onContinue,
             onCancel = onCancel,

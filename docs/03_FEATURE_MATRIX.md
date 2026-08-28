@@ -110,9 +110,9 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 카카오맵 상태 | `구현, QA 필요` | 설치 여부 확인, 앱 실행 또는 Play Store/웹 설치 경로 | 기기별 intent 처리 QA 필요 | `isKakaoMapAvailable`, `openKakaoMapHome`, `openKakaoMapInstallPage` |
 | 캐시·저장 삭제 | `구현, QA 필요` | 확인 후 이미지 캐시/cacheDir 삭제 또는 Room의 게스트 저장 목록 전체 해제 | 지도 SDK 내부 캐시까지 지운다는 보장은 없음 | `SettingsScreen`, `SavedPlacesRepository.clearGuest`, `clearAppCache` |
 | 문의하기 | `구현, QA 필요` | `godburgundy@gmail.com`으로 앱 버전을 포함한 메일 작성 화면 | 실제 메일 수신·응답 QA 필요 | `CONTACT_EMAIL`, `openContactEmail` |
-| 개인정보처리방침 | `배포 완료/앱 연결 필요` | no-JS 공개 HTML과 `/privacy` rewrite가 Vercel 운영 주소에서 HTTPS 200으로 동작. Android URL은 아직 비어 있음 | 앱 설정·Play Console에 운영 URL 연결 | `backend/privacy.html`, `PRIVACY_POLICY_URL` |
+| 개인정보처리방침 | `배포·앱 연결 완료, QA 필요` | no-JS 공개 HTML과 `/privacy` rewrite가 Vercel 운영 주소에서 HTTPS 200으로 동작하며 Android 설정이 `BuildConfig.API_BASE_URL/privacy`를 연다 | 실제 기기 브라우저 열기와 Play Console 동일 URL 확인 | `backend/privacy.html`, `PRIVACY_POLICY_URL` |
 | 위치기반서비스 약관 | `미구현` | 설정 행은 있으나 URL이 비어 있고 `준비 중` | 법률 검토·공개 문서·동의 정책 필요 | `LOCATION_TERMS_URL` |
-| 선택 로그인·프로필 | `구현·provider 연결 완료, 기기 QA 필요` | 게스트 우선, 카카오·Google PKCE, 선택 닉네임·연령대·성별, 로그아웃과 계정 삭제 UI. Supabase에서 Kakao·Google provider 활성화 | 서명 기기 OAuth·앱 복귀 미검증. 저장 동기화·푸시는 미구현 | `data/auth`, `data/profile`, `ui/account` |
+| 선택 로그인·프로필 | `구현·provider 연결 완료, 기기 QA 필요` | 게스트 우선, 카카오·Google PKCE, 선택 닉네임·연령대·성별, 로그아웃과 계정 삭제 UI. 로그인 문구는 프로필·계정 관리만 약속하고 기기 저장은 유지됨을 안내한다 | 서명 기기 OAuth·앱 복귀 미검증. 저장 동기화·푸시는 미구현 | `data/auth`, `data/profile`, `ui/account` |
 | 계정 삭제 | `구현 및 코드 검증, 운영 QA 필요` | 2단계 영향 확인 후 재로그인, Bearer 전용 `DELETE /api/account`, 성공 시 로컬 세션 제거 | 실제 Auth cascade·재가입은 새 Supabase/Vercel에서 검증 필요 | `AccountDeletionApi`, `AccountViewModel`, `backend/api/account.js` |
 
 ## 10. 릴리스·검증 준비
@@ -121,7 +121,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 |---|---|---|---|
 | Kotlin 컴파일 | `구현 및 코드 검증` | 최신 통합 소스 `compileDebugKotlin` 성공 | CI로 고정 |
 | Debug APK | `구현 및 코드 검증` | 지역/찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 `assembleDebug` 성공 (`2026-08-20`) | 새 버전 번호, 실기기 회귀 후 배포 |
-| Android 단위 테스트 | `구현 및 코드 검증` | 인증·프로필·계정 삭제를 포함한 71/71 통과 (`2026-08-28`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
+| Android 단위 테스트 | `구현 및 코드 검증` | 계정 문구·정책 URL, 인증·프로필·계정 삭제를 포함한 73/73 통과 (`2026-08-28`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
 | 백엔드 테스트 | `구현 및 코드 검증` | TourAPI 증분 동기화·정책·사용자 RLS 계약·계정 삭제를 포함한 Node 테스트 69/69 통과 (`2026-08-28`) | 실제 RLS는 새 Supabase에서 verifier 필요 |
 | Release 서명·AAB | `미구현` | signingConfig/키 전달/CI 없음 | 업로드 키, Play App Signing, `bundleRelease` |
 | 정책·스토어 자료 | `미구현` | 정책 URL·런처 아이콘·스토어 제출 체인 미완성 | 정책, 아이콘/스플래시, 데이터 안전, 스크린샷, AAB 준비 |

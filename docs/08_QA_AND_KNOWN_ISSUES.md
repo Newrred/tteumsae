@@ -9,7 +9,7 @@
 |---|---|---|
 | Android `compileDebugKotlin` | 성공 | Room Flow UI 연결과 레거시 UI 저장 코드 제거 기준 |
 | Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `F988EFB6F03E51DECD64280C230B14054BDF746A7C777DACEAFEE8EB61E2B602` |
-| Android `testDebugUnitTest` | 71/71 성공 | `2026-08-28`; 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
+| Android `testDebugUnitTest` | 73/73 성공 | `2026-08-28`; 계정 문구·정책 URL, 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
 | Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
 | 백엔드 Node 테스트 | 69/69 성공 | `2026-08-28`; TourAPI 증분 동기화, 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
@@ -23,7 +23,7 @@
 
 - 현재 `targetSdk=35`; 2026-08-31부터 신규 앱과 업데이트는 API 36 필요
 - Release signingConfig와 서명된 AAB 없음
-- 설정의 개인정보처리방침·위치 관련 외부 URL 일부 미설정
+- 개인정보처리방침 URL은 연결됨; 위치 관련 별도 공개 문서 URL은 미설정
 - Release 서명 기기에서 Google·Kakao OAuth와 계정 삭제 미검증
 - 저장 장소 클라우드 동기화가 없으므로 로그인 화면에서 기기 간 저장 연속성을 약속하면 안 됨
 
@@ -338,8 +338,8 @@ pnpm run check
 
 #### 정책·릴리스 체인
 
-- 개인정보처리방침 HTML은 준비됐지만 새 Vercel HTTPS 배포와 Android URL 연결이
-  남아 있다. 위치기반서비스 약관은 아직 준비되지 않았다.
+- 개인정보처리방침 HTML과 Android 운영 URL 연결은 완료됐다. 위치기반서비스 관련
+  별도 공개 문서는 아직 준비되지 않았다.
 - 새 Supabase migrations 001~004, 2-user RLS verifier, 카카오·Google provider와
   release-signed OAuth, 실제 계정 삭제는 아직 라이브 검증하지 않았다.
 - release signing, 업로드 키, AAB, Play App Signing, CI 배포 체인이 없다.

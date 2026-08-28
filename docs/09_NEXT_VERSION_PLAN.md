@@ -10,7 +10,7 @@
 
 - Android 활성 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
 - 시간 입력 없음, 내부 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`
-- Android 71/71, Backend 69/69, lint 오류 0
+- Android 73/73, Backend 69/69, lint 오류 0
 - 운영 장소 1,719곳, 이미지 72.8%, 운영시간 0.9%
 - `ARRIVAL_DEADLINE_V1` 요청 검증만 구현, 실제 최대 체류 계산과 Android 연결은 미구현
 - Release signingConfig·서명 AAB·실기기 전체 회귀 없음
@@ -21,8 +21,8 @@
 
 - [x] 현재 구현과 목표 제품 문서 분리
 - [x] 운영 백엔드 주소를 `tteumsae-backend-one.vercel.app`으로 정정
-- [x] 자동 테스트 기준을 Android 71/71, Backend 69/69로 갱신
-- [ ] 로그인 화면의 기기 간 저장 연속성 약속 제거
+- [x] 자동 테스트 기준을 Android 73/73, Backend 69/69로 갱신
+- [x] 로그인 화면과 정책의 기기 간 저장 연속성 약속 제거, 개인정보처리방침 URL 연결
 - [ ] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
 - [ ] 프로세스 복원 payload가 없으면 입력 화면으로 안전 복귀
 - [ ] GitHub CI에서 Backend test/check와 Android unit/lint를 실행

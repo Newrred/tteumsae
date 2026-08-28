@@ -23,6 +23,8 @@ test("개인정보처리방침은 서비스·운영자·처리 항목과 삭제 
   assert.match(html, /파기|삭제/);
   assert.match(html, /Supabase/);
   assert.match(html, /Vercel/);
+  assert.match(html, /저장한 장소는 이 기기에만 저장/);
+  assert.doesNotMatch(html, /저장한 장소 동기화/);
   assert.doesNotMatch(html, /<script\b/i);
   assert.doesNotMatch(html, /fonts\.(googleapis|gstatic)\.com|analytics|tracker/i);
 });
@@ -38,6 +40,7 @@ test("계정 삭제 페이지는 앱 내부와 이메일 요청 경로를 모두
   assert.match(html, /로그인 제공자/);
   assert.match(html, /프로필/);
   assert.match(html, /저장한 장소/);
+  assert.match(html, /기기에만 저장한 장소는 계정 삭제로 삭제되지/);
   assert.match(html, /비밀번호|토큰/);
   assert.match(html, /요청하지/);
   assert.doesNotMatch(html, /<script\b/i);
