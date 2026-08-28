@@ -97,6 +97,16 @@ pnpm test
 pnpm run check
 ```
 
+실기기 UI 스모크 테스트는 USB 디버깅을 허용한 Android 기기를 연결한 뒤 저장소
+루트에서 Maestro CLI로 실행합니다. 테스트는 앱 데이터를 초기화하지 않습니다.
+
+```powershell
+maestro test .maestro --include-tags smoke
+```
+
+현재 플로우는 홈 안내창을 조건부로 닫고 목적지 검색·틈새 발견·설정 UI가 표시되는지
+확인한 뒤 지도 화면 캡처를 `android/app/build/maestro-results`에 저장합니다.
+
 2026-08-28 기준 자동 검증은 Android 116/116, Backend 154/154이며 Android lint 오류는
 0건입니다. 이 수치는 실기기 지도·OAuth·외부 내비 검증을 대신하지 않습니다.
 

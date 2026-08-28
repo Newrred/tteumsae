@@ -1,0 +1,18 @@
+appId: com.tteumsae.app
+name: Android home smoke test
+tags:
+  - smoke
+---
+- launchApp
+- runFlow:
+    label: Close the daily guide when it is visible
+    when:
+      visible: "강원도로 가는 길, 어디 들를까?"
+    commands:
+      - tapOn: "확인"
+- assertVisible: "목적지 검색"
+- assertVisible: "틈새 발견"
+- assertVisible: "설정"
+- takeScreenshot:
+    path: home-map
+    label: Capture the rendered home map

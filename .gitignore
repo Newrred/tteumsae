@@ -9,6 +9,7 @@ Thumbs.db
 **/.gradle/
 **/.kotlin/
 **/build/
+.maestro/screenshots/
 **/local.properties
 **/*.apk
 **/*.aab
