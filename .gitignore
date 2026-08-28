@@ -26,6 +26,7 @@ Thumbs.db
 
 # Temporary and sensitive files
 .worktrees/
+.local-backup/
 **/*.log
 **/*.tmp
 **/*.zip
