@@ -1,6 +1,8 @@
 package com.tteumsae.app.data
 
 import com.tteumsae.app.BuildConfig
+import com.tteumsae.app.data.route.RouteGateway
+import com.tteumsae.app.data.route.RouteWaypoint
 import com.tteumsae.app.domain.Coordinates
 import com.tteumsae.app.domain.LocationSearchResult
 import com.tteumsae.app.domain.OperationStatus
@@ -23,7 +25,7 @@ import java.nio.charset.StandardCharsets
 
 class TteumsaeApi(
     private val baseUrl: String = BuildConfig.API_BASE_URL,
-) {
+) : RouteGateway {
     suspend fun searchPlaces(
         query: String,
         gangwonOnly: Boolean = false,
@@ -57,35 +59,10 @@ class TteumsaeApi(
         response.getJSONObject("data").getString("address")
     }
 
-    suspend fun recommendations(criteria: SearchCriteria): RecommendationResult =
+    override suspend fun recommendations(criteria: SearchCriteria): RecommendationResult =
         withContext(Dispatchers.IO) {
-            val start = criteria.startCoordinates
-                ?: throw ApiException("출발지 좌표가 없습니다.")
-            val destination = criteria.endCoordinates
-                ?: throw ApiException("목적지 좌표가 없습니다.")
-            val categories = JSONArray().apply {
-                criteria.categories.forEach { put(it.name) }
-            }
-            val body = JSONObject()
-                .put("mode", criteria.mode.name)
-                .put("start", start.toJson())
-                .put("destination", destination.toJson())
-                .put("extraTimeMinutes", criteria.deadlineMinutesFromNow)
-                .put("safetyBufferMinutes", criteria.safetyBufferMinutes)
-                .put("transport", criteria.transportMode.name)
-                .put("categories", categories)
-
-            val response = request("POST", "/api/recommendations", body)
-            RecommendationResult(
-                recommendations = response.getJSONArray("data").mapObjects { it.toRecommendation() },
-                warning = response.optJSONObject("meta")?.optString("warning").orEmpty(),
-                baseRoute = (
-                    response.optJSONObject("baseRoute")
-                        ?: response.optJSONObject("meta")?.optJSONObject("baseRoute")
-                    )?.toRouteSummary(),
-                corridorRadiusMeters = response.optJSONObject("meta")
-                    ?.optInt("corridorRadiusMeters", 1_600)
-                    ?: 1_600,
+            parseRecommendationResponse(
+                request("POST", "/api/recommendations", recommendationRequestBody(criteria)),
             )
         }
 
@@ -93,6 +70,29 @@ class TteumsaeApi(
         start: Coordinates,
         destination: Coordinates,
         waypoints: List<PlaceCandidate> = emptyList(),
+    ): RouteSummary {
+        if (waypoints.size > 5) throw ApiException("경유지는 최대 5곳까지 추가할 수 있어요.")
+        return calculateRoute(
+            start = start,
+            destination = destination,
+            waypoints = waypoints.map { place ->
+                RouteWaypoint(
+                    id = place.id,
+                    coordinates = Coordinates(
+                        latitude = place.latitude
+                            ?: throw ApiException("경유지 좌표가 없습니다."),
+                        longitude = place.longitude
+                            ?: throw ApiException("경유지 좌표가 없습니다."),
+                    ),
+                )
+            },
+        )
+    }
+
+    override suspend fun calculateRoute(
+        start: Coordinates,
+        destination: Coordinates,
+        waypoints: List<RouteWaypoint>,
     ): RouteSummary = withContext(Dispatchers.IO) {
         if (waypoints.size > 5) throw ApiException("경유지는 최대 5곳까지 추가할 수 있어요.")
         val body = JSONObject()
@@ -101,16 +101,12 @@ class TteumsaeApi(
             .put(
                 "waypoints",
                 JSONArray().apply {
-                    waypoints.forEach { place ->
-                        val latitude = place.latitude
-                            ?: throw ApiException("경유지 좌표가 없습니다.")
-                        val longitude = place.longitude
-                            ?: throw ApiException("경유지 좌표가 없습니다.")
+                    waypoints.forEach { waypoint ->
                         put(
                             JSONObject()
-                                .put("contentId", place.id)
-                                .put("latitude", latitude)
-                                .put("longitude", longitude),
+                                .put("contentId", waypoint.id)
+                                .put("latitude", waypoint.coordinates.latitude)
+                                .put("longitude", waypoint.coordinates.longitude),
                         )
                     }
                 },
@@ -180,7 +176,77 @@ data class RecommendationResult(
     val warning: String,
     val baseRoute: RouteSummary? = null,
     val corridorRadiusMeters: Int = 1_600,
+    val calculatedAtEpochMillis: Long? = null,
+    val arrivalDeadlineEpochMillis: Long? = null,
+    val minimumStayMinutes: Int? = null,
 )
+
+internal fun recommendationRequestBody(criteria: SearchCriteria): JSONObject {
+    val start = criteria.startCoordinates
+        ?: throw ApiException("출발지 좌표가 없습니다.")
+    val destination = criteria.endCoordinates
+        ?: throw ApiException("목적지 좌표가 없습니다.")
+    val body = JSONObject()
+        .put("mode", criteria.mode.name)
+        .put("start", start.toJson())
+        .put("destination", destination.toJson())
+        .put("transport", criteria.transportMode.name)
+        .put(
+            "categories",
+            JSONArray().apply {
+                criteria.categories.sortedBy { it.name }.forEach { put(it.name) }
+            },
+        )
+
+    return criteria.arrivalDeadlineEpochMillis?.let { deadline ->
+        body
+            .put("arrivalDeadlineEpochMillis", deadline)
+            .put("timeModel", "ARRIVAL_DEADLINE_V1")
+    } ?: body
+        .put("extraTimeMinutes", criteria.deadlineMinutesFromNow)
+        .put("safetyBufferMinutes", criteria.safetyBufferMinutes)
+}
+
+internal fun parseRecommendationResponse(response: JSONObject): RecommendationResult {
+    try {
+        val meta = response.optJSONObject("meta") ?: JSONObject()
+        val isArrivalDeadlineV1 = meta.optString("timeModel") == "ARRIVAL_DEADLINE_V1"
+        val calculatedAtEpochMillis = if (isArrivalDeadlineV1) {
+            meta.requiredPositiveLong("calculatedAtEpochMillis")
+        } else {
+            null
+        }
+        val arrivalDeadlineEpochMillis = if (isArrivalDeadlineV1) {
+            meta.requiredPositiveLong("arrivalDeadlineEpochMillis")
+        } else {
+            null
+        }
+        val minimumStayMinutes = if (isArrivalDeadlineV1) {
+            meta.requiredPositiveInt("minimumStayMinutes")
+        } else {
+            null
+        }
+
+        return RecommendationResult(
+            recommendations = response.getJSONArray("data").mapObjects {
+                it.toRecommendation(requireV1Fields = isArrivalDeadlineV1)
+            },
+            warning = meta.optString("warning"),
+            baseRoute = (
+                response.optJSONObject("baseRoute")
+                    ?: meta.optJSONObject("baseRoute")
+                )?.toRouteSummary(),
+            corridorRadiusMeters = meta.optInt("corridorRadiusMeters", 1_600),
+            calculatedAtEpochMillis = calculatedAtEpochMillis,
+            arrivalDeadlineEpochMillis = arrivalDeadlineEpochMillis,
+            minimumStayMinutes = minimumStayMinutes,
+        )
+    } catch (error: ApiException) {
+        throw error
+    } catch (error: Exception) {
+        throw ApiException("추천 응답 형식이 올바르지 않습니다.", error)
+    }
+}
 
 internal fun locationSearchQuery(query: String, gangwonOnly: Boolean): String =
     if (gangwonOnly && !query.contains("강원")) "강원 $query" else query
@@ -209,17 +275,39 @@ private fun JSONObject.toLocationSearchResult() = LocationSearchResult(
     ),
 )
 
-private fun JSONObject.toRecommendation(): SafeRecommendation {
+private fun JSONObject.toRecommendation(requireV1Fields: Boolean): SafeRecommendation {
     val place = getJSONObject("place")
     val route = getJSONObject("route")
     val address = place.optString("address")
     val routeProvider = route.optString("provider", "ESTIMATE")
+    val minimumStayMinutes = if (requireV1Fields) {
+        requiredPositiveInt("minimumStayMinutes")
+    } else {
+        null
+    }
+    val maximumStayMinutes = if (requireV1Fields) {
+        requiredPositiveInt("maximumStayMinutes")
+    } else {
+        null
+    }
+    val latestDepartureEpochMillis = if (requireV1Fields) {
+        requiredPositiveLong("latestDepartureEpochMillis")
+    } else {
+        null
+    }
+    if (
+        minimumStayMinutes != null &&
+        maximumStayMinutes != null &&
+        maximumStayMinutes < minimumStayMinutes
+    ) {
+        throw ApiException("추천 응답의 최대 체류시간이 최소 체류시간보다 짧습니다.")
+    }
     return SafeRecommendation(
         place = PlaceCandidate(
             id = place.getString("content_id"),
             name = place.getString("name"),
             category = placeCategory(place.optString("category")),
-            stayMinutes = getInt("stayMinutes"),
+            stayMinutes = if (requireV1Fields) 0 else getInt("stayMinutes"),
             firstLegMinutes = route.getInt("firstLegMinutes"),
             secondLegMinutes = route.getInt("secondLegMinutes"),
             detourMinutes = route.getInt("detourMinutes"),
@@ -238,8 +326,12 @@ private fun JSONObject.toRecommendation(): SafeRecommendation {
             openingHours = place.optString("opening_hours"),
             closedDays = place.optString("closed_days"),
         ),
-        totalMinutes = getInt("totalMinutes"),
-        marginMinutes = getInt("marginMinutes"),
+        totalMinutes = if (requireV1Fields) {
+            route.getInt("firstLegMinutes") + route.getInt("secondLegMinutes")
+        } else {
+            getInt("totalMinutes")
+        },
+        marginMinutes = if (requireV1Fields) maximumStayMinutes ?: 0 else getInt("marginMinutes"),
         safetyLevel = runCatching {
             SafetyLevel.valueOf(getString("safetyLevel"))
         }.getOrDefault(SafetyLevel.TIGHT),
@@ -252,7 +344,22 @@ private fun JSONObject.toRecommendation(): SafeRecommendation {
         operationStatus = runCatching {
             OperationStatus.valueOf(optString("operationStatus"))
         }.getOrDefault(OperationStatus.UNKNOWN),
+        minimumStayMinutes = minimumStayMinutes,
+        maximumStayMinutes = maximumStayMinutes,
+        latestDepartureEpochMillis = latestDepartureEpochMillis,
     )
+}
+
+private fun JSONObject.requiredPositiveInt(name: String): Int {
+    if (!has(name)) throw ApiException("추천 응답에 $name 값이 없습니다.")
+    return getInt(name).takeIf { it > 0 }
+        ?: throw ApiException("추천 응답의 $name 값이 올바르지 않습니다.")
+}
+
+private fun JSONObject.requiredPositiveLong(name: String): Long {
+    if (!has(name)) throw ApiException("추천 응답에 $name 값이 없습니다.")
+    return getLong(name).takeIf { it > 0 }
+        ?: throw ApiException("추천 응답의 $name 값이 올바르지 않습니다.")
 }
 
 private fun JSONObject.toPlaceCandidate() = PlaceCandidate(
