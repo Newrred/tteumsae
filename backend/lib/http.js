@@ -78,6 +78,18 @@ export function serverError(error) {
   const requestId = crypto.randomUUID();
   const message = error instanceof Error ? error.message : String(error);
   console.error(`[${requestId}] ${message}`);
+  if (error?.code === "UPSTREAM_TIMEOUT") {
+    return json(
+      {
+        error: {
+          code: "UPSTREAM_TIMEOUT",
+          message: "외부 서비스 응답이 늦어 요청을 완료하지 못했습니다.",
+          requestId
+        }
+      },
+      504
+    );
+  }
   return json(
     {
       error: {
