@@ -23,6 +23,7 @@ Thumbs.db
 !**/.env.example
 
 # Temporary and sensitive files
+.worktrees/
 **/*.log
 **/*.tmp
 **/*.zip
