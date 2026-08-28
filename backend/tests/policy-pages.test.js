@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 async function readOrEmpty(path) {
   return readFile(new URL(path, import.meta.url), "utf8").catch(() => "");
@@ -62,4 +62,22 @@ test("Vercel은 기존 설정을 유지하면서 정책 페이지 clean URL을 �
     { path: "/api/cron/tour-catalog-sync", schedule: "20 18 * * *" },
     { path: "/api/cron/tour-intro-sync", schedule: "20 22 * * *" }
   ]);
+});
+
+test("Vercel Hobby 배포 함수는 12개를 넘지 않는다", async () => {
+  const apiRoot = new URL("../api/", import.meta.url);
+  const countFunctions = async (directory) => {
+    const entries = await readdir(directory, { withFileTypes: true });
+    let count = 0;
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        count += await countFunctions(new URL(`${entry.name}/`, directory));
+      } else if (entry.name.endsWith(".js")) {
+        count += 1;
+      }
+    }
+    return count;
+  };
+
+  assert.ok(await countFunctions(apiRoot) <= 12);
 });

@@ -15,7 +15,6 @@ const requiredFiles = [
   "api/route.js",
   "api/cron/tour-sync.js",
   "api/cron/tour-catalog-sync.js",
-  "api/cron/tour-detail-sync.js",
   "api/cron/tour-intro-sync.js",
   "migrations/001_initial.sql",
   "migrations/002_detail_sync_state.sql",
