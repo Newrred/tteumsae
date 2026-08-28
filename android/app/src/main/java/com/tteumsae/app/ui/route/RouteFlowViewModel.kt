@@ -21,6 +21,8 @@ import com.tteumsae.app.domain.route.remainingWholeMinutes
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class RouteFlowViewModel(
@@ -37,6 +39,7 @@ class RouteFlowViewModel(
     val uiState: StateFlow<RouteFlowUiState> = _uiState.asStateFlow()
 
     private var lastSearchCriteria: SearchCriteria? = null
+    private var searchJob: Job? = null
 
     fun updateStart(location: RouteLocation?) {
         updateInput(_uiState.value.input.copy(start = location))
@@ -97,6 +100,8 @@ class RouteFlowViewModel(
     }
 
     fun startNewSearch() {
+        searchJob?.cancel()
+        searchJob = null
         lastSearchCriteria = null
         persistSelectedPlaceId(null)
         _uiState.value = RouteFlowUiState(input = _uiState.value.input)
@@ -135,7 +140,8 @@ class RouteFlowViewModel(
     }
 
     private fun requestRecommendations(criteria: SearchCriteria, isRefresh: Boolean) {
-        viewModelScope.launch {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             runCatching { gateway.recommendations(criteria) }
                 .onSuccess { result ->
                     val selectedPlaceId = _uiState.value.selectedPlaceId
@@ -158,6 +164,7 @@ class RouteFlowViewModel(
                     )
                 }
                 .onFailure { error ->
+                    if (error is CancellationException) throw error
                     val message = error.message?.takeIf(String::isNotBlank)
                         ?: "추천을 불러오지 못했습니다."
                     _uiState.value = if (isRefresh) {

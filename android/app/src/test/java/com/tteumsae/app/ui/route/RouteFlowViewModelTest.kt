@@ -15,9 +15,11 @@ import com.tteumsae.app.domain.SearchCriteria
 import com.tteumsae.app.domain.route.RouteLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -140,6 +142,32 @@ class RouteFlowViewModelTest {
         assertFalse(viewModel.uiState.value.isRefreshing)
         assertEquals(listOf("one"), viewModel.uiState.value.recommendations.map { it.place.id })
         assertTrue(viewModel.uiState.value.warning.isNotBlank())
+    }
+
+    @Test
+    fun `로딩 중 새 검색으로 돌아가면 늦은 응답을 무시한다`() = runTest(dispatcher) {
+        val pending = CompletableDeferred<RecommendationResult>()
+        val gateway = object : RouteGateway {
+            override suspend fun recommendations(criteria: SearchCriteria): RecommendationResult =
+                pending.await()
+
+            override suspend fun calculateRoute(
+                start: Coordinates,
+                destination: Coordinates,
+                waypoints: List<RouteWaypoint>,
+            ): RouteSummary = error("not used")
+        }
+        val viewModel = viewModel(gateway)
+        validInput(viewModel)
+        viewModel.search()
+        runCurrent()
+
+        viewModel.startNewSearch()
+        pending.complete(result(recommendation("late")).getOrThrow())
+        advanceUntilIdle()
+
+        assertEquals(RouteStage.LOCATION, viewModel.uiState.value.stage)
+        assertTrue(viewModel.uiState.value.recommendations.isEmpty())
     }
 
     @Test

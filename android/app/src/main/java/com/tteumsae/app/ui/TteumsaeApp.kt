@@ -196,6 +196,9 @@ import com.tteumsae.app.domain.route.additionalDetourDistanceMeters
 import com.tteumsae.app.domain.route.isRouteWithinExtraTimeBudget
 import com.tteumsae.app.domain.route.orderWaypointIdsAlongRoute
 import com.tteumsae.app.domain.route.selectedRouteEstimate
+import com.tteumsae.app.domain.route.RouteLocation
+import com.tteumsae.app.domain.route.SAFETY_BUFFER_MINUTES
+import com.tteumsae.app.domain.route.remainingWholeMinutes
 import com.tteumsae.app.platform.CONTACT_EMAIL
 import com.tteumsae.app.platform.LOCATION_TERMS_URL
 import com.tteumsae.app.platform.MAX_KAKAO_WAYPOINTS
@@ -217,6 +220,9 @@ import com.tteumsae.app.ui.navigation.AppDestination
 import com.tteumsae.app.ui.navigation.MainTab
 import com.tteumsae.app.ui.navigation.previousDestination
 import com.tteumsae.app.ui.navigation.safeRestoredDestination
+import com.tteumsae.app.ui.route.RouteFlowViewModel
+import com.tteumsae.app.ui.route.RouteLocationScreen
+import com.tteumsae.app.ui.route.RouteStage
 import com.tteumsae.app.ui.saved.SavedPlacesScreen
 import com.tteumsae.app.ui.saved.SavedPlaceImage
 import com.tteumsae.app.ui.settings.SettingsScreen
@@ -290,6 +296,12 @@ fun TteumsaeApp() {
     val context = LocalContext.current
     val api = remember { TteumsaeApi() }
     val application = context.applicationContext as TteumsaeApplication
+    val routeViewModel: RouteFlowViewModel = viewModel(
+        factory = remember(application) {
+            RouteFlowViewModel.factory(application.container.routeGateway)
+        },
+    )
+    val routeState by routeViewModel.uiState.collectAsStateWithLifecycle()
     val accountViewModel: AccountViewModel = viewModel(
         factory = remember(application) {
             AccountViewModelFactory(
@@ -342,20 +354,47 @@ fun TteumsaeApp() {
     var showHomeIntro by rememberSaveable { mutableStateOf(shouldShowHomeIntro(context)) }
     val appScope = rememberCoroutineScope()
 
-    val hasRouteLocations = startLocation != null &&
-        (mode == SearchMode.NEARBY || endLocation != null)
-    val safeScreen = safeRestoredDestination(
-        current = screen,
-        hasLocations = hasRouteLocations,
-        hasResults = activeCriteria != null && baseRoute != null,
-        hasDetail = selected != null,
-    )
+    val hasRouteLocations = routeState.input.start != null &&
+        routeState.input.destination != null
+    val safeScreen = if (
+        screen == AppDestination.LOADING && routeState.stage == RouteStage.LOADING
+    ) {
+        AppDestination.LOADING
+    } else {
+        safeRestoredDestination(
+            current = screen,
+            hasLocations = hasRouteLocations,
+            hasResults = routeState.stage == RouteStage.RESULTS,
+            hasDetail = selected != null,
+        )
+    }
     LaunchedEffect(safeScreen) {
         if (screen != safeScreen) screen = safeScreen
     }
+    LaunchedEffect(routeState.stage) {
+        if (
+            screen in setOf(
+                AppDestination.LOCATION,
+                AppDestination.CONDITIONS,
+                AppDestination.LOADING,
+                AppDestination.RESULTS,
+            )
+        ) {
+            screen = when (routeState.stage) {
+                RouteStage.LOCATION -> AppDestination.LOCATION
+                RouteStage.LOADING -> AppDestination.LOADING
+                RouteStage.RESULTS -> AppDestination.RESULTS
+            }
+        }
+    }
 
     BackHandler(enabled = screen != AppDestination.HOME) {
-        screen = previousDestination(screen)
+        if (screen == AppDestination.LOADING || screen == AppDestination.RESULTS) {
+            routeViewModel.startNewSearch()
+            screen = AppDestination.LOCATION
+        } else {
+            screen = previousDestination(screen)
+        }
     }
     LaunchedEffect(screen, catalogLoadAttempt, catalogRegion) {
         if (screen == AppDestination.SAVED) {
@@ -375,18 +414,21 @@ fun TteumsaeApp() {
     }
 
     val criteria = SearchCriteria(
-        mode = mode,
-        startName = startName.ifBlank { "현재 위치" },
-        endName = endName.ifBlank { if (mode == SearchMode.NEARBY) startName else "" },
-        deadlineMinutesFromNow = deadline,
-        safetyBufferMinutes = buffer,
-        transportMode = if (mode == SearchMode.ON_THE_WAY) TransportMode.CAR else transport,
-        categories = recommendationCategories(categories, excludeRestaurants),
-        startCoordinates = startLocation?.coordinates,
-        endCoordinates = endLocation?.coordinates,
+        mode = SearchMode.ON_THE_WAY,
+        startName = routeState.input.start?.name.orEmpty(),
+        endName = routeState.input.destination?.name.orEmpty(),
+        deadlineMinutesFromNow = routeState.input.arrivalDeadlineEpochMillis?.let {
+            remainingWholeMinutes(it, System.currentTimeMillis()).coerceAtLeast(0)
+        } ?: 0,
+        safetyBufferMinutes = SAFETY_BUFFER_MINUTES,
+        transportMode = TransportMode.CAR,
+        categories = routeState.input.categories,
+        startCoordinates = routeState.input.start?.coordinates,
+        endCoordinates = routeState.input.destination?.coordinates,
+        arrivalDeadlineEpochMillis = routeState.input.arrivalDeadlineEpochMillis,
     )
     val openRoute: (List<SafeRecommendation>) -> Unit = { routeRecommendations ->
-        val resolved = activeCriteria ?: criteria
+        val resolved = criteria
         openKakaoMapMultiRoute(
             context = context,
             start = resolved.startCoordinates,
@@ -413,22 +455,14 @@ fun TteumsaeApp() {
                 showHomeIntro = false
             },
             onStart = { coordinates ->
-                mode = SearchMode.ON_THE_WAY
-                deadline = DEFAULT_EXTRA_TIME_MINUTES
-                buffer = 15
                 selectedWaypointIds = emptyList()
-                startName = "현재 위치"
-                val currentLocation = coordinates?.let {
-                    LocationSearchResult(
-                        id = "current-location",
-                        name = "현재 위치",
-                        address = "GPS로 확인한 위치",
-                        coordinates = it,
-                    )
-                }
-                startLocation = currentLocation
-                endName = ""
-                endLocation = null
+                routeViewModel.startNewSearch()
+                routeViewModel.updateStart(
+                    coordinates?.let { RouteLocation("현재 위치", it) },
+                )
+                routeViewModel.updateDestination(null)
+                routeViewModel.updateDeadline(null)
+                routeViewModel.updateFilters(emptySet())
                 screen = AppDestination.LOCATION
             },
             onTabSelected = { tab ->
@@ -575,39 +609,24 @@ fun TteumsaeApp() {
             LaunchedEffect(Unit) { screen = AppDestination.SETTINGS }
         }
 
-        AppDestination.LOCATION -> LocationScreen(
-            startName = startName,
-            endName = endName,
-            startLocation = startLocation,
-            endLocation = endLocation,
+        AppDestination.LOCATION -> RouteLocationScreen(
+            input = routeState.input,
+            errorMessage = routeState.errorMessage,
             searchPlaces = api::searchPlaces,
             resolveCurrentAddress = api::regionAddress,
-            onStartNameChange = {
-                startName = it
-                startLocation = null
-                currentLocationTarget = null
-            },
-            onEndNameChange = {
-                endName = it
-                endLocation = null
-            },
             onStartSelected = {
-                startName = it.name
-                startLocation = it
-                currentLocationTarget = if (it.id == "current-location") {
+                routeViewModel.updateStart(it)
+                currentLocationTarget = it?.let { location ->
                     RequestedMapLocation(
-                        latitude = it.coordinates.latitude,
-                        longitude = it.coordinates.longitude,
+                        latitude = location.coordinates.latitude,
+                        longitude = location.coordinates.longitude,
                         requestId = System.nanoTime(),
                     )
-                } else {
-                    null
                 }
             },
-            onEndSelected = {
-                endName = it.name
-                endLocation = it
-            },
+            onDestinationSelected = routeViewModel::updateDestination,
+            onDeadlineSelected = routeViewModel::updateDeadline,
+            onFiltersChanged = routeViewModel::updateFilters,
             isChecking = locationChecking,
             onBack = { screen = AppDestination.HOME },
             onNext = {
@@ -615,32 +634,15 @@ fun TteumsaeApp() {
                     locationChecking = true
                     appScope.launch {
                         try {
-                            val resolvedStart = startLocation ?: api.searchPlace(
-                                startName,
-                                gangwonOnly = mode == SearchMode.NEARBY,
-                            )
-                            val resolvedEnd = if (mode == SearchMode.NEARBY) {
-                                resolvedStart
-                            } else {
-                                endLocation ?: api.searchPlace(endName, gangwonOnly = true)
-                            }
-                            val gangwonLocation = if (mode == SearchMode.NEARBY) resolvedStart else resolvedEnd
-                            if (!api.isGangwon(gangwonLocation.coordinates)) {
+                            val destination = requireNotNull(routeState.input.destination)
+                            if (!api.isGangwon(destination.coordinates)) {
                                 Toast.makeText(
                                     context,
-                                    if (mode == SearchMode.NEARBY) {
-                                        "현재 위치는 강원도 밖이라 근처 장소를 추천할 수 없어요."
-                                    } else {
-                                        "목적지가 강원도 밖이라 이동 중 들를 장소를 추천할 수 없어요."
-                                    },
+                                    "목적지가 강원도 밖이라 이동 중 들를 장소를 추천할 수 없어요.",
                                     Toast.LENGTH_LONG,
                                 ).show()
                             } else {
-                                startName = resolvedStart.name
-                                startLocation = resolvedStart
-                                endName = resolvedEnd.name
-                                endLocation = resolvedEnd
-                                screen = AppDestination.CONDITIONS
+                                routeViewModel.search()
                             }
                         } catch (error: Exception) {
                             Toast.makeText(
@@ -656,57 +658,23 @@ fun TteumsaeApp() {
             },
         )
 
-        AppDestination.CONDITIONS -> ConditionsScreen(
-            selectedIntents = selectedIntents,
-            onIntentSelected = { intent ->
-                selectedIntents = toggleRecommendationIntent(selectedIntents, intent)
-                val (selectedCategories, excludeFood) = recommendationIntentFilters(selectedIntents)
-                categories = selectedCategories
-                excludeRestaurants = excludeFood
-            },
-            onBack = { screen = AppDestination.LOCATION },
-            onSearch = { screen = AppDestination.LOADING },
-        )
+        AppDestination.CONDITIONS -> LaunchedEffect(Unit) {
+            screen = AppDestination.LOCATION
+        }
 
         AppDestination.LOADING -> LoadingScreen(
-            onLoad = {
-                val start = startLocation ?: api.searchPlace(
-                    criteria.startName,
-                    gangwonOnly = criteria.mode == SearchMode.NEARBY,
-                )
-                val end = if (criteria.mode == SearchMode.NEARBY) {
-                    start
-                } else {
-                    endLocation ?: api.searchPlace(criteria.endName, gangwonOnly = true)
-                }
-                val resolvedCriteria = criteria.copy(
-                    startName = start.name,
-                    endName = end.name,
-                    startCoordinates = start.coordinates,
-                    endCoordinates = end.coordinates,
-                )
-                val result = api.recommendations(resolvedCriteria)
-                recommendations = result.recommendations
-                recommendationWarning = result.warning
-                baseRoute = result.baseRoute
-                corridorRadiusMeters = result.corridorRadiusMeters
-                selectedWaypointIds = emptyList()
-                focusedResultPlaceId = result.recommendations.firstOrNull()?.place?.id
-                activeCriteria = resolvedCriteria
+            onBack = {
+                routeViewModel.startNewSearch()
+                screen = AppDestination.LOCATION
             },
-            onFinished = {
-                routeSummaryExpanded = true
-                screen = AppDestination.RESULTS
-            },
-            onBack = { screen = AppDestination.CONDITIONS },
         )
 
         AppDestination.RESULTS -> ResultsScreen(
-            criteria = activeCriteria ?: criteria,
-            recommendations = recommendations,
-            warning = recommendationWarning,
-            baseRoute = baseRoute,
-            corridorRadiusMeters = corridorRadiusMeters,
+            criteria = criteria,
+            recommendations = routeState.recommendations,
+            warning = routeState.warning,
+            baseRoute = routeState.baseRoute,
+            corridorRadiusMeters = routeState.corridorRadiusMeters,
             currentLocationTarget = currentLocationTarget,
             onCurrentLocationTargetChange = { currentLocationTarget = it },
             summaryExpanded = routeSummaryExpanded,
@@ -716,19 +684,22 @@ fun TteumsaeApp() {
             selectedIds = selectedWaypointIds,
             onSelectedIdsChange = { selectedWaypointIds = it },
             calculateRoute = { waypoints ->
-                val resolved = activeCriteria ?: criteria
-                val start = requireNotNull(resolved.startCoordinates)
-                val destination = requireNotNull(resolved.endCoordinates)
+                val start = requireNotNull(criteria.startCoordinates)
+                val destination = requireNotNull(criteria.endCoordinates)
                 api.route(start, destination, waypoints)
             },
-            onBack = { screen = AppDestination.CONDITIONS },
-            onClearConditions = {
-                categories = emptySet()
-                excludeRestaurants = false
-                selectedIntents = setOf(RecommendationIntent.ANY)
-                screen = AppDestination.LOADING
+            onBack = {
+                routeViewModel.startNewSearch()
+                screen = AppDestination.LOCATION
             },
-            onSearchOtherPlace = { screen = AppDestination.LOCATION },
+            onClearConditions = {
+                routeViewModel.updateFilters(emptySet())
+                routeViewModel.search()
+            },
+            onSearchOtherPlace = {
+                routeViewModel.startNewSearch()
+                screen = AppDestination.LOCATION
+            },
             onOpenRoute = openRoute,
             onSelect = {
                 selected = it
@@ -738,7 +709,7 @@ fun TteumsaeApp() {
 
         AppDestination.DETAIL -> selected?.let {
             val selectedRecommendations = selectedWaypointIds.mapNotNull { selectedId ->
-                recommendations.find { recommendation -> recommendation.place.id == selectedId }
+                routeState.recommendations.find { recommendation -> recommendation.place.id == selectedId }
             }
             val isReplacingLastWaypoint = it.place.id !in selectedWaypointIds &&
                 selectedRecommendations.size >= MAX_KAKAO_WAYPOINTS
@@ -748,9 +719,9 @@ fun TteumsaeApp() {
                 (selectedRecommendations + it).distinctBy { recommendation -> recommendation.place.id }
             }
             DetailScreen(
-                criteria = activeCriteria ?: criteria,
+                criteria = criteria,
                 recommendation = it,
-                warning = recommendationWarning,
+                warning = routeState.warning,
                 isSaved = savedPlaces.any { entry -> entry.place.id == it.place.id },
                 onToggleSave = {
                     appScope.launch {
@@ -763,7 +734,7 @@ fun TteumsaeApp() {
                     detailRouteChecking = true
                     appScope.launch {
                         try {
-                            val resolved = activeCriteria ?: criteria
+                            val resolved = criteria
                             val start = resolved.startCoordinates
                             val destination = resolved.endCoordinates
                             if (start == null || destination == null) {
@@ -785,7 +756,8 @@ fun TteumsaeApp() {
                                 ).show()
                                 fallbackRouteSummary(resolved, detailRoute)
                             }
-                            val directRoute = baseRoute ?: fallbackBaseRouteSummary(resolved, recommendations)
+                            val directRoute = routeState.baseRoute
+                                ?: fallbackBaseRouteSummary(resolved, routeState.recommendations)
                             val isWithinBudget = isRouteWithinExtraTimeBudget(
                                 baseDrivingMinutes = directRoute.totalDrivingMinutes,
                                 extraTimeMinutes = resolved.deadlineMinutesFromNow,
@@ -2100,23 +2072,8 @@ private fun ConditionsScreen(
 
 @Composable
 private fun LoadingScreen(
-    onLoad: suspend () -> Unit,
-    onFinished: () -> Unit,
     onBack: () -> Unit,
 ) {
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    var attempt by rememberSaveable { mutableStateOf(0) }
-
-    LaunchedEffect(attempt) {
-        errorMessage = null
-        try {
-            onLoad()
-            delay(500)
-            onFinished()
-        } catch (error: Exception) {
-            errorMessage = networkFailureMessage("장소 추천", error.message)
-        }
-    }
     Box(Modifier.fillMaxSize()) {
         MapBackground(Modifier.fillMaxSize())
         Card(
@@ -2143,33 +2100,22 @@ private fun LoadingScreen(
                     )
                 }
                 Spacer(Modifier.height(18.dp))
-                if (errorMessage == null) {
+                Text(
+                    "가는 길 주변에서\n들를 장소를 찾고 있어요.",
+                    fontSize = 21.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(16.dp))
+                listOf("기본 경로 확인", "실시간 경유 경로 비교", "최대 체류시간 계산", "도착 전 여유 적용").forEach {
                     Text(
-                        "가는 길 주변에서\n들를 장소를 찾고 있어요.",
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
+                        "✓  $it",
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                        color = TteumMuted,
                     )
-                    Spacer(Modifier.height(16.dp))
-                    listOf("기본 경로 확인", "실시간 경유 경로 비교", "머무름 시간 계산", "도착 전 여유 적용").forEach {
-                        Text(
-                            "✓  $it",
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                            color = TteumMuted,
-                        )
-                    }
-                } else {
-                    Text(
-                        "장소를 추천하지 못했어요.",
-                        fontSize = 21.sp,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(10.dp))
-                    Text(errorMessage.orEmpty(), color = TteumMuted)
-                    Spacer(Modifier.height(18.dp))
-                    PrimaryButton(text = "다시 시도", onClick = { attempt += 1 })
-                    TextButton(onClick = onBack) {
-                        Text("조건으로 돌아가기")
-                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                TextButton(onClick = onBack) {
+                    Text("경로 입력으로 돌아가기")
                 }
             }
         }
