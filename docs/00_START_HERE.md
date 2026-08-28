@@ -35,7 +35,7 @@ Android 패키지: `com.tteumsae.app`
 
 Play Store 제출 준비는 끝나지 않았습니다. 로컬 조직 소유 업로드 키와 서명 AAB,
 릴리스 서명 실기기의 핵심 경로·카카오맵 전환까지는 검증했습니다. 업로드 키의 독립된
-보안 백업, Play App Signing 인증서의 카카오 키 해시, release Google OAuth 동의·복귀,
+보안 백업, Play App Signing 인증서의 카카오 키 해시, 실제 예약 만료 시각의 화면 알림 관찰,
 정책 URL 최종 점검과 스토어 리소스가 남아 있습니다.
 
 현재 소스 기준 확인용 APK는 `tteumsae-apk.vercel.app`에 배포돼 있습니다. APK는 Git에서 제외되므로 소스가 바뀌면 새 파일명으로 다시 빌드·배포하세요.
@@ -130,9 +130,11 @@ release APK를 설치해 GPS 거부 직접 입력부터 한 곳 선택, 실제 �
 출발지·경유지·도착지 전달까지 Maestro로 재검증했습니다. 키스토어와
 `android/keystore.properties`는 로컬 Git 제외 파일이며 별도 보안 백업이 필요합니다.
 
-같은 release APK에서 카카오 로그인 동의와 앱 복귀, 앱 프로세스 재시작 후 세션 복원도
-확인했습니다. Kakao Developers의 닉네임·프로필 사진·이메일 동의항목은 현재 모두
-선택 동의로 설정돼 있습니다. Google 로그인 계정 동의·복귀는 아직 남아 있습니다.
+같은 release APK에서 카카오·Google 로그인 동의와 앱 복귀, 앱 프로세스 재시작 후
+각 세션 복원도 확인했습니다. Kakao Developers의 닉네임·프로필 사진·이메일 동의항목은
+현재 모두 선택 동의로 설정돼 있습니다. 선택 경유지의 `오전 4시 35분까지 출발` UI가
+알림 권한이 허용된 시스템 AlarmManager의 `오전 4시 30분` RTC_WAKEUP 예약으로
+전달되는 것도 확인했습니다.
 
 ## 5. 카카오 Android 플랫폼 확인
 

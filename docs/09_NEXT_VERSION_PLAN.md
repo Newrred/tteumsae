@@ -15,8 +15,9 @@
 - `ARRIVAL_DEADLINE_V1`, 최대 체류 계산, 한 곳 선택과 선택형 출발 알림까지 코드 구현
 - Gate 2 운영 V1 smoke와 Android 실기기 한 곳 선택 골든 플로우 완료
 - 조직 소유 업로드 키·서명 AAB·release APK 핵심 경로 회귀와 카카오 업로드 키 해시 등록 완료
-- release Kakao OAuth 계정 동의·복귀와 프로세스 재시작 후 세션 복원 완료
-- 업로드 키 독립 보안 백업·Play App Signing 키 해시·release Google OAuth 회귀는 미완료
+- release Kakao·Google OAuth 계정 동의·복귀와 프로세스 재시작 후 세션 복원 완료
+- release 알림 스위치·권한·채널과 UI 출발 시각 기준 5분 전 AlarmManager 등록 완료
+- 업로드 키 독립 보안 백업·Play App Signing 키 해시·실제 예약 만료 시각 알림 관찰은 미완료
 
 ## Gate 0 — 사실·출시 안전 정리
 
@@ -31,7 +32,7 @@
 - [x] GitHub CI에 Backend test/check와 Android unit/lint 워크플로 구성
 - [x] Release signingConfig·조직 소유 업로드 키·서명 AAB와 핵심 경로 실기기 회귀
 - [x] Release-signed Kakao OAuth 계정 동의·앱 복귀·프로세스 재시작 세션 복원 회귀
-- [ ] Release-signed Google OAuth 계정 동의와 앱 복귀 실기기 회귀
+- [x] Release-signed Google OAuth 계정 동의·앱 복귀·프로세스 재시작 세션 복원 회귀
 - [x] Production Branch 직접 배포 대신 Preview smoke 후 명시적 승격 절차 문서화
 - [ ] migration 001~005 전체로 빈 DB 복구 리허설
 
@@ -168,7 +169,7 @@ lintVital을 통과했으며, 서명값 없이는 release 산출 작업이 실�
 
 1. 생성한 조직 소유 업로드 키를 독립된 보안 저장소에 백업한다.
 2. Google Play 첫 AAB 업로드 뒤 Play App Signing 키 해시를 Kakao Developers에 등록한다.
-3. Google OAuth 계정 동의·앱 복귀, 알림 탭과 실제 예약 시각 전달을 release 서명 기기에서 검증한다.
+3. 등록된 release 알림이 실제 예약 만료 시각에 표시되는지 장시간 실기기 관찰한다.
 4. Gate 0의 빈 DB 복구 리허설을 별도 승인 작업으로 마무리한다.
 5. 위 증거가 모인 뒤 Gate 3의 개인정보 최소 이벤트 계측과 10~15명 사용성 테스트를
    새 설계로 확정한다. 앱 복귀 자동 재조회나 지오펜스는 먼저 구현하지 않는다.
