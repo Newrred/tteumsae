@@ -64,8 +64,9 @@
 
 2026-08-28 운영 적용으로 migration 005~006, 7,000/8,000 호출 경계, 검수 overlay
 100행과 Production 승격을 확인했다. 후보 배포의 실제 route·recommendations가 성공했고
-ops RPC는 검수 100/100과 Mobility 예약/성공 10/10을 반환했다. 인증된 ops HTTP
-호출과 다음 예약 Cron 결과 확인은 운영 비밀값을 로컬에 복제하지 않는 별도 수동 점검으로 남긴다.
+인증된 ops HTTP는 검수 100/100과 Mobility 예약/성공 10/10을 반환했다. 실제 Production
+Cron 수동 실행에서 catalog와 intro 모두 200/completed였고 intro 20건 갱신·실패 0과
+두 작업의 마지막 완료 요약 영속화를 확인했다. 다음 예약 트리거 실행 이력만 남아 있다.
 
 ## Gate 2 — 도착 마감 1곳 핵심 플로우
 

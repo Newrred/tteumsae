@@ -687,7 +687,14 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 | 검수 import | 100행, 운영시간 VERIFIED 75, 주차 VERIFIED 71 |
 | ops 집계 | curation 100/100, Mobility 예약/성공 10/10, 잔여 7,990 |
 | Production 승격 | `tteumsae-backend-one.vercel.app`, health 200, curation 상세 200 |
+| Cron 비밀값 정합성 | 기존 배포와 현재 Production 설정 불일치 발견, `CRON_SECRET` 회전 후 재배포 |
+| 최종 Production | `dpl_2uF9qkGXpRwymLvU9xttEJAqTZSs`, `Ready`, 운영 별칭 연결 |
+| 인증 ops HTTP | 200, curation 100/100, Mobility 예약/성공 10/10 |
+| 수동 운영 Cron | catalog 200/completed, intro 200/completed·20건 갱신·실패 0 |
+| 실행 요약 영속화 | catalog 4,240ms, intro 10,663ms, 두 작업 모두 `lastStatus=completed` |
 
-`/api/ops/status`의 인증된 HTTP 호출은 운영 `CRON_SECRET` 원문을 로컬에 복제하지 않아
-직접 실행하지 않았다. 같은 집계 RPC의 운영 응답, HTTP 401 경계와 자동화 테스트로
-검증했으며 다음 비밀값 순환 또는 운영자 수동 점검 때 인증된 HTTP 응답을 추가 기록한다.
+운영 `CRON_SECRET`은 원문을 파일이나 로그에 남기지 않고 프로세스 메모리에서 생성해
+Vercel Sensitive 환경 변수로 회전했다. 동일 프로세스에서 재배포와 인증 요청을 수행해
+`/api/ops/status`, catalog Cron, intro Cron의 실제 Production HTTP 경계를 검증했다.
+수동 실행 뒤 ops에는 catalog와 intro의 완료 시각·소요시간·요약이 저장됐다. Vercel
+예약 트리거 자체의 실행 증거는 다음 UTC 예약 시각 이후 별도로 확인한다.

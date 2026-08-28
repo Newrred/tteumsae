@@ -17,7 +17,7 @@
 | 1–7 | 완료 | schema, provider tracking, ops API, 보수적 시간·축제 판정, CSV 도구 커밋 |
 | 8 | 완료 | `9ed9d53`, 강릉 검수 100행, validator와 데이터 계약 테스트 통과 |
 | 9 local | 완료 | Backend 143/143, project check 88 files, Android 75/75·lint·assemble 성공 |
-| 9 live | 조건부 완료 | migration 005~006, 예산 env, 100행 import, 후보 smoke, Production promote 완료 |
+| 9 live | 조건부 완료 | migration 005~006, 예산 env, 100행 import, 인증 ops·수동 Cron smoke 완료 |
 
 운영 적용 중 실제 DB에 migration 005가 빠져 006 ops RPC가 `sync_state.last_started_at`
 부재로 실패했다. 005 미적용을 스키마와 함수 존재 여부로 확인한 뒤 005를 먼저 적용했고,
@@ -26,8 +26,9 @@
 
 운영 증거: 강릉 활성 474곳, 검수 100/100, 운영시간 VERIFIED 75, 주차 VERIFIED 71,
 Mobility 예약/성공 10/10, 후보 배포 route/recommendations 성공, Production health와
-curation 상세 성공. 인증된 `/api/ops/status` HTTP 호출과 다음 예약 Cron 성공 요약은
-비밀값을 로컬에 복제하지 않는 후속 운영 점검으로 남는다.
+curation 상세 성공. 인증된 `/api/ops/status`와 수동 Production catalog·intro Cron은
+200을 반환했고 두 작업의 `completed` 요약이 영속화됐다. 다음 실제 예약 트리거 실행
+이력 확인만 후속 운영 점검으로 남는다.
 
 ## Global Constraints
 
