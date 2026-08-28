@@ -13,6 +13,7 @@
 | Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
 | 백엔드 Node 테스트 | 69/69 성공 | `2026-08-28`; TourAPI 증분 동기화, 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
+| GitHub CI 구성 | 완료, 첫 원격 실행 대기 | Backend test/check와 Android unit/lint 워크플로를 추가했으며 push 후 Actions 결과 확인 필요 |
 | 운영 백엔드 계약 | 부분 배포 | `ARRIVAL_DEADLINE_V1` 요청 검증은 배포됐지만 최대 체류·출발 마감 계산과 Android 연결은 미구현 |
 | 최신 APK 실기기 전체 회귀 | 필요 | 빌드 성공과 사용자 흐름 통과는 별개 |
 
@@ -344,7 +345,9 @@ pnpm run check
   별도 공개 문서는 아직 준비되지 않았다.
 - 새 Supabase migrations 001~004, 2-user RLS verifier, 카카오·Google provider와
   release-signed OAuth, 실제 계정 삭제는 아직 라이브 검증하지 않았다.
-- release signing, 업로드 키, AAB, Play App Signing, CI 배포 체인이 없다.
+- Backend test/check와 Android unit/lint를 수행하는 GitHub CI는 구성했다. 최초 원격 실행,
+  branch protection, Preview 스모크와 명시적 Production 승격은 아직 검증하지 않았다.
+- release signing, 업로드 키, AAB, Play App Signing과 자동 배포 체인은 없다.
 - 정책/아이콘/스플래시/데이터 안전/스토어 이미지가 제출 전 필요하다.
 
 #### Room 업데이트 설치 QA 미완료

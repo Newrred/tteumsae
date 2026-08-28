@@ -250,11 +250,11 @@ pnpm test
 pnpm run check
 ```
 
-2026-08-20 통합본 검증 결과:
+2026-08-28 Gate 0 검증 결과:
 
 ```text
-Node 테스트: 27개 통과, 0개 실패
-Project check: 통과
+Node 테스트: 69개 통과, 0개 실패
+Project check: 55개 파일 통과
 ```
 
 테스트 범위:
@@ -270,7 +270,19 @@ Project check: 통과
 이 테스트는 실제 TourAPI, Kakao, Supabase에 연결하지 않는 단위 테스트다.
 Production 배포 후 API 스모크 테스트가 별도로 필요하다.
 
-### 5.3 로컬 Vercel Functions
+### 5.3 GitHub CI
+
+`.github/workflows/ci.yml`은 push와 pull request마다 다음 두 작업을 실행한다.
+
+- Backend: Node.js 24, `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run check`
+- Android: JDK 17, Android API 36 설치, `testDebugUnitTest`, `lintDebug`
+
+CI checkout은 영문·무공백 Linux 경로를 사용하며 `android/gradlew`의 실행 권한을
+저장소에서 유지한다. 이 워크플로는 회귀 검증용이다. 서명된 AAB 생성, 실기기 OAuth·지도·
+외부 내비게이션 검증, Preview 스모크 테스트, Production 승격을 대신하지 않는다. 최초
+GitHub 원격 실행 결과는 이 커밋을 push한 뒤 Actions 화면에서 별도로 확인한다.
+
+### 5.4 로컬 Vercel Functions
 
 먼저 권한을 받은 뒤 로컬 프로젝트를 연결한다.
 
@@ -595,10 +607,9 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 
 - [ ] Git 작업 트리와 배포 커밋 식별 가능
 - [ ] 비밀값 검사 완료
-- [ ] 백엔드 27개 테스트 및 project check 통과
-- [ ] Android 컴파일·APK 빌드 통과
-- [ ] `subst Q:` 영문 드라이브에서 Android 5개 테스트 클래스 전체 통과
-- [ ] 원래 한글·공백 경로의 JUnit 로딩 한계와 우회 방법을 릴리스 노트에 명시
+- [ ] 백엔드 69개 테스트 및 55개 파일 project check 통과
+- [ ] Android 75개 단위 테스트·lint·APK 빌드 통과
+- [ ] GitHub CI의 Backend·Android 검증 작업 통과
 - [ ] Preview 스모크 테스트 통과
 - [ ] Production API 스모크 테스트 통과
 - [ ] 새 버전 APK 직접 링크 200 및 실기기 설치 통과

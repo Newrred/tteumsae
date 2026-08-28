@@ -25,7 +25,7 @@
 - [x] 로그인 화면과 정책의 기기 간 저장 연속성 약속 제거, 개인정보처리방침 URL 연결
 - [x] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
 - [x] 프로세스 복원 payload가 없으면 입력 화면 또는 데이터가 있는 이전 화면으로 안전 복귀
-- [ ] GitHub CI에서 Backend test/check와 Android unit/lint를 실행
+- [x] GitHub CI에 Backend test/check와 Android unit/lint 워크플로 구성
 - [ ] Production Branch 직접 배포 대신 Preview smoke 후 명시적 승격 절차 문서화
 - [ ] migration 001~004 전체로 빈 DB 복구 리허설
 
@@ -34,6 +34,10 @@
 - 현재 제공하지 않는 저장 동기화·실시간 추적을 UI와 정책이 약속하지 않는다.
 - API 36 대상 빌드와 자동 검증이 통과한다.
 - 화면 enum만 복원되고 결과 payload가 사라지는 상태가 사용자에게 노출되지 않는다.
+
+로컬에서는 CI와 같은 Backend·Android 명령까지 통과했다. 최초 GitHub Actions 원격 실행은
+커밋 push 후 확인해야 하며, 서명 AAB·실기기 회귀·Preview smoke·Production 승격·빈 DB
+복구 리허설은 Gate 0의 외부 환경 검증으로 남아 있다.
 
 ## Gate 1 — 최소 데이터·운영 신뢰
 
