@@ -24,6 +24,7 @@ const requiredFiles = [
   "scripts/verify-user-rls.js",
   "lib/supabase-auth.js",
   "lib/fetch-policy.js",
+  "lib/sync-lease.js",
   "lib/tour-sync.js",
   "privacy.html",
   "account-deletion.html",
