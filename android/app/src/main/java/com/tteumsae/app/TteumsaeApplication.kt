@@ -2,6 +2,7 @@ package com.tteumsae.app
 
 import android.app.Application
 import com.kakao.vectormap.KakaoMapSdk
+import com.tteumsae.app.reminder.ReminderNotifications
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,6 +17,7 @@ class TteumsaeApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        ReminderNotifications.createChannel(this)
         applicationScope.launch {
             container.savedPlacePreferencesMigration.migrateIfNeeded()
         }

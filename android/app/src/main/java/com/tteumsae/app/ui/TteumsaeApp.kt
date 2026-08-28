@@ -3,8 +3,10 @@ package com.tteumsae.app.ui
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -204,6 +206,7 @@ import com.tteumsae.app.platform.LOCATION_TERMS_URL
 import com.tteumsae.app.platform.MAX_KAKAO_WAYPOINTS
 import com.tteumsae.app.platform.PRIVACY_POLICY_URL
 import com.tteumsae.app.platform.clearAppCache
+import com.tteumsae.app.platform.buildKakaoMapMultiRouteUrl
 import com.tteumsae.app.platform.isKakaoMapAvailable
 import com.tteumsae.app.platform.openAppSettings
 import com.tteumsae.app.platform.openContactEmail
@@ -234,6 +237,8 @@ import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
+import com.tteumsae.app.reminder.ActiveTrip
+import com.tteumsae.app.reminder.activeTripExpiryEpochMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -303,6 +308,30 @@ fun TteumsaeApp() {
         },
     )
     val routeState by routeViewModel.uiState.collectAsStateWithLifecycle()
+    var reminderEnabledPlaceId by rememberSaveable {
+        mutableStateOf(application.container.activeTripStore.loadValid()?.stopId)
+    }
+    var pendingReminderTrip by remember { mutableStateOf<ActiveTrip?>(null) }
+    var pendingReminderPlaceId by remember { mutableStateOf<String?>(null) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val trip = pendingReminderTrip
+        val placeId = pendingReminderPlaceId
+        if (granted && trip != null && placeId != null) {
+            application.container.activeTripStore.save(trip)
+            application.container.departureReminderScheduler.schedule(trip)
+            reminderEnabledPlaceId = placeId
+        } else if (!granted) {
+            Toast.makeText(
+                context,
+                "알림 권한 없이도 길 안내는 그대로 이용할 수 있어요.",
+                Toast.LENGTH_LONG,
+            ).show()
+        }
+        pendingReminderTrip = null
+        pendingReminderPlaceId = null
+    }
     val accountViewModel: AccountViewModel = viewModel(
         factory = remember(application) {
             AccountViewModelFactory(
@@ -673,9 +702,81 @@ fun TteumsaeApp() {
             selectedPlaceId = routeState.selectedPlaceId,
             warning = routeState.warning,
             isRefreshing = routeState.isRefreshing,
-            onSelectPlace = routeViewModel::selectPlace,
-            onClearSelection = routeViewModel::clearSelection,
+            reminderEnabled = reminderEnabledPlaceId == routeState.selectedPlaceId,
+            onSelectPlace = { placeId ->
+                if (reminderEnabledPlaceId != null && reminderEnabledPlaceId != placeId) {
+                    application.container.departureReminderScheduler.cancel()
+                    application.container.activeTripStore.clear()
+                    reminderEnabledPlaceId = null
+                }
+                routeViewModel.selectPlace(placeId)
+            },
+            onClearSelection = {
+                application.container.departureReminderScheduler.cancel()
+                application.container.activeTripStore.clear()
+                reminderEnabledPlaceId = null
+                routeViewModel.clearSelection()
+            },
             onRefresh = routeViewModel::refresh,
+            onReminderChanged = reminder@{ recommendation, enabled ->
+                if (!enabled) {
+                    application.container.departureReminderScheduler.cancel()
+                    application.container.activeTripStore.clear()
+                    reminderEnabledPlaceId = null
+                    return@reminder
+                }
+                val start = criteria.startCoordinates
+                val destination = criteria.endCoordinates
+                val deadline = criteria.arrivalDeadlineEpochMillis
+                val stopLatitude = recommendation.place.latitude
+                val stopLongitude = recommendation.place.longitude
+                val latestDeparture = recommendation.latestDepartureEpochMillis
+                if (
+                    start == null || destination == null || deadline == null ||
+                    stopLatitude == null || stopLongitude == null || latestDeparture == null
+                ) {
+                    Toast.makeText(context, "알림에 필요한 경로 정보가 부족해요.", Toast.LENGTH_SHORT).show()
+                    return@reminder
+                }
+                if (latestDeparture <= System.currentTimeMillis()) {
+                    Toast.makeText(context, "출발 권장시각이 지나 알림을 설정할 수 없어요.", Toast.LENGTH_SHORT).show()
+                    return@reminder
+                }
+                val stop = Coordinates(stopLatitude, stopLongitude)
+                val navigationUrl = buildKakaoMapMultiRouteUrl(
+                    startName = criteria.startName,
+                    start = start,
+                    waypoints = listOf(recommendation.place.name to stop),
+                    destinationName = criteria.endName,
+                    destination = destination,
+                )
+                val trip = ActiveTrip(
+                    startName = criteria.startName,
+                    start = start,
+                    destinationName = criteria.endName,
+                    destination = destination,
+                    stopId = recommendation.place.id,
+                    stopName = recommendation.place.name,
+                    stop = stop,
+                    arrivalDeadlineEpochMillis = deadline,
+                    latestDepartureEpochMillis = latestDeparture,
+                    navigationUrl = navigationUrl,
+                    expiresAtEpochMillis = activeTripExpiryEpochMillis(deadline),
+                )
+                val hasNotificationPermission =
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED
+                if (hasNotificationPermission) {
+                    application.container.activeTripStore.save(trip)
+                    application.container.departureReminderScheduler.schedule(trip)
+                    reminderEnabledPlaceId = recommendation.place.id
+                } else {
+                    pendingReminderTrip = trip
+                    pendingReminderPlaceId = recommendation.place.id
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            },
             onBack = {
                 routeViewModel.startNewSearch()
                 screen = AppDestination.LOCATION

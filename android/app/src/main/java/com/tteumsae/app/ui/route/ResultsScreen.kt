@@ -25,6 +25,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,9 +50,11 @@ internal fun RouteResultsScreen(
     selectedPlaceId: String?,
     warning: String,
     isRefreshing: Boolean,
+    reminderEnabled: Boolean,
     onSelectPlace: (String) -> Unit,
     onClearSelection: () -> Unit,
     onRefresh: () -> Unit,
+    onReminderChanged: (SafeRecommendation, Boolean) -> Unit,
     onBack: () -> Unit,
     onNewSearch: () -> Unit,
     onNavigate: (SafeRecommendation?) -> Unit,
@@ -166,6 +169,30 @@ internal fun RouteResultsScreen(
                     ) {
                         if (warning.isNotBlank()) {
                             item { Text(warning, color = TteumMuted, fontSize = 12.sp) }
+                        }
+                        selected?.let { selectedRecommendation ->
+                            item {
+                                Surface(
+                                    color = Color(0xFFF5F6F8),
+                                    shape = RoundedCornerShape(14.dp),
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(14.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("출발 5분 전에 알려드릴까요?", fontWeight = FontWeight.Bold)
+                                            Text("선택 사항 · 길 안내는 알림 없이도 이용할 수 있어요", color = TteumMuted, fontSize = 12.sp)
+                                        }
+                                        Switch(
+                                            checked = reminderEnabled,
+                                            onCheckedChange = {
+                                                onReminderChanged(selectedRecommendation, it)
+                                            },
+                                        )
+                                    }
+                                }
+                            }
                         }
                         item {
                             TextButton(onClick = onRefresh, enabled = !isRefreshing) {

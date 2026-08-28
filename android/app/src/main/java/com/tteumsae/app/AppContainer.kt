@@ -18,6 +18,10 @@ import com.tteumsae.app.data.profile.SupabaseOAuthProfileMetadataSource
 import com.tteumsae.app.data.profile.SupabaseProfileRemoteDataSource
 import com.tteumsae.app.data.saved.RoomSavedPlacesRepository
 import com.tteumsae.app.data.saved.SavedPlacesRepository
+import com.tteumsae.app.reminder.ActiveTripStore
+import com.tteumsae.app.reminder.AlarmManagerDepartureReminderScheduler
+import com.tteumsae.app.reminder.DepartureReminderScheduler
+import com.tteumsae.app.reminder.SharedPreferencesActiveTripPreferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -55,6 +59,13 @@ class AppContainer(context: Context) {
     val accountDeletionClient = AccountDeletionApi()
 
     val routeGateway: RouteGateway = TteumsaeApi()
+
+    val activeTripStore = ActiveTripStore(
+        SharedPreferencesActiveTripPreferences(context.applicationContext),
+    )
+
+    val departureReminderScheduler: DepartureReminderScheduler =
+        AlarmManagerDepartureReminderScheduler(context.applicationContext)
 
     val savedPlacePreferencesMigration = SavedPlacePreferencesMigration(
         preferences = SharedPreferencesSavedPlaceMigrationPreferences(context.applicationContext),
