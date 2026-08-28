@@ -1,4 +1,4 @@
-import { access, copyFile, readFile } from "node:fs/promises";
+import { access, copyFile, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,10 @@ const LOCAL_CONFIGS = [
 ];
 
 const ANDROID_REQUIRED = ["sdk.dir", "KAKAO_MAP_NATIVE_APP_KEY"];
+const ANDROID_PUBLIC_AUTH_CONFIG = [
+  "SUPABASE_URL",
+  "SUPABASE_PUBLISHABLE_KEY"
+];
 const BACKEND_REQUIRED = [
   "TOUR_API_SERVICE_KEY",
   "KAKAO_REST_API_KEY",
@@ -43,6 +47,37 @@ function isConfigured(value) {
   return !/YOUR_|별도_전달|새 컴퓨터|CHANGE_ME/i.test(value);
 }
 
+function unquotePropertyValue(value) {
+  const trimmed = value.trim();
+  if (trimmed.length >= 2) {
+    const first = trimmed[0];
+    const last = trimmed.at(-1);
+    if ((first === "\"" && last === "\"") || (first === "'" && last === "'")) {
+      return trimmed.slice(1, -1);
+    }
+  }
+  return trimmed;
+}
+
+function replaceProperty(source, key, value) {
+  const lines = source.split(/\r?\n/);
+  let replaced = false;
+  const updated = lines.map((line) => {
+    const separator = line.indexOf("=");
+    if (
+      separator >= 0 &&
+      !line.trimStart().startsWith("#") &&
+      line.slice(0, separator).trim() === key
+    ) {
+      replaced = true;
+      return `${key}=${value}`;
+    }
+    return line;
+  });
+  if (!replaced) updated.push(`${key}=${value}`);
+  return updated.join("\n");
+}
+
 async function inspectConfig(repoRoot, relativePath, requiredKeys) {
   const path = join(repoRoot, relativePath);
   if (!(await exists(path))) {
@@ -70,6 +105,30 @@ export async function initializeLocalConfig(repoRoot) {
     result.created.push(targetPath);
   }
   return result;
+}
+
+export async function importAndroidPublicConfig(repoRoot, sourcePath) {
+  const sourceValues = parseProperties(await readFile(resolve(sourcePath), "utf8"));
+  const selected = Object.fromEntries(
+    ANDROID_PUBLIC_AUTH_CONFIG.map((key) => [
+      key,
+      unquotePropertyValue(sourceValues[key] ?? "")
+    ])
+  );
+  const missing = ANDROID_PUBLIC_AUTH_CONFIG.filter(
+    (key) => !isConfigured(selected[key])
+  );
+  if (missing.length > 0) {
+    throw new Error(`Android 공개 설정 누락: ${missing.join(", ")}`);
+  }
+
+  const targetPath = join(repoRoot, "android", "local.properties");
+  let target = await readFile(targetPath, "utf8");
+  for (const key of ANDROID_PUBLIC_AUTH_CONFIG) {
+    target = replaceProperty(target, key, selected[key]);
+  }
+  await writeFile(targetPath, target, "utf8");
+  return { updated: [...ANDROID_PUBLIC_AUTH_CONFIG] };
 }
 
 export async function inspectWorkspace(
@@ -111,6 +170,16 @@ async function main() {
     const initialized = await initializeLocalConfig(repoRoot);
     for (const path of initialized.created) console.log(`[CREATED] ${path}`);
     for (const path of initialized.preserved) console.log(`[KEEP] ${path}`);
+  }
+
+  const importIndex = process.argv.indexOf("--import-android-public-env");
+  if (importIndex >= 0) {
+    const sourcePath = process.argv[importIndex + 1];
+    if (!sourcePath || sourcePath.startsWith("--")) {
+      throw new Error("--import-android-public-env 뒤에 env 파일 경로가 필요합니다.");
+    }
+    const imported = await importAndroidPublicConfig(repoRoot, sourcePath);
+    console.log(`[UPDATED] Android 공개 설정: ${imported.updated.join(", ")}`);
   }
 
   const report = await inspectWorkspace(repoRoot);

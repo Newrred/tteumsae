@@ -215,17 +215,33 @@ CI는 영문·무공백 checkout을 사용한다. 원래 한글·공백 경로�
 Play Store 제출 형식은 APK가 아니라 AAB다.
 
 ```powershell
+Copy-Item keystore.properties.example keystore.properties
+# keystore.properties에 조직 소유 업로드 키 경로·alias·비밀번호 입력
 .\gradlew.bat bundleRelease
 ```
 
-하지만 현재 프로젝트에는 릴리스 `signingConfig`가 없다. 실제 제출 전에는 다음을
-완료해야 한다.
+`app/build.gradle.kts`는 Git에서 제외한 `keystore.properties` 또는 아래 CI 환경변수에서
+릴리스 서명값을 읽는다.
+
+```text
+TTEUMSAE_RELEASE_STORE_FILE
+TTEUMSAE_RELEASE_STORE_PASSWORD
+TTEUMSAE_RELEASE_KEY_ALIAS
+TTEUMSAE_RELEASE_KEY_PASSWORD
+```
+
+서명값 없이 `bundleRelease` 또는 `assembleRelease`를 실행하면 미서명 산출물의 오배포를
+막기 위해 즉시 실패한다. 난독화·컴파일만 확인할 때만 명시적으로
+`.\gradlew.bat bundleRelease -PallowUnsignedRelease=true`를 사용한다.
+
+2026-08-28에는 위 compile-only 모드에서 R8·lintVital·AAB 패키징이 성공했고, 생성된
+AAB가 미서명임을 `jarsigner -verify`로 확인했다. 실제 제출 전에는 다음을 완료해야 한다.
 
 1. 조직 소유 업로드 키 생성·보관
-2. 비밀값을 환경변수 또는 로컬 `keystore.properties`로 읽는 signingConfig 추가
+2. 로컬 또는 CI에 위 서명값 설정
 3. Google Play App Signing 활성화
-4. release와 Play 앱 서명 키 해시를 Kakao Developers에 등록
-5. release 빌드에서 난독화 후 지도·딥링크·JSON 파싱 회귀 테스트
+4. 업로드 키와 Play 앱 서명 키 해시를 Kakao Developers에 등록
+5. 서명 release 빌드에서 지도·OAuth·딥링크·JSON 파싱 회귀 테스트
 
 키스토어와 비밀번호는 Git에 커밋하지 않는다.
 
@@ -640,7 +656,7 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 
 - [x] Git 작업 트리와 배포 커밋 식별 가능
 - [x] 비밀값 검사 완료
-- [x] 백엔드 154개 테스트 및 84개 파일 project check 통과
+- [x] 백엔드 155개 테스트 및 84개 파일 project check 통과
 - [x] Android 116개 단위 테스트·lint·APK 빌드 통과
 - [ ] GitHub CI의 Backend·Android 검증 작업 통과
 - [x] 도메인 미연결 Production-target 후보 스모크 테스트 통과

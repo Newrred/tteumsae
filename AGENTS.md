@@ -20,8 +20,8 @@
 - 공식 통합 기준은 `main`입니다.
 - Gate 0, Gate 1, Gate 1-B와 Gate 2 코드는 완료됐습니다.
 - 활성 흐름은 `HOME → LOCATION → LOADING → RESULTS → DETAIL`입니다.
-- Gate 2의 남은 외부 단계는 Vercel Preview smoke와 Android 실기기 QA입니다.
-- 위 검증 후 Gate 3의 최소 계측·사용성 테스트·실경로 검증을 설계합니다.
+- Gate 2의 운영 V1 smoke, GPS 거부 fallback, 실제 카카오맵 전환과 알림 생성까지 확인했습니다.
+- 조직 소유 업로드 키·서명 AAB·release OAuth와 남은 실기기 경계를 확인한 뒤 Gate 3을 설계합니다.
 - 앱 복귀 자동 재조회, 지오펜스, 복수 경유지 UI, 전국 확장은 현재 범위가 아닙니다.
 
 ## 변경 원칙

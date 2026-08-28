@@ -10,11 +10,11 @@
 
 - Android 활성 흐름: `HOME → LOCATION → LOADING → RESULTS → DETAIL`
 - LOCATION에서 절대 도착 마감과 선택 관심 필터 입력
-- 현재 자동 검증: Android 116/116, Backend 154/154, lint 오류 0
+- 현재 자동 검증: Android 116/116, Backend 155/155, lint 오류 0
 - 운영 장소 1,719곳, 강릉 활성 474곳, 강릉 검수 100곳
 - `ARRIVAL_DEADLINE_V1`, 최대 체류 계산, 한 곳 선택과 선택형 출발 알림까지 코드 구현
 - Gate 2 운영 V1 smoke와 Android 실기기 한 곳 선택 골든 플로우 완료
-- Release signingConfig·서명 AAB·실기기 전체 회귀 없음
+- Release signingConfig 뼈대와 compile-only AAB는 완료, 조직 소유 업로드 키·서명 AAB·OAuth 회귀는 없음
 
 ## Gate 0 — 사실·출시 안전 정리
 
@@ -157,12 +157,14 @@ Cron 수동 실행에서 catalog와 intro 모두 200/completed였고 intro 20건
 
 2026-08-28 Vercel 접근 권한을 복구해 운영 환경의 격리 후보에서 health와 유효한
 `ARRIVAL_DEADLINE_V1` 추천 8건을 검증하고 동일 아티팩트를 Production으로 승격했다.
-SM-F776N 무선 ADB에서 Maestro 골든 플로우도 결과·한 곳 선택·최대 체류·출발 마감·알림
-문구·카카오맵 CTA까지 통과했다. 다음 실행 단위는 아래 순서다.
+SM-F776N 무선 ADB에서 Maestro 골든 플로우와 GPS 거부 직접 입력, 실제 카카오맵 전환,
+AlarmManager 예약과 receiver 알림 생성까지 통과했다. release compile-only AAB도 R8과
+lintVital을 통과했으며, 서명값 없이는 release 산출 작업이 실패하도록 보호했다. 다음 실행
+단위는 아래 순서다.
 
-1. GPS 권한·설정 분기, 실제 외부 카카오맵 앱 전환과 알림 수신을 수동 실기기 회귀한다.
-2. Google·Kakao OAuth를 release 서명 기기에서 검증한다.
-3. Gate 0의 release signingConfig·서명 AAB와 빈 DB 복구 리허설을 별도 승인 작업으로
-   마무리한다.
-4. 위 증거가 모인 뒤 Gate 3의 개인정보 최소 이벤트 계측과 10~15명 사용성 테스트를
+1. 조직 소유 업로드 키를 생성·백업하고 서명 AAB를 만든다.
+2. 업로드 키와 Play App Signing 키 해시를 Kakao Developers에 등록한다.
+3. Google·Kakao OAuth 계정 동의·앱 복귀, 알림 탭과 실제 예약 시각 전달을 release 서명 기기에서 검증한다.
+4. Gate 0의 빈 DB 복구 리허설을 별도 승인 작업으로 마무리한다.
+5. 위 증거가 모인 뒤 Gate 3의 개인정보 최소 이벤트 계측과 10~15명 사용성 테스트를
    새 설계로 확정한다. 앱 복귀 자동 재조회나 지오펜스는 먼저 구현하지 않는다.

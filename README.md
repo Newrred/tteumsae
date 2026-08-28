@@ -107,7 +107,7 @@ maestro test .maestro --include-tags smoke
 현재 플로우는 홈 안내창을 조건부로 닫고 목적지 검색·틈새 발견·설정 UI가 표시되는지
 확인한 뒤 지도 화면 캡처를 `android/app/build/maestro-results`에 저장합니다.
 
-2026-08-28 기준 자동 검증은 Android 116/116, Backend 154/154이며 Android lint 오류는
+2026-08-28 기준 자동 검증은 Android 116/116, Backend 155/155이며 Android lint 오류는
 0건입니다. 이 수치는 실기기 지도·OAuth·외부 내비 검증을 대신하지 않습니다.
 
 실제 비밀값, `local.properties`, `.env.local`, Vercel 연결 정보, 키스토어와 APK는 Git에 포함하지 않습니다.

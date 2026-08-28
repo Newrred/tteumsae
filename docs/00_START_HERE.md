@@ -73,6 +73,17 @@ node scripts/workspace-doctor.mjs --init
 누락된 변수 이름만 표시됩니다. Codex로 이어서 작업할 때는 저장소 루트를 열어
 `AGENTS.md`가 이 문서와 `09_NEXT_VERSION_PLAN.md`를 안내하도록 합니다.
 
+승인된 비밀관리 채널에서 받은 env 파일에 Android 로그인용 공개 설정이 함께 있으면
+서버 비밀을 복사하지 않고 아래 두 값만 `local.properties`로 가져올 수 있습니다.
+
+```powershell
+node scripts/workspace-doctor.mjs --import-android-public-env C:\secure\tteumsae.env
+```
+
+선별 대상은 `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`뿐이다. Sensitive로 저장된
+Vercel 변수는 CLI에서 원문을 다시 받을 수 없으므로 Supabase 프로젝트의 API Keys
+화면, 승인된 Supabase 연결 도구 또는 조직 비밀관리 도구에서 확보해야 한다.
+
 Git에 실제 키를 추가하지 마세요. 다음 파일은 각 개발자가 직접 만들거나 서비스에서 내려받습니다.
 
 - `android/local.properties`

@@ -11,6 +11,7 @@ Thumbs.db
 **/build/
 .maestro/screenshots/
 **/local.properties
+**/keystore.properties
 **/*.apk
 **/*.aab
 **/*.jks

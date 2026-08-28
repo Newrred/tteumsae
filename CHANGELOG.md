@@ -9,6 +9,9 @@
 - 새 데스크톱용 안전한 로컬 설정 진단기와 Codex 인수인계 지침 추가
 - Maestro 실기기 스모크·Gate 2 골든 플로우와 장소 검색 입력창 접근성 이름 추가
 - 운영 백엔드를 V1 계약 아티팩트로 승격하고 실기기 한 곳 선택 골든 플로우 검증 완료
+- GPS 권한 거부 직접 입력·실제 카카오맵 전환·출발 알림 receiver 실기기 회귀 추가
+- 릴리스 Foundation API opt-in 오류 수정과 비밀 분리 signingConfig 뼈대·미서명 방지 추가
+- workspace doctor에 서버 비밀을 제외한 Android Supabase 공개 설정 선별 import 추가
 
 ## 0.12.4 - 2026-08-22
 

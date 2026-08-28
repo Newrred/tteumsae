@@ -21,6 +21,39 @@ val supabaseUrl =
     localProperties.getProperty("SUPABASE_URL", "").trim()
 val supabasePublishableKey =
     localProperties.getProperty("SUPABASE_PUBLISHABLE_KEY", "").trim()
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) {
+        file.inputStream().use(::load)
+    }
+}
+
+fun releaseSigningValue(propertyName: String, environmentName: String): String =
+    System.getenv(environmentName)?.trim()?.takeIf(String::isNotEmpty)
+        ?: keystoreProperties.getProperty(propertyName, "").trim()
+
+val releaseStoreFile = releaseSigningValue("storeFile", "TTEUMSAE_RELEASE_STORE_FILE")
+val releaseStorePassword = releaseSigningValue("storePassword", "TTEUMSAE_RELEASE_STORE_PASSWORD")
+val releaseKeyAlias = releaseSigningValue("keyAlias", "TTEUMSAE_RELEASE_KEY_ALIAS")
+val releaseKeyPassword = releaseSigningValue("keyPassword", "TTEUMSAE_RELEASE_KEY_PASSWORD")
+val hasReleaseSigningConfig = listOf(
+    releaseStoreFile,
+    releaseStorePassword,
+    releaseKeyAlias,
+    releaseKeyPassword,
+).all(String::isNotEmpty)
+val allowUnsignedRelease = providers.gradleProperty("allowUnsignedRelease").orNull == "true"
+val releaseArtifactRequested = gradle.startParameter.taskNames.any { taskName ->
+    taskName.substringAfterLast(':').lowercase() in setOf("bundlerelease", "assemblerelease")
+}
+
+if (releaseArtifactRequested && !hasReleaseSigningConfig && !allowUnsignedRelease) {
+    throw GradleException(
+        "Release signing is not configured. Copy keystore.properties.example to " +
+            "keystore.properties and fill it, or provide the TTEUMSAE_RELEASE_* environment variables. " +
+            "Use -PallowUnsignedRelease=true only for a local compile check.",
+    )
+}
 
 fun String.asBuildConfigString(): String =
     "\"${replace("\\", "\\\\").replace("\"", "\\\"")}\""
@@ -65,8 +98,20 @@ android {
         vectorDrawables.useSupportLibrary = true
     }
 
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                storeFile = rootProject.file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

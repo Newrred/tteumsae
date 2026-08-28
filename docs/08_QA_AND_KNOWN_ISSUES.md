@@ -10,9 +10,9 @@
 | Android `testDebugUnitTest` | 116/116 성공 | 도착 마감 경계, V1 직렬화/파싱, ViewModel 복원·취소, 단일 선택, 만료 알림·백업·오류 계약 포함 |
 | Android `lintDebug` | 오류 0 | 경고 34개; deprecated 아이콘·API 등은 후속 정리 |
 | Android `assembleDebug` | 성공 | APK SHA-256 `D33AFD5DAE1D112E3BE1C553B5BA73DF36700057B41CD8BA3070132AD8FD00FA` |
-| Backend `pnpm test` | 154/154 성공 | V1·legacy·운영시간·route 호환, 보수적 우회시간과 작업공간 인수인계 포함 |
+| Backend `pnpm test` | 155/155 성공 | V1·legacy·운영시간·route 호환, 보수적 우회시간과 공개 설정 선별 import 포함 |
 | Backend `pnpm check` | 84개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
-| 실기기 회귀 | 핵심 자동 흐름 통과 | SM-F776N에서 홈·입력 smoke 2/2와 Gate 2 한 곳 선택 골든 플로우 통과; 수동 권한·OAuth·외부 앱 회귀는 남음 |
+| 실기기 회귀 | 핵심 자동·수동 흐름 통과 | SM-F776N에서 홈·입력 smoke 2/2, Gate 2 골든 플로우, GPS 거부 직접 입력, 실제 카카오맵 전환과 알림 생성 통과; OAuth와 나머지 경계 회귀는 남음 |
 
 ## 2. 로컬 자동 검증
 
@@ -39,7 +39,7 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 
 ### LOCATION
 
-- [ ] 출발지와 목적지를 검색하고 현위치 권한 거부 후에도 직접 입력할 수 있다.
+- [x] 출발지와 목적지를 검색하고 현위치 권한 거부 후에도 직접 입력할 수 있다.
 - [x] 도착 마감은 처음에 미선택이고 선택기 취소 시 값이 생기지 않는다.
 - [ ] 현재부터 15분 미만과 24시간 초과를 거부한다.
 - [ ] 자정 이후 시각을 다음 날 마감으로 해석한다.
@@ -60,9 +60,9 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 
 ### 카카오맵·알림
 
-- [ ] 선택 없음은 목적지 직행, 선택 한 곳은 해당 장소를 경유해 카카오맵이 열린다.
+- [x] 선택 한 곳은 해당 장소를 경유해 실제 카카오맵 앱이 열린다. 선택 없음 직행은 별도 확인이 남았다.
 - [ ] 카카오맵 미설치 시 웹 또는 설치 안내 fallback이 동작한다.
-- [ ] 장소를 선택했을 때만 출발 5분 전 알림 토글이 보인다.
+- [x] 장소를 선택하면 출발 5분 전 알림 토글이 보이고 켜기·끄기가 동작한다.
 - [ ] Android 13+에서 토글을 켤 때만 알림 권한을 요청한다.
 - [ ] 권한 거부 후에도 카카오맵 안내가 동작한다.
 - [ ] 알림이 예상 시각에 오고 탭하면 저장된 카카오 경로 URL이 열린다.
@@ -95,7 +95,7 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 
 ### P0 — 출시 전 필수
 
-- release signingConfig와 서명 AAB가 없다.
+- release signingConfig 뼈대는 추가됐지만 조직 소유 업로드 키와 서명 AAB가 없다.
 - API 36 실제 기기 전체 회귀가 없다.
 - Google·Kakao OAuth release 서명 회귀가 없다.
 ### P1 — 핵심 UX 검증
@@ -125,11 +125,18 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 | Maestro home smoke | 통과 — Kakao 지도 타일·로고, 목적지 검색, 틈새 발견, 설정 확인 |
 | Maestro route input smoke | 통과 — 입력 UI, 미선택 마감, 선택기 취소, 선택 필터와 CTA 확인 |
 | Maestro Gate 2 golden | 통과 — 강릉역 검색, 약 6시간 뒤 마감, 추천 결과, 한 곳 선택, 최대 체류·출발 마감·알림·카카오맵 CTA 확인 |
+| GPS 거부 fallback | 통과 — 시스템 권한 요청 2회 거부 후 `직접 검색`, 강릉시청→강릉역 추천과 선택 완료; 테스트 종료 후 위치 권한 복구 |
+| 실제 카카오맵 전환 | 통과 — 선택 경유지 CTA 뒤 `net.daum.android.map/com.kakao.map.main.view.MainActivity` 전경 확인 |
+| 출발 알림 | 부분 통과 — 활성 여행 저장, 02:57 AlarmManager 예약, 실제 receiver 호출과 고우선순위 알림 제목·본문 확인; 예약은 해제, 알림 탭과 실제 시각 전달은 남음 |
+| Release compile-only | 통과 — 누락 opt-in 수정 후 R8·lintVital·AAB 패키징 성공; 25,582,110바이트, SHA-256 `26B80F4EAF4FD34AEA828676EF6721BBC5B4E0F43017052CB6A198BEE3C7589C`, 미서명이라 제출 불가 |
+| Android OAuth 로컬 설정 | 부분 통과 — Supabase 연결로 modern publishable key만 로컬 복구, Auth settings의 Google·Kakao 활성 확인, 실기기 버튼이 `accounts.google.com`·`accounts.kakao.com` 진입; 계정 동의·앱 복귀와 release 서명 회귀는 남음 |
 | Vercel Production | 배포 `dpl_EryPsqsbuegEP3gTQfDwseTH49Wt` 승격; health 200, TourAPI·DB·Kakao routing configured, V1 추천 8건과 필수 meta/추천 필드 확인 |
 
 실행 명령은 `maestro test .maestro --include-tags smoke`이며 앱 데이터를 초기화하지 않는다.
 `gate2-golden.yaml`은 운영 V1 계약의 결과·한 곳 선택·최대 체류·출발 마감·알림·외부
-카카오맵 CTA를 반복 검증한다. 실제 외부 카카오맵 앱 전환과 알림 수신은 수동 회귀로 남긴다.
+카카오맵 CTA를 반복 검증한다. GPS 거부 회귀는 Android의 `USER_FIXED` 권한 플래그까지
+초기화하는 `.maestro/run-gps-denied-kakao.ps1 -DeviceId <adb-id>`로 실행한다. 알림 예약과
+receiver 생성은 확인했지만 실제 예약 시각 전달과 알림 탭 경로는 수동 회귀로 남긴다.
 
 ## 7. 회귀 기록 형식
 

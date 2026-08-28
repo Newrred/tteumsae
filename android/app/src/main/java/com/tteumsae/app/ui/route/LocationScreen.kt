@@ -512,6 +512,7 @@ private fun RouteFilterChip(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun RouteLocationSearchField(
     value: String,

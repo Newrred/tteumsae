@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
+  importAndroidPublicConfig,
   initializeLocalConfig,
   inspectWorkspace
 } from "../../scripts/workspace-doctor.mjs";
@@ -95,6 +96,42 @@ test("환경 진단은 Node 24가 아니면 작업 기준과 실제 버전을 �
       expected: "24.x",
       actual: "20.20.1"
     });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("Android 공개 설정 import는 Supabase 공개값만 복사하고 서버 비밀은 배제한다", async () => {
+  const root = await fixture();
+  try {
+    await writeFile(
+      join(root, "android", "local.properties"),
+      "sdk.dir=C\\:\\\\Android\\\\Sdk\n" +
+        "KAKAO_MAP_NATIVE_APP_KEY=keep-native-key\n" +
+        "SUPABASE_URL=\nSUPABASE_PUBLISHABLE_KEY=\n"
+    );
+    const source = join(root, "backend", ".env.production.local");
+    await writeFile(
+      source,
+      "SUPABASE_URL=\"https://sample.supabase.co\"\n" +
+        "SUPABASE_PUBLISHABLE_KEY='sb_publishable_sample'\n" +
+        "SUPABASE_SERVICE_ROLE_KEY=must-never-reach-android\n"
+    );
+
+    const result = await importAndroidPublicConfig(root, source);
+    const androidConfig = await readFile(
+      join(root, "android", "local.properties"),
+      "utf8"
+    );
+
+    assert.deepEqual(result.updated, [
+      "SUPABASE_URL",
+      "SUPABASE_PUBLISHABLE_KEY"
+    ]);
+    assert.match(androidConfig, /SUPABASE_URL=https:\/\/sample\.supabase\.co/);
+    assert.match(androidConfig, /SUPABASE_PUBLISHABLE_KEY=sb_publishable_sample/);
+    assert.match(androidConfig, /KAKAO_MAP_NATIVE_APP_KEY=keep-native-key/);
+    assert.doesNotMatch(androidConfig, /SERVICE_ROLE|must-never-reach-android/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
