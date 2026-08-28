@@ -9,6 +9,18 @@ function restoreEnv(name, value) {
   else process.env[name] = value;
 }
 
+async function passthroughLease({ run }) {
+  return run();
+}
+
+function activeDeadline() {
+  return {
+    signal: new AbortController().signal,
+    canStart: () => true,
+    dispose: () => {}
+  };
+}
+
 test("증분 목록은 modifiedtime을 보내고 표출·비표출 항목을 모두 매핑한다", async () => {
   const originalFetch = globalThis.fetch;
   const originalServiceKey = process.env.TOUR_API_SERVICE_KEY;
@@ -138,6 +150,8 @@ test("카탈로그 첫 페이지는 주기 시작을 먼저 저장하고 완료 
   let fetchOptions;
 
   const handler = createTourCatalogSyncHandler({
+    withLease: passthroughLease,
+    deadlineFactory: activeDeadline,
     now: () => new Date(fixedNow),
     getState: async (id) => {
       if (id === "tour_catalog_delta") {
@@ -205,6 +219,8 @@ test("부분 처리 재시작은 기존 주기와 커서를 유지하고 다음 
     cycle_started_at: "2026-08-27T00:00:00.000Z"
   };
   const handler = createTourCatalogSyncHandler({
+    withLease: passthroughLease,
+    deadlineFactory: activeDeadline,
     now: () => new Date(fixedNow),
     getState: async () => state,
     saveState: async (saved) => savedStates.push(structuredClone(saved)),
@@ -249,6 +265,8 @@ test("초기 증분 커서는 현재 시각보다 24시간 이전부터 겹쳐 �
   process.env.CRON_SECRET = "cron-secret";
   let modifiedTime;
   const handler = createTourCatalogSyncHandler({
+    withLease: passthroughLease,
+    deadlineFactory: activeDeadline,
     now: () => new Date(fixedNow),
     getState: async (id) => ({ id, next_page: 1 }),
     saveState: async () => {},
@@ -271,4 +289,73 @@ test("초기 증분 커서는 현재 시각보다 24시간 이전부터 겹쳐 �
   } finally {
     restoreEnv("CRON_SECRET", originalSecret);
   }
+});
+
+test("카탈로그 Cron은 이미 실행 중이면 작업 없이 skipped를 반환한다", async () => {
+  const { createTourCatalogSyncHandler } = await import("../api/cron/tour-catalog-sync.js");
+  process.env.CRON_SECRET = "cron-secret";
+  let fetched = false;
+  const handler = createTourCatalogSyncHandler({
+    withLease: async ({ jobId }) => {
+      assert.equal(jobId, "tour_catalog_delta");
+      return { status: "skipped", reason: "already_running" };
+    },
+    deadlineFactory: activeDeadline,
+    fetchPage: async () => {
+      fetched = true;
+    }
+  });
+
+  const response = await handler.fetch(
+    new Request("https://example.test/api/cron/tour-catalog-sync", {
+      headers: { authorization: "Bearer cron-secret" }
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "skipped", reason: "already_running" });
+  assert.equal(fetched, false);
+});
+
+test("카탈로그 Cron은 deadline 여유가 없으면 새 페이지를 시작하지 않는다", async () => {
+  const { createTourCatalogSyncHandler } = await import("../api/cron/tour-catalog-sync.js");
+  process.env.CRON_SECRET = "cron-secret";
+  let fetched = false;
+  let minimumRemaining;
+  const signal = new AbortController().signal;
+  const handler = createTourCatalogSyncHandler({
+    withLease: passthroughLease,
+    deadlineFactory: () => ({
+      signal,
+      canStart: (minimum) => {
+        minimumRemaining = minimum;
+        return false;
+      },
+      dispose: () => {}
+    }),
+    now: () => new Date(fixedNow),
+    getState: async () => ({
+      id: "tour_catalog_delta",
+      next_page: 2,
+      source_cursor: "20260827",
+      cycle_started_at: "2026-08-28T00:00:00.000Z"
+    }),
+    saveState: async () => {},
+    fetchPage: async () => {
+      fetched = true;
+    }
+  });
+
+  const response = await handler.fetch(
+    new Request("https://example.test/api/cron/tour-catalog-sync", {
+      headers: { authorization: "Bearer cron-secret" }
+    })
+  );
+  const body = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "partial");
+  assert.equal(body.processedPages, 0);
+  assert.equal(minimumRemaining, 5_000);
+  assert.equal(fetched, false);
 });

@@ -9,6 +9,18 @@ async function waitFor(predicate, message) {
   assert.fail(message);
 }
 
+async function passthroughLease({ run }) {
+  return run();
+}
+
+function activeDeadline() {
+  return {
+    signal: new AbortController().signal,
+    canStart: () => true,
+    dispose: () => {}
+  };
+}
+
 test("intro 배치는 성공·빈 결과·실패를 분리하고 각 결과를 기록한다", async () => {
   const { runIntroBatch } = await import("../lib/tour-sync.js");
   const places = [
@@ -33,7 +45,7 @@ test("intro 배치는 성공·빈 결과·실패를 분리하고 각 결과를 �
     recordFailure: async (place, error, now) => failures.push({ place, error, now })
   });
 
-  assert.deepEqual(result, { processed: 3, updated: 1, empty: 1, failed: 1 });
+  assert.deepEqual(result, { processed: 3, deferred: 0, updated: 1, empty: 1, failed: 1 });
   assert.deepEqual(saved.map(({ place }) => place.content_id), ["success", "empty"]);
   assert.equal(saved[0].enrichment.openingHours, "09:00~18:00");
   assert.equal(saved[0].enrichment.syncedAt, syncedAt);
@@ -76,7 +88,40 @@ test("intro 배치는 설정한 동시 실행 수를 넘지 않는다", async ()
   assert.equal(maxActive, 2);
   blockers.splice(0).forEach((release) => release());
 
-  assert.deepEqual(await running, { processed: 4, updated: 0, empty: 4, failed: 0 });
+  assert.deepEqual(await running, {
+    processed: 4,
+    deferred: 0,
+    updated: 0,
+    empty: 4,
+    failed: 0
+  });
+});
+
+test("intro 배치는 deadline 뒤 새 장소를 시작하지 않고 signal을 전달한다", async () => {
+  const { runIntroBatch } = await import("../lib/tour-sync.js");
+  const signal = new AbortController().signal;
+  const started = [];
+  let admissions = 0;
+
+  const result = await runIntroBatch({
+    places: ["1", "2", "3"].map((content_id) => ({ content_id, content_type_id: 12 })),
+    concurrency: 1,
+    syncedAt: "2026-08-27T00:00:00.000Z",
+    signal,
+    canStart: () => admissions++ < 1,
+    fetchIntro: async (contentId, _contentTypeId, options) => {
+      assert.equal(options.signal, signal);
+      started.push(contentId);
+      return null;
+    },
+    saveIntro: async (_place, _enrichment, options) => {
+      assert.equal(options.signal, signal);
+    },
+    recordFailure: async () => {}
+  });
+
+  assert.deepEqual(started, ["1"]);
+  assert.deepEqual(result, { processed: 1, deferred: 2, updated: 0, empty: 1, failed: 0 });
 });
 
 test("intro 대상은 활성·미완료·재시도 시각 도래 순으로 최대 40개만 조회한다", async () => {
@@ -284,7 +329,13 @@ test("intro Cron은 GET·Bearer 인증만 허용한다", async () => {
   const { createTourIntroSyncHandler } = await import("../api/cron/tour-intro-sync.js");
   process.env.CRON_SECRET = "cron-secret";
   let listed = 0;
+  let claimed = 0;
   const handler = createTourIntroSyncHandler({
+    withLease: async (options) => {
+      claimed += 1;
+      return passthroughLease(options);
+    },
+    deadlineFactory: activeDeadline,
     listPlaces: async () => {
       listed += 1;
       return [];
@@ -300,6 +351,34 @@ test("intro Cron은 GET·Bearer 인증만 허용한다", async () => {
   );
   assert.equal(authResponse.status, 401);
   assert.equal(listed, 0);
+  assert.equal(claimed, 0);
+});
+
+test("intro Cron은 이미 실행 중이면 작업 없이 skipped를 반환한다", async () => {
+  const { createTourIntroSyncHandler } = await import("../api/cron/tour-intro-sync.js");
+  process.env.CRON_SECRET = "cron-secret";
+  let listed = false;
+  const handler = createTourIntroSyncHandler({
+    withLease: async ({ jobId }) => {
+      assert.equal(jobId, "tour_intro");
+      return { status: "skipped", reason: "already_running" };
+    },
+    deadlineFactory: activeDeadline,
+    listPlaces: async () => {
+      listed = true;
+      return [];
+    }
+  });
+
+  const response = await handler.fetch(
+    new Request("https://example.test/api/cron/tour-intro-sync", {
+      headers: { authorization: "Bearer cron-secret" }
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "skipped", reason: "already_running" });
+  assert.equal(listed, false);
 });
 
 test("intro Cron은 배치 40·동시성 4로 제한하고 빈 대상은 idle로 반환한다", async () => {
@@ -314,13 +393,15 @@ test("intro Cron은 배치 40·동시성 4로 제한하고 빈 대상은 idle로
     { content_id: "2", content_type_id: 14 }
   ];
   const handler = createTourIntroSyncHandler({
+    withLease: passthroughLease,
+    deadlineFactory: activeDeadline,
     listPlaces: async (options) => {
       listOptions = options;
       return places;
     },
     runBatch: async (options) => {
       runOptions = options;
-      return { processed: 2, updated: 1, empty: 1, failed: 0 };
+      return { processed: 2, deferred: 0, updated: 1, empty: 1, failed: 0 };
     },
     fetchIntro: async () => null,
     saveIntro: async () => {},
@@ -336,17 +417,23 @@ test("intro Cron은 배치 40·동시성 4로 제한하고 빈 대상은 idle로
   assert.deepEqual(await response.json(), {
     status: "completed",
     processed: 2,
+    deferred: 0,
     updated: 1,
     empty: 1,
     failed: 0
   });
   assert.equal(listOptions.limit, 40);
   assert.ok(listOptions.now instanceof Date);
+  assert.equal(listOptions.signal, runOptions.signal);
   assert.equal(runOptions.concurrency, 4);
   assert.equal(runOptions.places, places);
   assert.equal(typeof runOptions.syncedAt, "string");
 
-  const idleHandler = createTourIntroSyncHandler({ listPlaces: async () => [] });
+  const idleHandler = createTourIntroSyncHandler({
+    withLease: passthroughLease,
+    deadlineFactory: activeDeadline,
+    listPlaces: async () => []
+  });
   const idleResponse = await idleHandler.fetch(
     new Request("https://example.test/api/cron/tour-intro-sync", {
       headers: { authorization: "Bearer cron-secret" }
@@ -355,6 +442,7 @@ test("intro Cron은 배치 40·동시성 4로 제한하고 빈 대상은 idle로
   assert.deepEqual(await idleResponse.json(), {
     status: "idle",
     processed: 0,
+    deferred: 0,
     updated: 0,
     empty: 0,
     failed: 0

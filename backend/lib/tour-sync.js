@@ -6,27 +6,31 @@ export async function runIntroBatch({
   saveIntro,
   recordFailure,
   concurrency = 4,
-  syncedAt
+  syncedAt,
+  signal,
+  canStart = () => true
 }) {
   const queue = Array.isArray(places) ? places : [];
   const workerCount = Math.min(Math.max(Number.parseInt(concurrency, 10) || 1, 1), 4, queue.length);
-  const counts = { processed: queue.length, updated: 0, empty: 0, failed: 0 };
+  const counts = { processed: 0, deferred: 0, updated: 0, empty: 0, failed: 0 };
   const failureTime = new Date(syncedAt);
   let nextIndex = 0;
   let recordError = null;
 
   async function worker() {
     while (nextIndex < queue.length) {
+      if (!canStart()) break;
       const place = queue[nextIndex];
       nextIndex += 1;
+      counts.processed += 1;
       try {
-        const intro = await fetchIntro(place.content_id, place.content_type_id);
+        const intro = await fetchIntro(place.content_id, place.content_type_id, { signal });
         const enrichment = normalizeTourIntro({
           contentTypeId: place.content_type_id,
           intro,
           syncedAt
         });
-        await saveIntro(place, enrichment);
+        await saveIntro(place, enrichment, { signal });
         if (intro === null) counts.empty += 1;
         else counts.updated += 1;
       } catch (error) {
@@ -41,6 +45,7 @@ export async function runIntroBatch({
   }
 
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  counts.deferred = queue.length - counts.processed;
   if (recordError) throw recordError;
   return counts;
 }

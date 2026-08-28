@@ -27,7 +27,7 @@
     },
     {
       "path": "/api/cron/tour-intro-sync",
-      "schedule": "40 18 * * *"
+      "schedule": "20 22 * * *"
     }
   ]
 }

@@ -58,5 +58,8 @@ test("Vercel은 기존 설정을 유지하면서 정책 페이지 clean URL을 �
     { source: "/account-deletion", destination: "/account-deletion.html" }
   );
   assert.ok(config.rewrites.some((rewrite) => rewrite.source.includes("downloads")));
-  assert.equal(config.crons.length, 2);
+  assert.deepEqual(config.crons, [
+    { path: "/api/cron/tour-catalog-sync", schedule: "20 18 * * *" },
+    { path: "/api/cron/tour-intro-sync", schedule: "20 22 * * *" }
+  ]);
 });
