@@ -1,4 +1,5 @@
 import { estimateRoute } from "./routing.js";
+import { evaluateOperatingWindow } from "./operating-hours.js";
 
 export function safetyLevel(marginMinutes) {
   if (marginMinutes >= 20) return "COMFORTABLE";
@@ -13,47 +14,12 @@ function matchesCategories(criteria, place) {
 }
 
 export function operationStatus(place, arrival = new Date()) {
-  const hours = String(place.opening_hours ?? "").trim();
-  const closedDays = String(place.closed_days ?? "").trim();
-  if (!hours && !closedDays) return "UNKNOWN";
-
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("ko-KR", {
-      timeZone: "Asia/Seoul",
-      weekday: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23"
-    }).formatToParts(arrival).map(({ type, value }) => [type, value])
-  );
-  const weekday = parts.weekday?.[0];
-  const arrivalMinutes = Number(parts.hour) * 60 + Number(parts.minute);
-  const alwaysOpen = /24\s*시간/.test(hours);
-  const simpleWeeklyClosedDays = /^(?:매주\s*)?[월화수목금토일](?:요일)?(?:\s*[,·/]\s*(?:매주\s*)?[월화수목금토일](?:요일)?)*$/.test(closedDays)
-    ? [...closedDays.matchAll(/[월화수목금토일](?=요일|\s*[,·/]|$)/g)].map((match) => match[0])
-    : [];
-  if (!alwaysOpen && weekday && simpleWeeklyClosedDays.includes(weekday)) {
-    return "CLOSED";
-  }
-  if (alwaysOpen) return "OPEN";
-
-  const ranges = [...hours.matchAll(/(\d{1,2})(?::(\d{2}))?\s*(?:~|-|–|부터)\s*(\d{1,2})(?::(\d{2}))?/g)]
-    .map((match) => [
-      Number(match[1]) * 60 + Number(match[2] ?? 0),
-      Number(match[3]) * 60 + Number(match[4] ?? 0)
-    ]);
-  if (ranges.length === 0) return "UNKNOWN";
-
-  const isOpen = ranges.some(([start, end]) =>
-    end > start
-      ? arrivalMinutes >= start && arrivalMinutes < end
-      : arrivalMinutes >= start || arrivalMinutes < end
-  );
-  if (!isOpen) return "CLOSED";
-
-  const understoodClosedDays = !closedDays || /연중무휴/.test(closedDays) ||
-    simpleWeeklyClosedDays.length > 0;
-  return understoodClosedDays ? "OPEN" : "UNKNOWN";
+  const instant = arrival instanceof Date ? arrival : new Date(arrival);
+  return evaluateOperatingWindow(place, {
+    arrival: instant,
+    departure: new Date(instant.getTime() + 1),
+    timeZone: "Asia/Seoul"
+  }).status;
 }
 
 export function selectRouteCandidates(criteria, places, limit = 20) {
@@ -101,18 +67,14 @@ export function recommendPlaces(
       );
       if (!route) return null;
       const arrival = new Date(now.getTime() + route.firstLegMinutes * 60_000);
-      const lastVisitMoment = new Date(
-        arrival.getTime() + Math.max(0, place.default_stay_minutes * 60_000 - 1)
+      const departure = new Date(
+        arrival.getTime() + Math.max(0, place.default_stay_minutes) * 60_000
       );
-      const visitStatuses = [
-        operationStatus(place, arrival),
-        operationStatus(place, lastVisitMoment)
-      ];
-      const status = visitStatuses.includes("CLOSED")
-        ? "CLOSED"
-        : visitStatuses.every((value) => value === "OPEN")
-          ? "OPEN"
-          : "UNKNOWN";
+      const status = evaluateOperatingWindow(place, {
+        arrival,
+        departure,
+        timeZone: "Asia/Seoul"
+      }).status;
       if (status === "CLOSED") return null;
       const totalMinutes =
         route.firstLegMinutes + place.default_stay_minutes + route.secondLegMinutes;

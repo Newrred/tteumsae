@@ -33,12 +33,30 @@ const enrichmentPublicColumns = [
 ];
 
 const publicColumns = [...basePublicColumns, ...enrichmentPublicColumns].join(",");
+const effectivePublicColumns = [
+  "effective_opening_hours",
+  "effective_closed_days",
+  "effective_last_admission",
+  "effective_parking_info",
+  "data_provenance",
+  "operating_info_status",
+  "admission_info_status",
+  "parking_info_status",
+  "reviewed_at"
+];
+const effectiveColumns = [
+  ...basePublicColumns,
+  ...enrichmentPublicColumns,
+  ...effectivePublicColumns
+].join(",");
 
 const legacyPublicColumns = [...basePublicColumns, "raw"].join(",");
 
 function toPublicPlace(row) {
   const legacy = row.raw?._tteumsae ?? {};
   const { raw: _raw, ...place } = row;
+  const hasEffectiveHours = Object.hasOwn(place, "effective_opening_hours");
+  const hasEffectiveClosedDays = Object.hasOwn(place, "effective_closed_days");
   const imageUrls = Array.isArray(place.image_urls)
     ? place.image_urls
     : Array.isArray(legacy.imageUrls)
@@ -49,7 +67,7 @@ function toPublicPlace(row) {
     : Array.isArray(legacy.tags)
       ? legacy.tags
       : [];
-  return {
+  const result = {
     ...place,
     cat1: place.cat1 ?? row.raw?.cat1 ?? null,
     cat2: place.cat2 ?? row.raw?.cat2 ?? null,
@@ -57,9 +75,19 @@ function toPublicPlace(row) {
     image_url: place.image_url || imageUrls[0] || null,
     image_urls: imageUrls,
     tags,
-    opening_hours: place.opening_hours ?? legacy.openingHours ?? null,
-    closed_days: place.closed_days ?? legacy.closedDays ?? null
+    opening_hours: hasEffectiveHours
+      ? place.effective_opening_hours
+      : place.opening_hours ?? legacy.openingHours ?? null,
+    closed_days: hasEffectiveClosedDays
+      ? place.effective_closed_days
+      : place.closed_days ?? legacy.closedDays ?? null,
+    last_admission: place.effective_last_admission ?? null,
+    parking_info: place.effective_parking_info ?? null
   };
+  for (const column of effectivePublicColumns.filter((name) => name.startsWith("effective_"))) {
+    delete result[column];
+  }
+  return result;
 }
 
 async function databaseRequest(path, { method = "GET", body, prefer, signal } = {}) {
@@ -103,13 +131,32 @@ async function databaseRequest(path, { method = "GET", body, prefer, signal } = 
 }
 
 async function requestPublicPlaceRows(query, signal) {
+  query.set("select", effectiveColumns);
   try {
-    return await databaseRequest(`places?${query}`, { signal });
+    return await databaseRequest(`effective_places?${query}`, { signal });
   } catch (error) {
     const missingEnrichmentColumn =
       error.code === "42703" &&
       enrichmentPublicColumns.some((column) => error.databaseMessage?.includes(`places.${column}`));
-    if (!missingEnrichmentColumn) throw error;
+    if (missingEnrichmentColumn) {
+      query.set("select", legacyPublicColumns);
+      return databaseRequest(`places?${query}`, { signal });
+    }
+    const missingEffectiveView =
+      ["42P01", "PGRST205"].includes(error.code) ||
+      /effective_places/i.test(error.databaseMessage ?? "");
+    if (!missingEffectiveView) throw error;
+    query.set("select", publicColumns);
+    try {
+      return await databaseRequest(`places?${query}`, { signal });
+    } catch (fallbackError) {
+      const missingFallbackColumn =
+        fallbackError.code === "42703" &&
+        enrichmentPublicColumns.some((column) =>
+          fallbackError.databaseMessage?.includes(`places.${column}`)
+        );
+      if (!missingFallbackColumn) throw fallbackError;
+    }
     query.set("select", legacyPublicColumns);
     return databaseRequest(`places?${query}`, { signal });
   }
@@ -127,7 +174,6 @@ export async function listPlaces({
   signal
 } = {}) {
   const query = new URLSearchParams({
-    select: publicColumns,
     is_active: "eq.true",
     order: "name.asc",
     limit: String(Math.min(Math.max(limit, 1), 500)),
@@ -146,7 +192,6 @@ export async function listPlaces({
 
 export async function getPlace(contentId, { signal } = {}) {
   const query = new URLSearchParams({
-    select: publicColumns,
     content_id: `eq.${contentId}`,
     is_active: "eq.true",
     limit: "1"

@@ -185,6 +185,43 @@ test("동기화 작업 finish는 소유 token과 결과 요약을 보낸다", as
   }
 });
 
+test("검수 overlay의 유효 운영시간과 입장 마감을 원본보다 우선한다", async () => {
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json([{
+    content_id: "curated-1",
+    source: "TOUR_API",
+    name: "검수 장소",
+    category: "CULTURE",
+    content_type_id: 14,
+    area_code: 32,
+    sigungu_code: 1,
+    latitude: 37.75,
+    longitude: 128.87,
+    default_stay_minutes: 60,
+    opening_hours: "00:00~01:00",
+    closed_days: null,
+    effective_opening_hours: "09:00~18:00",
+    effective_closed_days: "매주 월요일",
+    effective_last_admission: "17:30",
+    effective_parking_info: "건물 주차장 이용",
+    data_provenance: "CURATION",
+    image_urls: [],
+    tags: []
+  }]);
+  try {
+    const [place] = await listPlaces({ limit: 1 });
+    assert.equal(place.opening_hours, "09:00~18:00");
+    assert.equal(place.closed_days, "매주 월요일");
+    assert.equal(place.last_admission, "17:30");
+    assert.equal(place.parking_info, "건물 주차장 이용");
+    assert.equal(place.data_provenance, "CURATION");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("공급자 사용량 예약 RPC 결과를 서버 필드명으로 정규화한다", async () => {
   const originalUrl = process.env.SUPABASE_URL;
   const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
