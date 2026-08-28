@@ -7,6 +7,7 @@ const root = new URL("../", import.meta.url);
 const rootPath = fileURLToPath(root);
 const requiredFiles = [
   "api/health.js",
+  "api/ops/status.js",
   "api/account.js",
   "api/places/index.js",
   "api/places/[id].js",
