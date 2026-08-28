@@ -12,6 +12,7 @@
     "test": "node scripts/run-tests.js",
     "check": "node scripts/check-project.js",
     "curation:export": "node scripts/export-place-curations.mjs",
+    "curation:research:apply": "node scripts/apply-tour-curation-research.mjs",
     "curation:validate": "node scripts/validate-place-curations.mjs",
     "curation:import": "node scripts/import-place-curations.mjs"
   },

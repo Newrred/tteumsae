@@ -6,6 +6,7 @@ import {
   selectCurationCandidates,
   serializeCurationCsv
 } from "../lib/curation-csv.js";
+import { listCurationCandidatesFromApi } from "../lib/curation-source.js";
 import { listGangneungCurationCandidates } from "../lib/database.js";
 
 const defaultOutput = fileURLToPath(
@@ -14,11 +15,17 @@ const defaultOutput = fileURLToPath(
 
 async function main() {
   const { values } = parseArgs({
-    options: { output: { type: "string", default: defaultOutput } }
+    options: {
+      output: { type: "string", default: defaultOutput },
+      "api-base": { type: "string" }
+    }
   });
   const output = resolve(values.output);
+  const sourceCandidates = values["api-base"]
+    ? await listCurationCandidatesFromApi(values["api-base"])
+    : await listGangneungCurationCandidates();
   const candidates = selectCurationCandidates(
-    await listGangneungCurationCandidates(),
+    sourceCandidates,
     100
   );
   if (candidates.length !== 100) {

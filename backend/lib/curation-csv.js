@@ -194,10 +194,45 @@ function qualityScore(place) {
     (place.intro_synced_at ? 1 : 0);
 }
 
+const categoryTargets = Object.freeze({
+  ATTRACTION: 30,
+  CULTURE: 8,
+  FESTIVAL: 3,
+  LEISURE: 20,
+  CAFE: 12,
+  RESTAURANT: 22,
+  SHOPPING: 5
+});
+
+const nonDestinationNamePattern = new RegExp([
+  "화장실",
+  "종합사회복지관",
+  "대한노인회",
+  "관광안내센터",
+  "문화교육센터",
+  "여객터미널",
+  "공설운동장",
+  "국민체육센터",
+  "생활체육센터",
+  "실내체육관",
+  "스쿼시장",
+  "볼링장",
+  "복권마트",
+  "식자재마트",
+  "다이소",
+  "베이비하우스",
+  "배스킨라빈스",
+  "컴포즈커피",
+  "이디야커피"
+].join("|"));
+
 export function selectCurationCandidates(candidates, limit = 100) {
   const unique = [...new Map(
     candidates
-      .filter((place) => String(place?.content_id ?? "").trim())
+      .filter((place) =>
+        String(place?.content_id ?? "").trim() &&
+        !nonDestinationNamePattern.test(String(place?.name ?? ""))
+      )
       .map((place) => [String(place.content_id), place])
   ).values()];
   const groups = new Map();
@@ -215,6 +250,12 @@ export function selectCurationCandidates(candidates, limit = 100) {
   }
 
   const selected = [];
+  for (const [category, targetAt100] of Object.entries(categoryTargets)) {
+    const group = groups.get(category) ?? [];
+    const target = Math.floor(limit * targetAt100 / 100);
+    selected.push(...group.splice(0, Math.min(target, group.length)));
+  }
+
   const categories = [...groups.keys()].sort();
   while (selected.length < limit) {
     let added = false;

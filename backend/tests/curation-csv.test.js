@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import {
   CURATION_COLUMNS,
   parseCurationCsv,
@@ -125,4 +126,89 @@ test("후보 선정은 품질순을 유지하면서 카테고리를 순환해 10
   assert.equal(new Set(selected.map((row) => row.content_id)).size, 100);
   assert.ok(selected.some((row) => row.category === "CULTURE"));
   assert.equal(selected[0].image_url, "https://example.com/image.jpg");
+});
+
+test("강릉 핵심 100개는 관광 경험 중심 카테고리 목표를 적용한다", () => {
+  const categories = [
+    "ATTRACTION",
+    "CULTURE",
+    "FESTIVAL",
+    "LEISURE",
+    "CAFE",
+    "RESTAURANT",
+    "SHOPPING"
+  ];
+  const candidates = categories.flatMap((category) =>
+    Array.from({ length: 40 }, (_, index) => ({
+      content_id: `${category}-${index}`,
+      name: `${category} ${index}`,
+      category,
+      image_url: "https://example.com/image.jpg",
+      overview: "소개",
+      intro_synced_at: null
+    }))
+  );
+
+  const selected = selectCurationCandidates(candidates, 100);
+  const counts = Object.fromEntries(
+    Object.entries(Object.groupBy(selected, (row) => row.category))
+      .map(([category, rows]) => [category, rows.length])
+  );
+
+  assert.deepEqual(counts, {
+    ATTRACTION: 30,
+    CULTURE: 8,
+    FESTIVAL: 3,
+    LEISURE: 20,
+    CAFE: 12,
+    RESTAURANT: 22,
+    SHOPPING: 5
+  });
+});
+
+test("화장실·복지·체육 행정시설과 체인점은 핵심 장소 후보에서 제외한다", () => {
+  const excludedNames = [
+    "강문해변화장실",
+    "강릉종합사회복지관",
+    "대한노인회 강릉시지회",
+    "강릉국민체육센터",
+    "꽃사슴복권마트(슈퍼맨편의점)",
+    "다이소 강릉내곡점",
+    "배스킨라빈스강릉주문진점"
+  ];
+  const candidates = [
+    ...excludedNames.map((name, index) => ({
+      content_id: `excluded-${index}`,
+      name,
+      category: "ATTRACTION",
+      image_url: "https://example.com/image.jpg",
+      overview: "소개",
+      intro_synced_at: "2026-08-28T00:00:00Z"
+    })),
+    ...Array.from({ length: 100 }, (_, index) => ({
+      content_id: `valid-${index}`,
+      name: `관광 장소 ${index}`,
+      category: "ATTRACTION",
+      image_url: null,
+      overview: null,
+      intro_synced_at: null
+    }))
+  ];
+
+  const selected = selectCurationCandidates(candidates, 100);
+
+  assert.equal(selected.length, 100);
+  assert.ok(selected.every((row) => !excludedNames.includes(row.name)));
+});
+
+test("강릉 알파 검수 데이터는 출처가 있는 고유 장소 100개다", async () => {
+  const dataUrl = new URL(
+    "../data/gangneung-core-place-curations.csv",
+    import.meta.url
+  );
+  const rows = parseCurationCsv(await readFile(dataUrl, "utf8"));
+  const normalized = validateCurationRows(rows, { expectedCount: 100 });
+
+  assert.equal(new Set(normalized.map((row) => row.content_id)).size, 100);
+  assert.ok(normalized.every((row) => row.source_urls.length > 0));
 });
