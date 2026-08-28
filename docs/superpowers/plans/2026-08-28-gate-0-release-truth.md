@@ -41,7 +41,7 @@
 - Consumes: existing optional Kakao/Google account flow, Room `GUEST` saved-place behavior, `BuildConfig.API_BASE_URL`.
 - Produces: `GUEST_ACCOUNT_DESCRIPTION`, `LOGIN_SHEET_TITLE`, `LOGIN_SHEET_DESCRIPTION`, `ACCOUNT_DELETION_IMPACT`, and a non-empty `PRIVACY_POLICY_URL` derived from the deployed backend base URL.
 
-- [ ] **Step 1: Write failing Android copy tests**
+- [x] **Step 1: Write failing Android copy tests**
 
 ```kotlin
 package com.tteumsae.app.ui.account
@@ -69,7 +69,7 @@ class AccountCopyTest {
 }
 ```
 
-- [ ] **Step 2: Extend policy and URL tests so the current code fails**
+- [x] **Step 2: Extend policy and URL tests so the current code fails**
 
 Add to `ExternalSettingsTest.kt`:
 
@@ -93,7 +93,7 @@ assert.doesNotMatch(html, /저장한 장소 동기화/);
 assert.match(html, /기기에만 저장한 장소는 계정 삭제로 삭제되지/);
 ```
 
-- [ ] **Step 3: Run focused tests and verify failure**
+- [x] **Step 3: Run focused tests and verify failure**
 
 Run:
 
@@ -106,7 +106,7 @@ node --test tests/policy-pages.test.js
 
 Expected: Android fails because the copy constants do not exist; Backend fails because the current policy promises saved-place synchronization.
 
-- [ ] **Step 4: Add copy constants and use them from Compose**
+- [x] **Step 4: Add copy constants and use them from Compose**
 
 Create `AccountCopy.kt`:
 
@@ -124,7 +124,7 @@ internal const val ACCOUNT_DELETION_IMPACT =
 
 Replace the four inline strings in `AccountComponents.kt` and `LoginSheet.kt` with these constants.
 
-- [ ] **Step 5: Connect the existing privacy page and correct current policy claims**
+- [x] **Step 5: Connect the existing privacy page and correct current policy claims**
 
 Change `ExternalSettings.kt` to:
 
@@ -134,7 +134,7 @@ internal val PRIVACY_POLICY_URL = "${BuildConfig.API_BASE_URL}/privacy"
 
 Keep `LOCATION_TERMS_URL` blank until a separate public document exists. Rewrite the privacy and deletion page saved-place paragraphs to say that current saved places remain on the device and are not synchronized to the account. Keep profile, auth provider, Vercel log and Supabase processor disclosures.
 
-- [ ] **Step 6: Run focused and full tests**
+- [x] **Step 6: Run focused and full tests**
 
 Run:
 
@@ -148,11 +148,11 @@ node scripts/check-project.js
 
 Expected: Android 73 tests pass after adding `AccountCopyTest` and the privacy URL assertion; Backend policy tests and full suite pass.
 
-- [ ] **Step 7: Update feature and Gate 0 status docs**
+- [x] **Step 7: Update feature and Gate 0 status docs**
 
 Record that account copy no longer promises remote saved-place sync and that the privacy URL is connected. Do not mark remote sync as implemented.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/ui/account android/app/src/test/java/com/tteumsae/app/ui/account android/app/src/main/java/com/tteumsae/app/platform/ExternalSettings.kt android/app/src/test/java/com/tteumsae/app/platform/ExternalSettingsTest.kt backend/privacy.html backend/account-deletion.html backend/tests/policy-pages.test.js docs/03_FEATURE_MATRIX.md docs/09_NEXT_VERSION_PLAN.md
@@ -175,7 +175,7 @@ git commit -m "fix: 계정과 저장 기능 안내를 실제 동작에 맞춤"
 - Consumes: current compileSdk 36 and minSdk 26.
 - Produces: targetSdk 36 builds without adding permissions or changing runtime behavior intentionally.
 
-- [ ] **Step 1: Verify the precondition fails the API 36 gate**
+- [x] **Step 1: Verify the precondition fails the API 36 gate**
 
 Run:
 
@@ -186,7 +186,7 @@ if ($text -notmatch 'targetSdk\s*=\s*36') { throw 'targetSdk 36 gate failed as e
 
 Expected: command throws because current targetSdk is 35.
 
-- [ ] **Step 2: Change only the target SDK**
+- [x] **Step 2: Change only the target SDK**
 
 ```kotlin
 defaultConfig {
@@ -198,7 +198,7 @@ defaultConfig {
 
 Do not update unrelated dependencies in this task.
 
-- [ ] **Step 3: Run Android verification**
+- [x] **Step 3: Run Android verification**
 
 Run:
 
@@ -209,11 +209,11 @@ cd android
 
 Expected: all unit tests pass, lint reports zero errors, and `app-debug.apk` is created.
 
-- [ ] **Step 4: Update current-state documentation**
+- [x] **Step 4: Update current-state documentation**
 
 Replace current `targetSdk=35` facts and Play-blocker warnings with target 36 completion. Retain release signing, AAB and real-device regression as unfinished.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add android/app/build.gradle.kts README.md android/README.md docs/00_START_HERE.md docs/06_ENVIRONMENT_AND_ACCESS.md docs/07_BUILD_TEST_DEPLOY.md docs/08_QA_AND_KNOWN_ISSUES.md docs/09_NEXT_VERSION_PLAN.md
@@ -235,7 +235,7 @@ git commit -m "build: Android target SDK를 36으로 상향"
 - Consumes: `AppDestination`, current in-memory start/end locations, `activeCriteria`, `baseRoute`, and selected recommendation.
 - Produces: `safeRestoredDestination(current, hasLocations, hasResults, hasDetail)` and a root effect that redirects invalid restored states.
 
-- [ ] **Step 1: Write failing policy tests**
+- [x] **Step 1: Write failing policy tests**
 
 Add to `AppDestinationTest.kt`:
 
@@ -256,7 +256,7 @@ fun complete_route_payload_keeps_the_requested_destination() {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify failure**
+- [x] **Step 2: Run the focused test and verify failure**
 
 Run:
 
@@ -267,7 +267,7 @@ cd android
 
 Expected: compilation fails because `safeRestoredDestination` does not exist.
 
-- [ ] **Step 3: Implement the pure restoration policy**
+- [x] **Step 3: Implement the pure restoration policy**
 
 Add to `AppDestination.kt`:
 
@@ -299,7 +299,7 @@ fun safeRestoredDestination(
 }
 ```
 
-- [ ] **Step 4: Apply the policy at the root Compose state boundary**
+- [x] **Step 4: Apply the policy at the root Compose state boundary**
 
 After the route state declarations in `TteumsaeApp.kt`, derive:
 
@@ -319,7 +319,7 @@ LaunchedEffect(safeScreen) {
 
 Import the policy function. Keep the later `RouteFlowViewModel + SavedStateHandle` migration in Gate 2; this task only prevents broken restored screens.
 
-- [ ] **Step 5: Run focused and full Android verification**
+- [x] **Step 5: Run focused and full Android verification**
 
 Run:
 
@@ -331,11 +331,11 @@ cd android
 
 Expected: focused policy tests and the full Android suite pass with zero lint errors.
 
-- [ ] **Step 6: Update current-state and QA docs**
+- [x] **Step 6: Update current-state and QA docs**
 
 Document the safe fallback while retaining the known limitation that route payload itself is not yet restored across process death.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add android/app/src/main/java/com/tteumsae/app/ui/navigation/AppDestination.kt android/app/src/test/java/com/tteumsae/app/ui/navigation/AppDestinationTest.kt android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt docs/03_FEATURE_MATRIX.md docs/04_SCREEN_FLOWS.md docs/08_QA_AND_KNOWN_ISSUES.md docs/09_NEXT_VERSION_PLAN.md
@@ -355,7 +355,7 @@ git commit -m "fix: 복원 데이터 없는 경로 화면을 안전하게 되돌
 - Consumes: `backend/pnpm-lock.yaml`, Node 24 package engine, Gradle wrapper 8.13, JDK 17.
 - Produces: `backend` and `android` CI jobs on pushes and pull requests without production secrets.
 
-- [ ] **Step 1: Verify CI is absent**
+- [x] **Step 1: Verify CI is absent**
 
 Run:
 
@@ -365,7 +365,7 @@ if (-not (Test-Path .github\workflows\ci.yml)) { throw 'CI file missing as expec
 
 Expected: command throws.
 
-- [ ] **Step 2: Create the workflow**
+- [x] **Step 2: Create the workflow**
 
 Create `.github/workflows/ci.yml`:
 
@@ -413,7 +413,7 @@ jobs:
       - run: ./gradlew testDebugUnitTest lintDebug
 ```
 
-- [ ] **Step 3: Preserve executable mode for Unix checkouts**
+- [x] **Step 3: Preserve executable mode for Unix checkouts**
 
 Run:
 
@@ -421,7 +421,7 @@ Run:
 git update-index --chmod=+x android/gradlew
 ```
 
-- [ ] **Step 4: Run the workflow commands locally**
+- [x] **Step 4: Run the workflow commands locally**
 
 Run:
 
@@ -435,7 +435,7 @@ cd ..\android
 
 Expected: Backend tests/check and Android unit/lint pass without production secrets.
 
-- [ ] **Step 5: Validate workflow invariants**
+- [x] **Step 5: Validate workflow invariants**
 
 Run:
 
@@ -446,11 +446,11 @@ $workflow = Get-Content -Raw .github\workflows\ci.yml
 }
 ```
 
-- [ ] **Step 6: Update build, QA and Gate 0 docs**
+- [x] **Step 6: Update build, QA and Gate 0 docs**
 
 Document the two CI jobs and keep real-device, signed release and production promotion as separate manual gates.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add .github/workflows/ci.yml android/gradlew docs/07_BUILD_TEST_DEPLOY.md docs/08_QA_AND_KNOWN_ISSUES.md docs/09_NEXT_VERSION_PLAN.md
@@ -468,7 +468,7 @@ git commit -m "ci: Android와 Backend 검증 워크플로 추가"
 - Consumes: Tasks 1–4 commits and verification output.
 - Produces: an honest Gate 0 status that separates completed local work from external release and DB recovery gates.
 
-- [ ] **Step 1: Run final verification from a clean index**
+- [x] **Step 1: Run final verification from a clean index**
 
 Run:
 
@@ -485,7 +485,7 @@ git status --short
 
 Expected: all automatic checks pass; only deliberate documentation status edits and pre-existing untracked `output/`, `tmp/` remain.
 
-- [ ] **Step 2: Record completed and external Gate 0 items accurately**
+- [x] **Step 2: Record completed and external Gate 0 items accurately**
 
 Mark copy, privacy URL, targetSdk 36, safe restoration and CI complete. Leave these unchecked:
 
@@ -493,13 +493,25 @@ Mark copy, privacy URL, targetSdk 36, safe restoration and CI complete. Leave th
 - protected main/Preview smoke/explicit production promotion in GitHub and Vercel UI
 - empty Supabase 001–004 recovery rehearsal
 
-- [ ] **Step 3: Commit checkpoint evidence**
+- [x] **Step 3: Commit checkpoint evidence**
 
 ```powershell
 git add docs/09_NEXT_VERSION_PLAN.md docs/08_QA_AND_KNOWN_ISSUES.md docs/superpowers/plans/2026-08-28-gate-0-release-truth.md
 git commit -m "docs: Gate 0 로컬 검증 결과 기록"
 ```
 
-- [ ] **Step 4: Stop for review before Gate 1 or Gate 2**
+- [x] **Step 4: Stop for review before Gate 1 or Gate 2**
 
 Report exact test counts, lint result, APK path, commits and remaining external gates. Do not start the absolute-deadline Backend contract until this checkpoint is reviewed.
+
+## Execution record — 2026-08-28
+
+- Account/privacy truth: `263aa8b`
+- Android API 36 target: `0971a3c`
+- Safe restored destination: `104b6d8`
+- Backend/Android CI: `4f4d198`
+- Deterministic pnpm 11.19.0 and `esbuild` allowlist: `a5ce2c4`
+- Backend: frozen install 성공, tests 69/69, project check 56 files
+- Android: tests 75/75, lint errors 0, `assembleDebug` 성공
+- Local checkpoint only: GitHub Actions 최초 원격 실행, 서명 AAB·실기기 OAuth,
+  Preview/Production 승격, 빈 Supabase migration 001–004 복구 리허설은 미완료

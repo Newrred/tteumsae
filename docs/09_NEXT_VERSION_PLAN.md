@@ -26,6 +26,7 @@
 - [x] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
 - [x] 프로세스 복원 payload가 없으면 입력 화면 또는 데이터가 있는 이전 화면으로 안전 복귀
 - [x] GitHub CI에 Backend test/check와 Android unit/lint 워크플로 구성
+- [ ] Release signingConfig·서명 AAB와 release-signed OAuth 실기기 회귀
 - [ ] Production Branch 직접 배포 대신 Preview smoke 후 명시적 승격 절차 문서화
 - [ ] migration 001~004 전체로 빈 DB 복구 리허설
 

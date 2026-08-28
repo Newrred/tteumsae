@@ -8,7 +8,7 @@
 | 대상 | 상태 | 근거·주의 |
 |---|---|---|
 | Android `compileDebugKotlin` | 성공 | Room Flow UI 연결과 레거시 UI 저장 코드 제거 기준 |
-| Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `F988EFB6F03E51DECD64280C230B14054BDF746A7C777DACEAFEE8EB61E2B602` |
+| Android `assembleDebug` | 성공 | `2026-08-28` 강제 재빌드; `app-debug.apk` SHA-256 `843821A80816EF61613960C589A689530F81919C3F659F9BAA496A155F324E33` |
 | Android `testDebugUnitTest` | 75/75 성공 | `2026-08-28`; 안전한 화면 복원, 계정 문구·정책 URL, 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
 | Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
