@@ -239,3 +239,29 @@
 - 운영자 표기는 `신홍`, 문의 메일은 `godburgundy@gmail.com`을 사용한다.
 - 계정 삭제는 검증된 토큰 ID만 사용하고 Auth 사용자 삭제 cascade로 프로필과
   원격 저장 행을 함께 삭제한다.
+
+## 2026-08-28 — Gate 1-A 무료 운영 런타임 안전 경계
+
+상태: 확정
+
+결정:
+
+- Vercel Hobby의 카탈로그·intro Cron은 단일 오케스트레이터로 합치지 않고 UTC
+  시간대를 4시간 분리한다.
+- 수동 호출과 비정상 중복은 `sync_state` 기반 90초 DB lease와 service-role 전용
+  claim/finish RPC로 차단한다.
+- Supabase·Kakao·TourAPI 요청별 timeout과 추천 25초, Cron 신규 작업 45초·강제
+  중단 50초의 내부 deadline을 둔다.
+- 자동차 추천의 실제 Kakao Mobility 후보 호출은 최대 8개로 제한한다.
+
+이유:
+
+- Hobby Cron은 같은 시각대 안에서 최대 ±59분 오차가 있어 분 단위 순서에 의존할 수 없다.
+- 현재 Vercel Function 제한은 60초지만 외부 요청과 DB 작업에 timeout이 없어 플랫폼
+  강제 종료 전에 상태를 저장한다는 보장이 없다.
+- 무료 운영에서 후보 20개 경로 호출은 비용·지연 대비 검증 가치가 낮다.
+
+다시 검토할 조건:
+
+- 유료 Vercel로 전환해 분 단위 Cron·긴 Function 또는 durable workflow를 사용할 때.
+- Gate 3 실제 경로 검증에서 후보 8개로 인한 의미 있는 추천 누락이 확인될 때.
