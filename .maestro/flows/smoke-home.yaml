@@ -10,6 +10,24 @@ tags:
       visible: "강원도로 가는 길, 어디 들를까?"
     commands:
       - tapOn: "확인"
+- runFlow:
+    label: Leave place detail when it is open
+    when:
+      visible: "카카오맵에서 경유지로 안내"
+    commands:
+      - back
+- runFlow:
+    label: Leave recommendation results when they are open
+    when:
+      visible: "한 곳만 골라 가볍게 들러보세요"
+    commands:
+      - back
+- runFlow:
+    label: Return home from route input when needed
+    when:
+      visible: "어디로, 몇 시까지 가나요?"
+    commands:
+      - back
 - assertVisible: "목적지 검색"
 - assertVisible: "틈새 발견"
 - assertVisible: "설정"

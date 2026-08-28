@@ -1,0 +1,51 @@
+appId: com.tteumsae.app
+name: Android route input smoke test
+tags:
+  - smoke
+  - gate2
+---
+- launchApp
+- runFlow:
+    label: Close the daily guide when it is visible
+    when:
+      visible: "강원도로 가는 길, 어디 들를까?"
+    commands:
+      - tapOn: "확인"
+- runFlow:
+    label: Leave place detail when it is open
+    when:
+      visible: "카카오맵에서 경유지로 안내"
+    commands:
+      - back
+- runFlow:
+    label: Return to route input from results when needed
+    when:
+      visible: "한 곳만 골라 가볍게 들러보세요"
+    commands:
+      - back
+- runFlow:
+    label: Open route input from home when needed
+    when:
+      visible: "목적지 검색"
+    commands:
+      - tapOn: "목적지 검색"
+- hideKeyboard
+- assertVisible: "출발지"
+- assertVisible: "목적지"
+- assertVisible: "도착 마감"
+- assertVisible: "도착해야 하는 시각 선택"
+- tapOn: "도착해야 하는 시각 선택"
+- assertVisible: "도착 마감 선택"
+- tapOn: "취소"
+- assertVisible: "도착해야 하는 시각 선택"
+- scrollUntilVisible:
+    element: "아무거나"
+    direction: DOWN
+- assertVisible: "아무거나"
+- scrollUntilVisible:
+    element: "틈새 찾기"
+    direction: DOWN
+- assertVisible: "틈새 찾기"
+- takeScreenshot:
+    path: route-input
+    label: Capture the route input screen

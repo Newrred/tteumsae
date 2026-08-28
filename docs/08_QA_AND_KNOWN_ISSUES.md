@@ -8,11 +8,11 @@
 | 대상 | 상태 | 주의 |
 |---|---|---|
 | Android `testDebugUnitTest` | 116/116 성공 | 도착 마감 경계, V1 직렬화/파싱, ViewModel 복원·취소, 단일 선택, 만료 알림·백업·오류 계약 포함 |
-| Android `lintDebug` | 오류 0 | 경고 35개; deprecated 아이콘·API 등은 후속 정리 |
-| Android `assembleDebug` | 성공 | APK SHA-256 `12E3D987C82417D928A0B7D07E01A9FCA837E5D5D614F8C14CE1F4B2CCC82B93` |
+| Android `lintDebug` | 오류 0 | 경고 34개; deprecated 아이콘·API 등은 후속 정리 |
+| Android `assembleDebug` | 성공 | APK SHA-256 `D33AFD5DAE1D112E3BE1C553B5BA73DF36700057B41CD8BA3070132AD8FD00FA` |
 | Backend `pnpm test` | 154/154 성공 | V1·legacy·운영시간·route 호환, 보수적 우회시간과 작업공간 인수인계 포함 |
 | Backend `pnpm check` | 84개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
-| 실기기 회귀 | 미실행 | 지도, GPS, 카카오맵, 알림, OAuth는 기기 확인 필요 |
+| 실기기 회귀 | 부분 실행 | SM-F776N에서 홈 지도와 입력 화면 2/2 통과; Gate 2 골든 흐름은 운영 V1 계약 불일치로 차단 |
 
 ## 2. 로컬 자동 검증
 
@@ -40,7 +40,7 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 ### LOCATION
 
 - [ ] 출발지와 목적지를 검색하고 현위치 권한 거부 후에도 직접 입력할 수 있다.
-- [ ] 도착 마감은 처음에 미선택이고 선택기 취소 시 값이 생기지 않는다.
+- [x] 도착 마감은 처음에 미선택이고 선택기 취소 시 값이 생기지 않는다.
 - [ ] 현재부터 15분 미만과 24시간 초과를 거부한다.
 - [ ] 자정 이후 시각을 다음 날 마감으로 해석한다.
 - [ ] 관심 필터를 선택하지 않아도 진행할 수 있다.
@@ -101,6 +101,11 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - Gate 2 Preview 배포는 Vercel에서 `BLOCKED/UNKNOWN` 상태로 멈췄고, 기존 Ready
   Preview는 Supabase·Kakao Preview 환경변수가 없어 V1 유효 요청 smoke를 할 수 없다.
   Production은 변경하지 않았다.
+- 2026-08-28 운영 `POST /api/recommendations`에 유효한 `ARRIVAL_DEADLINE_V1`
+  요청을 보내면 legacy 검증 메시지 `deadlineMinutes와 extraTimeMinutes 중 하나만 입력해야
+  합니다.`와 함께 400을 반환한다. Android 요청 본문 단위 테스트는 V1 필드만 전송함을
+  확인했으므로 앱 fallback으로 숨기지 않고 Preview 배포·smoke 후 Production 승격으로
+  바로잡아야 한다. 현재 PC의 Vercel CLI에는 로그인 자격 증명이 없다.
 
 ### P1 — 핵심 UX 검증
 
@@ -118,7 +123,24 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - 저장 장소는 기기 로컬이며 계정 간·기기 간 동기화하지 않는다.
 - legacy 상대시간과 복수 route 코드는 호환을 위해 남아 있어 별도 제거 버전이 필요하다.
 
-## 6. 회귀 기록 형식
+## 6. 2026-08-28 실기기 회귀 기록
+
+| 항목 | 기록 |
+|---|---|
+| 기기 / OS | Samsung SM-F776N / Android 17 (API 37) |
+| 앱 기준 | 이 회귀 기록을 반영한 커밋의 접근성 선택자 포함 debug APK |
+| APK SHA-256 | `D33AFD5DAE1D112E3BE1C553B5BA73DF36700057B41CD8BA3070132AD8FD00FA` |
+| 환경 | 운영 `https://tteumsae-backend-one.vercel.app` |
+| Maestro home smoke | 통과 — Kakao 지도 타일·로고, 목적지 검색, 틈새 발견, 설정 확인 |
+| Maestro route input smoke | 통과 — 입력 UI, 미선택 마감, 선택기 취소, 선택 필터와 CTA 확인 |
+| Maestro Gate 2 golden | 차단 — 강릉역 검색과 실행 시각 약 6시간 뒤 마감 선택 후 운영 V1 요청이 400 |
+| Vercel health | 200, TourAPI·DB·Kakao routing configured |
+
+실행 명령은 `maestro test .maestro --include-tags smoke`이며 앱 데이터를 초기화하지 않는다.
+`gate2-golden.yaml`은 운영 배포가 V1 계약을 수용하면 결과·한 곳 선택·알림·외부 카카오맵
+검증을 계속하도록 남겨 둔다.
+
+## 7. 회귀 기록 형식
 
 실기기 확인 시 날짜, 기기/OS, APK commit, 환경(Preview/Production), 단계, 기대/실제,
 스크린샷 또는 로그를 함께 남긴다. 자동 테스트 성공을 실기기 완료로 대체하지 않는다.
