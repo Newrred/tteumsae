@@ -115,8 +115,8 @@
 
 - 기존 `minjaeimnydaa/tteumsae`는 upstream 원본으로 유지한다.
 - 직접 관리하고 배포할 기준 저장소는 `Newrred/tteumsae` 포크로 이전한다.
-- 진행 중인 통합 브랜치는 `agent/new-route-flow-ui`이며, Vercel 백엔드의 Git 루트는 `backend/`로 설정한다.
-- Vercel 프로젝트 `tteumsae-backend`는 `Newrred/tteumsae`와 연결하고, 통합이 끝날 때까지 `agent/new-route-flow-ui`를 Production Branch로 사용한다.
+- 당시 통합 브랜치는 `agent/new-route-flow-ui`였으며, Vercel 백엔드의 Git 루트는 `backend/`로 설정했다.
+- 당시 Vercel 프로젝트 `tteumsae-backend`는 통합 완료 전까지 해당 브랜치를 Production Branch로 사용했다. 2026-08-28 Gate 2 통합 뒤 공식 Git 기준과 Production Branch는 `main`으로 전환한다.
 - CLI 배포 시 Android 산출물이나 로컬 작업물이 전송되지 않도록 저장소 루트 `.vercelignore`를 유지한다.
 
 이유:

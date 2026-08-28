@@ -63,6 +63,16 @@ Play Store 제출 준비는 끝나지 않았습니다. 릴리스 서명, AAB,
 
 ## 3. 저장소 복제 후 보안 원칙
 
+새 Windows 데스크톱에서는 저장소 루트에서 다음 진단기를 먼저 실행할 수 있습니다.
+
+```powershell
+node scripts/workspace-doctor.mjs --init
+```
+
+템플릿이 없는 로컬 설정만 생성하고 기존 파일은 보존합니다. 진단 출력에는 값 대신
+누락된 변수 이름만 표시됩니다. Codex로 이어서 작업할 때는 저장소 루트를 열어
+`AGENTS.md`가 이 문서와 `09_NEXT_VERSION_PLAN.md`를 안내하도록 합니다.
+
 Git에 실제 키를 추가하지 마세요. 다음 파일은 각 개발자가 직접 만들거나 서비스에서 내려받습니다.
 
 - `android/local.properties`

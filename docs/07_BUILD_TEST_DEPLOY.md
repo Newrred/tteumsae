@@ -258,7 +258,7 @@ pnpm run check
 
 ```text
 Node 테스트: 94개 통과, 0개 실패
-Project check: 83개 파일 통과
+Project check: 84개 파일 통과
 ```
 
 테스트 범위:
@@ -366,16 +366,15 @@ Preview 배포에는 Vercel Cron이 자동 실행되지 않는다. Cron 검증�
 
 ### 7.2 Production 배포
 
-Vercel 프로젝트는 `Newrred/tteumsae`와 연결되어 있다. `agent/new-route-flow-ui`
-push 또는 CLI 배포는 먼저 Preview 검증 대상으로 취급하고, 자동 Production 배포에
-의존하지 않는다. Vercel Production Branch가 아직 작업 브랜치를 가리키면 Preview
-검증 전에 `main`으로 되돌린다. 저장소 루트 `.vercelignore`는 Android 빌드 산출물,
+Vercel 프로젝트는 `Newrred/tteumsae`와 연결되어 있다. `main` push 또는 CLI 배포는
+먼저 Preview 검증 대상으로 취급하고, 자동 Production 배포에 의존하지 않는다.
+Vercel Production Branch는 `main`을 기준으로 한다. 저장소 루트 `.vercelignore`는 Android 빌드 산출물,
 `node_modules`, `output/`, `tmp/`가 CLI 업로드에 포함되지 않게 하므로 삭제하지
 않는다. Vercel Build and Deployment의 Node.js 버전과 `backend/package.json`의
 `engines.node`는 모두 `24.x`를 사용한다.
 
 ```powershell
-git push newrred agent/new-route-flow-ui
+git push newrred main
 ```
 
 연결된 Preview 배포의 스모크 테스트와 migration 호환성을 확인한 뒤 Vercel UI에서
@@ -641,8 +640,8 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 
 - [x] Git 작업 트리와 배포 커밋 식별 가능
 - [x] 비밀값 검사 완료
-- [x] 백엔드 143개 테스트 및 88개 파일 project check 통과
-- [x] Android 75개 단위 테스트·lint·APK 빌드 통과
+- [x] 백엔드 154개 테스트 및 84개 파일 project check 통과
+- [x] Android 116개 단위 테스트·lint·APK 빌드 통과
 - [ ] GitHub CI의 Backend·Android 검증 작업 통과
 - [x] 도메인 미연결 Production-target 후보 스모크 테스트 통과
 - [x] Production API 스모크 테스트 통과

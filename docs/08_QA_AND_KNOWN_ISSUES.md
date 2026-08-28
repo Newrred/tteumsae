@@ -10,8 +10,8 @@
 | Android `testDebugUnitTest` | 116/116 성공 | 도착 마감 경계, V1 직렬화/파싱, ViewModel 복원·취소, 단일 선택, 만료 알림·백업·오류 계약 포함 |
 | Android `lintDebug` | 오류 0 | 경고 35개; deprecated 아이콘·API 등은 후속 정리 |
 | Android `assembleDebug` | 성공 | APK SHA-256 `12E3D987C82417D928A0B7D07E01A9FCA837E5D5D614F8C14CE1F4B2CCC82B93` |
-| Backend `pnpm test` | 151/151 성공 | V1·legacy·운영시간·route 호환과 보수적 우회시간 포함 |
-| Backend `pnpm check` | 83개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
+| Backend `pnpm test` | 154/154 성공 | V1·legacy·운영시간·route 호환, 보수적 우회시간과 작업공간 인수인계 포함 |
+| Backend `pnpm check` | 84개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
 | 실기기 회귀 | 미실행 | 지도, GPS, 카카오맵, 알림, OAuth는 기기 확인 필요 |
 
 ## 2. 로컬 자동 검증
