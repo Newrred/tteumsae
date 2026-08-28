@@ -1,5 +1,10 @@
 # Deadline-Aware Route Core Implementation Plan
 
+> **상태: 실행 중지.** 2026-08-28 감사에서 API 계약이 상대 `deadlineMinutes`에서 절대
+> `arrivalDeadlineEpochMillis`로 바뀌고, 알파 범위가 1곳으로 축소됐다. Task 1의
+> `ARRIVAL_DEADLINE_V1` 검증 골격만 현재 코드에 반영됐으며 Task 2 이후를 이 문서대로
+> 실행하지 않는다. 개정 스펙 승인 후 Gate 0 계획과 1곳 핵심 계획으로 교체한다.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 사용자가 출발지·목적지·도착 마감만 정하면, 최소 15분 이상 머물 수 있는 경유지 한 곳을 우선 추천하고 선택 시 최대 체류 가능 시간과 출발 마감을 보여주며, 가능한 경우에만 두 번째 경유지를 선택적으로 제안하고 고정 출발 알림까지 예약한다.

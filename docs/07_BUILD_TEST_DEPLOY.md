@@ -48,7 +48,10 @@ Android Gradle Plugin 8.7.3
 Kotlin 2.0.21
 Compose BOM 2024.12.01
 Kakao Maps Android SDK 2.14.0
-minSdk 26 / compileSdk 35 / targetSdk 35
+minSdk 26 / compileSdk 36 / targetSdk 35
+
+`targetSdk=35`는 현재 소스 사실이며 2026-08-31 이후 공개 Play 신규 앱·업데이트
+제출 전 36으로 올려야 한다.
 Java/Kotlin target 17
 ```
 
@@ -290,6 +293,7 @@ pnpm dev
 backend/migrations/001_initial.sql
 backend/migrations/002_detail_sync_state.sql
 backend/migrations/003_user_accounts.sql
+backend/migrations/004_tour_enrichment.sql
 ```
 
 적용 후 확인:
@@ -496,10 +500,8 @@ Invoke-WebRequest -Method Head -Uri $url
 
 - [ ] 출발지는 현재 위치 자동 선택, 검색으로 교체 가능
 - [ ] 목적지 검색과 선택
-- [ ] 경유에 쓸 순수 여유시간 15분~6시간 슬라이더
-- [ ] 순수 여유시간 직접 입력은 최대 1440분
-- [ ] 안전 여유 10/15/20/30분 중 입력시간보다 작은 값만 선택
-- [ ] `우회 주행시간+기본 머무름+안전여유≤순수 여유시간`인 후보만 노출
+- [ ] 활성 흐름에 시간 입력 화면이 나타나지 않음
+- [ ] 내부 호환값 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`로 요청됨
 - [ ] 추천 의도 `아무거나/식사/카페/산책·관광/실내 활동/지금은 음식 제외`
 - [ ] 붉은 후보 영역과 카테고리 아이콘 핀
 - [ ] 경유지 최대 5개, 선택 순서 번호와 추가/제거
@@ -510,6 +512,10 @@ Invoke-WebRequest -Method Head -Uri $url
 경유지 0개는 직행 baseRoute를 유지하고, 1~5개는 `/api/route`의 통합 Kakao
 경로로 다시 계산한다. route 실패 fallback만 예상값이며, 최종 안내 시간은
 카카오맵이 다시 계산한다.
+
+위 항목은 현재 `0.12.4` 레거시 APK 검증 기준이다. 도착 마감 알파가 연결되면 이
+절을 목적지+도착 마감, 한 곳 선택, 최대 체류시간, 출발 권장시각과 고정 알림 기준으로
+교체한다.
 
 ### 9.4 근처에서 갈 장소 — 현재 비활성 레거시
 

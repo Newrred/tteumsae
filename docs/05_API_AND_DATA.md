@@ -669,11 +669,12 @@ numOfRows=100
 
 | UTC | 한국시간(KST) | 작업 |
 |---|---|---|
-| 매일 18:20 | 다음 날 03:20 | 기본 장소 동기화 |
-| 매일 18:40 | 다음 날 03:40 | 상세 보강 동기화 |
+| 매일 18:20 | 다음 날 03:20 | 증분 카탈로그 동기화 (`tour-catalog-sync`) |
+| 매일 18:40 | 다음 날 03:40 | 소개·운영정보 보강 (`tour-intro-sync`) |
 
 두 작업 모두 최대 실행시간 60초다. 데이터가 많으면 한 번에 전체를 끝내지 않고
-`sync_state` 커서를 다음 날 이어서 처리한다.
+`sync_state` 커서를 다음 날 이어서 처리한다. Vercel Hobby는 같은 시간대 안의 분 단위
+실행 순서를 보장하지 않으므로 현재 20분·40분 차이를 작업 선후관계로 간주하면 안 된다.
 
 ## 7. Supabase 스키마
 
@@ -682,6 +683,7 @@ numOfRows=100
 1. [`001_initial.sql`](../backend/migrations/001_initial.sql)
 2. [`002_detail_sync_state.sql`](../backend/migrations/002_detail_sync_state.sql)
 3. [`003_user_accounts.sql`](../backend/migrations/003_user_accounts.sql)
+4. [`004_tour_enrichment.sql`](../backend/migrations/004_tour_enrichment.sql)
 
 ### 7.1 `public.places`
 
@@ -759,7 +761,7 @@ delete는 할 수 없다. [`verify-user-rls.js`](../backend/scripts/verify-user-
 
 계약 변경에는 반드시 백엔드 Node 테스트와 Android JSON 파서 테스트를 함께
 추가한다. 현재 소스의 `sigunguCode` 검증과 route/baseRoute/corridor를 포함한
-백엔드 테스트는 `2026-08-27` 기준 41/41 통과했다.
+백엔드 테스트는 `2026-08-28` 기준 69/69 통과했다.
 
 ## 9. 알려진 데이터·API 부채
 

@@ -94,7 +94,7 @@ SUPABASE_PUBLISHABLE_KEY=Supabase publishable key
 |---|---|
 | 패키지·applicationId | `com.tteumsae.app` |
 | minSdk | 26 |
-| compileSdk / targetSdk | 35 / 35 |
+| compileSdk / targetSdk | 36 / 35; 공개 Play 제출 전 target 36 필요 |
 | API 기준 URL | `android/app/build.gradle.kts`의 `BuildConfig.API_BASE_URL` |
 | 현재 API 기준 URL | `https://tteumsae-backend-one.vercel.app` |
 
@@ -211,9 +211,11 @@ pnpm dlx vercel env ls
 1. [`backend/migrations/001_initial.sql`](../backend/migrations/001_initial.sql)
 2. [`backend/migrations/002_detail_sync_state.sql`](../backend/migrations/002_detail_sync_state.sql)
 3. [`backend/migrations/003_user_accounts.sql`](../backend/migrations/003_user_accounts.sql)
+4. [`backend/migrations/004_tour_enrichment.sql`](../backend/migrations/004_tour_enrichment.sql)
 
 그다음 새 프로젝트의 URL과 service role 키를 Vercel 환경변수에 설정하고
-기본·상세 Cron을 순서대로 실행한다.
+카탈로그·소개/운영정보 Cron을 각각 스모크 테스트한다. Hobby 환경에서는 같은 시간대의
+분 단위 실행 순서에 의존하지 않는다.
 
 확인할 테이블:
 

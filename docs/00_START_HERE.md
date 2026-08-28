@@ -1,6 +1,6 @@
 # 새 담당자 시작 안내
 
-기준일: `2026-08-22`
+기준일: `2026-08-28`
 Android 버전: `0.12.4` (`versionCode 25`)
 Android 패키지: `com.tteumsae.app`
 
@@ -20,14 +20,21 @@ Android 패키지: `com.tteumsae.app`
 - Kakao Mobility 차량 경로
 - 이동 경로 주변 추천과 카카오맵 딥링크
 
-현재 사용자 입력 흐름은
+현재 소스의 사용자 입력 흐름은
 `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`입니다.
 `TimeScreen` 소스는 남아 있지만 `AppScreen`과 활성 전이에 연결되지 않습니다.
 추천 API 호환을 위해 앱 내부에서 `extraTimeMinutes=1,440`,
 `safetyBufferMinutes=15`를 사용하며, 이는 사용자가 입력한 도착 마감이나 시간
 보장이 아닙니다.
 
-다만 Play Store 제출 준비는 끝나지 않았습니다. 릴리스 서명, AAB, 개인정보처리방침, 위치 약관, 스토어 리소스와 실기기 회귀 테스트가 남아 있습니다.
+이 현재 흐름과 다음 목표를 혼동하지 않습니다. 다음 목표는 목적지와 절대 도착 마감만
+입력하고 한 곳을 우선 추천한 뒤 최대 체류시간과 출발 권장시각을 보여주는
+`ARRIVAL_DEADLINE_V1`입니다. 제품 기준은
+[도착 마감 플로우 설계](superpowers/specs/2026-08-26-deadline-aware-route-flow-design.md),
+실행 순서는 [다음 버전 계획](09_NEXT_VERSION_PLAN.md)을 따릅니다.
+
+Play Store 제출 준비는 끝나지 않았습니다. targetSdk 36, 릴리스 서명, AAB,
+정책 URL, 스토어 리소스와 실기기 회귀 테스트가 남아 있습니다.
 
 현재 소스 기준 확인용 APK는 `tteumsae-apk.vercel.app`에 배포돼 있습니다. APK는 Git에서 제외되므로 소스가 바뀌면 새 파일명으로 다시 빌드·배포하세요.
 
@@ -52,7 +59,7 @@ Android 패키지: `com.tteumsae.app`
 | Java/JVM | 17 |
 | Compose BOM | 2024.12.01 |
 | Kakao Maps Android SDK | 2.14.0 |
-| Android SDK | min 26 / compile 35 / target 35 |
+| Android SDK | min 26 / compile 36 / target 35; Play 제출 전 target 36 필요 |
 
 ## 3. 저장소 복제 후 보안 원칙
 
@@ -81,7 +88,7 @@ KAKAO_MAP_NATIVE_APP_KEY=별도_전달받은_네이티브_앱_키
 ```powershell
 cd C:\dev\tteumsae\android
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
-.\gradlew.bat compileDebugKotlin compileDebugUnitTestKotlin
+.\gradlew.bat testDebugUnitTest lintDebug
 .\gradlew.bat assembleDebug
 ```
 
@@ -91,7 +98,9 @@ APK 위치:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`compileDebugUnitTestKotlin`은 테스트 소스 컴파일만 확인합니다. 실제 `testDebugUnitTest`는 현재 환경에서 클래스 로딩 오류가 있으므로 [QA 문서](08_QA_AND_KNOWN_ISSUES.md)를 확인하세요.
+2026-08-28 현재 이 작업 경로에서 `testDebugUnitTest` 71/71과 `lintDebug` 오류 0을
+확인했습니다. 자동 테스트는 실제 지도, OAuth, 카카오맵 복귀와 알림 실기기 QA를
+대신하지 않습니다.
 
 ## 5. 카카오 Android 플랫폼 확인
 
@@ -139,7 +148,7 @@ pnpm dlx vercel env pull .env.local
 4. 출발지와 강원도 목적지 검색
 5. 추천 의도 입력
 6. 추천 결과와 지도 후보 핀 표시
-7. 경유지 최대 5개 선택·해제
+7. 레거시 경유지 최대 5개 선택·해제
 8. 카카오맵에 출발지·경유지·최종 목적지 전달
 9. 장소 상세, 저장과 결과 화면 복귀
 10. 장소 둘러보기 이미지·추가 로딩·저장 동작
@@ -147,7 +156,12 @@ pnpm dlx vercel env pull .env.local
 
 상세한 케이스는 [QA와 알려진 문제](08_QA_AND_KNOWN_ISSUES.md)를 사용합니다.
 
-## 8. 작업 시작 전 읽을 순서
+## 8. 문서 역할과 읽을 순서
+
+- `00_START_HERE`, `03_FEATURE_MATRIX`, `04_SCREEN_FLOWS`: 현재 구현 사실
+- `01_PRODUCT_AND_SCOPE`, `10_DECISION_LOG`, 최신 `superpowers/specs`: 확정 제품 목표
+- `09_NEXT_VERSION_PLAN`, 최신 `superpowers/plans`: 실행 순서
+- 과거 계획과 데모 문서는 최신 결정과 충돌하면 기준으로 사용하지 않음
 
 1. [제품 범위](01_PRODUCT_AND_SCOPE.md)
 2. [아키텍처](02_ARCHITECTURE.md)

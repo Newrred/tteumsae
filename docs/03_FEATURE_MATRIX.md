@@ -1,10 +1,13 @@
 # 기능 구현 현황표
 
-기준일: `2026-08-20`
+기준일: `2026-08-28`
 검토 기준: 현재 통합된 `android/`와, Android가 직접 사용하는 `backend/` 계약
 Android 버전: `0.12.4` (`versionCode 25`)
 
-이 표는 디자인 시안이나 과거 APK가 아니라 현재 소스의 실제 동작을 기록한다. 축약 경로 `ui/`, `data/`, `domain/`은 `android/app/src/main/java/com/tteumsae/app/`를 기준으로 한다.
+이 표는 디자인 시안이나 목표 스펙이 아니라 현재 소스의 실제 동작만 기록한다. 다음
+도착 마감 제품 목표는 `superpowers/specs/2026-08-26-deadline-aware-route-flow-design.md`를
+따른다. 축약 경로 `ui/`, `data/`, `domain/`은
+`android/app/src/main/java/com/tteumsae/app/`를 기준으로 한다.
 
 ## 상태 정의
 
@@ -118,8 +121,8 @@ Android 버전: `0.12.4` (`versionCode 25`)
 |---|---|---|---|
 | Kotlin 컴파일 | `구현 및 코드 검증` | 최신 통합 소스 `compileDebugKotlin` 성공 | CI로 고정 |
 | Debug APK | `구현 및 코드 검증` | 지역/찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 `assembleDebug` 성공 (`2026-08-20`) | 새 버전 번호, 실기기 회귀 후 배포 |
-| Android 단위 테스트 | `구현 및 코드 검증` | 인증·프로필·계정 삭제를 포함한 70/70 통과 (`2026-08-27`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
-| 백엔드 테스트 | `구현 및 코드 검증` | 정책 페이지·사용자 RLS 계약·계정 삭제를 포함한 Node 테스트 41/41 통과 (`2026-08-27`) | 실제 RLS는 새 Supabase에서 verifier 필요 |
+| Android 단위 테스트 | `구현 및 코드 검증` | 인증·프로필·계정 삭제를 포함한 71/71 통과 (`2026-08-28`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
+| 백엔드 테스트 | `구현 및 코드 검증` | TourAPI 증분 동기화·정책·사용자 RLS 계약·계정 삭제를 포함한 Node 테스트 69/69 통과 (`2026-08-28`) | 실제 RLS는 새 Supabase에서 verifier 필요 |
 | Release 서명·AAB | `미구현` | signingConfig/키 전달/CI 없음 | 업로드 키, Play App Signing, `bundleRelease` |
 | 정책·스토어 자료 | `미구현` | 정책 URL·런처 아이콘·스토어 제출 체인 미완성 | 정책, 아이콘/스플래시, 데이터 안전, 스크린샷, AAB 준비 |
 | 실기기 회귀 | `구현, QA 필요` | 새 결과·상세·복수 경유지와 Room 저장 흐름은 코드/빌드 기준 | GPS, Kakao Map SDK, 0~5 경유지, 기존 JSON 업데이트 이전, 저장 복원·전체 해제 검증 |

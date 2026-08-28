@@ -9,15 +9,23 @@
 |---|---|---|
 | Android `compileDebugKotlin` | 성공 | Room Flow UI 연결과 레거시 UI 저장 코드 제거 기준 |
 | Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `F988EFB6F03E51DECD64280C230B14054BDF746A7C777DACEAFEE8EB61E2B602` |
-| Android `testDebugUnitTest` | 70/70 성공 | 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
+| Android `testDebugUnitTest` | 71/71 성공 | `2026-08-28`; 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
 | Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
-| 백엔드 Node 테스트 | 41/41 성공 | `2026-08-27`; 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
-| 운영 백엔드 계약 | 배포 필요 | `2026-08-20` 운영 URL은 아직 `deadlineMinutes`만 허용함을 400 응답으로 확인; 새 백엔드를 먼저 배포해야 최신 APK 추천이 동작한다 |
+| 백엔드 Node 테스트 | 69/69 성공 | `2026-08-28`; TourAPI 증분 동기화, 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
+| 운영 백엔드 계약 | 부분 배포 | `ARRIVAL_DEADLINE_V1` 요청 검증은 배포됐지만 최대 체류·출발 마감 계산과 Android 연결은 미구현 |
 | 최신 APK 실기기 전체 회귀 | 필요 | 빌드 성공과 사용자 흐름 통과는 별개 |
 
 컴파일·단위 테스트·`assembleDebug` 성공만으로 실기기 QA가 통과했다고 보고하지
 않는다.
+
+### 공개 Play 제출 차단 항목
+
+- 현재 `targetSdk=35`; 2026-08-31부터 신규 앱과 업데이트는 API 36 필요
+- Release signingConfig와 서명된 AAB 없음
+- 설정의 개인정보처리방침·위치 관련 외부 URL 일부 미설정
+- Release 서명 기기에서 Google·Kakao OAuth와 계정 삭제 미검증
+- 저장 장소 클라우드 동기화가 없으므로 로그인 화면에서 기기 간 저장 연속성을 약속하면 안 됨
 
 ### Room 저장소 전환 검증 기록
 
@@ -332,7 +340,7 @@ pnpm run check
 
 - 개인정보처리방침 HTML은 준비됐지만 새 Vercel HTTPS 배포와 Android URL 연결이
   남아 있다. 위치기반서비스 약관은 아직 준비되지 않았다.
-- 새 Supabase migrations 001~003, 2-user RLS verifier, 카카오·Google provider와
+- 새 Supabase migrations 001~004, 2-user RLS verifier, 카카오·Google provider와
   release-signed OAuth, 실제 계정 삭제는 아직 라이브 검증하지 않았다.
 - release signing, 업로드 키, AAB, Play App Signing, CI 배포 체인이 없다.
 - 정책/아이콘/스플래시/데이터 안전/스토어 이미지가 제출 전 필요하다.
