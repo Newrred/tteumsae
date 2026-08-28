@@ -239,6 +239,10 @@ corepack enable
 pnpm install --frozen-lockfile
 ```
 
+`package.json`은 CI와 로컬이 같은 `pnpm@11.19.0`을 사용하도록 고정한다.
+`pnpm-workspace.yaml`은 Vercel 의존성이 실제로 요구하는 `esbuild` 설치 스크립트만
+허용한다.
+
 `pnpm-lock.yaml`은 lockfile v9다. 배포나 테스트 전에 lockfile을 임의로
 갱신하지 않는다. 의존성을 의도적으로 바꿀 때만 `package.json`과 lockfile을
 같은 커밋에 넣는다.
@@ -254,7 +258,7 @@ pnpm run check
 
 ```text
 Node 테스트: 69개 통과, 0개 실패
-Project check: 55개 파일 통과
+Project check: 56개 파일 통과
 ```
 
 테스트 범위:
@@ -607,7 +611,7 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 
 - [ ] Git 작업 트리와 배포 커밋 식별 가능
 - [ ] 비밀값 검사 완료
-- [ ] 백엔드 69개 테스트 및 55개 파일 project check 통과
+- [ ] 백엔드 69개 테스트 및 56개 파일 project check 통과
 - [ ] Android 75개 단위 테스트·lint·APK 빌드 통과
 - [ ] GitHub CI의 Backend·Android 검증 작업 통과
 - [ ] Preview 스모크 테스트 통과
