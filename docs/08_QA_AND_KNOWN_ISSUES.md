@@ -12,7 +12,7 @@
 | Android `assembleDebug` | 성공 | APK SHA-256 `D33AFD5DAE1D112E3BE1C553B5BA73DF36700057B41CD8BA3070132AD8FD00FA` |
 | Backend `pnpm test` | 154/154 성공 | V1·legacy·운영시간·route 호환, 보수적 우회시간과 작업공간 인수인계 포함 |
 | Backend `pnpm check` | 84개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
-| 실기기 회귀 | 부분 실행 | SM-F776N에서 홈 지도와 입력 화면 2/2 통과; Gate 2 골든 흐름은 운영 V1 계약 불일치로 차단 |
+| 실기기 회귀 | 핵심 자동 흐름 통과 | SM-F776N에서 홈·입력 smoke 2/2와 Gate 2 한 곳 선택 골든 플로우 통과; 수동 권한·OAuth·외부 앱 회귀는 남음 |
 
 ## 2. 로컬 자동 검증
 
@@ -89,7 +89,7 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - [ ] V1 meta와 추천별 필수 필드가 모두 반환된다.
 - [ ] legacy `extraTimeMinutes` 요청이 회귀하지 않는다.
 - [ ] `POST /api/route`의 경유지 0~5개 호환이 유지된다.
-- [ ] Preview에서 health와 V1 recommendations 계약을 확인한 뒤 Production을 승격한다.
+- [x] 운영 환경의 격리 후보에서 health와 V1 recommendations 계약을 확인한 뒤 동일 아티팩트를 Production으로 승격한다.
 
 ## 5. 알려진 문제와 비범위
 
@@ -98,15 +98,6 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - release signingConfig와 서명 AAB가 없다.
 - API 36 실제 기기 전체 회귀가 없다.
 - Google·Kakao OAuth release 서명 회귀가 없다.
-- Gate 2 Preview 배포는 Vercel에서 `BLOCKED/UNKNOWN` 상태로 멈췄고, 기존 Ready
-  Preview는 Supabase·Kakao Preview 환경변수가 없어 V1 유효 요청 smoke를 할 수 없다.
-  Production은 변경하지 않았다.
-- 2026-08-28 운영 `POST /api/recommendations`에 유효한 `ARRIVAL_DEADLINE_V1`
-  요청을 보내면 legacy 검증 메시지 `deadlineMinutes와 extraTimeMinutes 중 하나만 입력해야
-  합니다.`와 함께 400을 반환한다. Android 요청 본문 단위 테스트는 V1 필드만 전송함을
-  확인했으므로 앱 fallback으로 숨기지 않고 Preview 배포·smoke 후 Production 승격으로
-  바로잡아야 한다. 현재 PC의 Vercel CLI에는 로그인 자격 증명이 없다.
-
 ### P1 — 핵심 UX 검증
 
 - 교통 데이터는 요청 시점 스냅샷이며 자동 실시간 추적이 아니다.
@@ -133,12 +124,12 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 | 환경 | 운영 `https://tteumsae-backend-one.vercel.app` |
 | Maestro home smoke | 통과 — Kakao 지도 타일·로고, 목적지 검색, 틈새 발견, 설정 확인 |
 | Maestro route input smoke | 통과 — 입력 UI, 미선택 마감, 선택기 취소, 선택 필터와 CTA 확인 |
-| Maestro Gate 2 golden | 차단 — 강릉역 검색과 실행 시각 약 6시간 뒤 마감 선택 후 운영 V1 요청이 400 |
-| Vercel health | 200, TourAPI·DB·Kakao routing configured |
+| Maestro Gate 2 golden | 통과 — 강릉역 검색, 약 6시간 뒤 마감, 추천 결과, 한 곳 선택, 최대 체류·출발 마감·알림·카카오맵 CTA 확인 |
+| Vercel Production | 배포 `dpl_EryPsqsbuegEP3gTQfDwseTH49Wt` 승격; health 200, TourAPI·DB·Kakao routing configured, V1 추천 8건과 필수 meta/추천 필드 확인 |
 
 실행 명령은 `maestro test .maestro --include-tags smoke`이며 앱 데이터를 초기화하지 않는다.
-`gate2-golden.yaml`은 운영 배포가 V1 계약을 수용하면 결과·한 곳 선택·알림·외부 카카오맵
-검증을 계속하도록 남겨 둔다.
+`gate2-golden.yaml`은 운영 V1 계약의 결과·한 곳 선택·최대 체류·출발 마감·알림·외부
+카카오맵 CTA를 반복 검증한다. 실제 외부 카카오맵 앱 전환과 알림 수신은 수동 회귀로 남긴다.
 
 ## 7. 회귀 기록 형식
 

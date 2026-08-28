@@ -13,7 +13,7 @@
 - 현재 자동 검증: Android 116/116, Backend 154/154, lint 오류 0
 - 운영 장소 1,719곳, 강릉 활성 474곳, 강릉 검수 100곳
 - `ARRIVAL_DEADLINE_V1`, 최대 체류 계산, 한 곳 선택과 선택형 출발 알림까지 코드 구현
-- Gate 2 Vercel Preview smoke는 미완료이고 Android 실기기 QA는 홈·입력 화면만 부분 완료
+- Gate 2 운영 V1 smoke와 Android 실기기 한 곳 선택 골든 플로우 완료
 - Release signingConfig·서명 AAB·실기기 전체 회귀 없음
 
 ## Gate 0 — 사실·출시 안전 정리
@@ -155,18 +155,14 @@ Cron 수동 실행에서 catalog와 intro 모두 200/completed였고 intro 20건
 
 ## 바로 다음 실행 단위
 
-2026-08-28 Maestro 실기기 골든 플로우에서 운영 URL의 health는 200이지만 유효한
-`ARRIVAL_DEADLINE_V1` 추천 요청이 legacy 검증 400을 반환하는 배포 불일치를 재현했다.
-Android 요청 본문은 단위 테스트에서 V1 전용 필드만 포함한다. 현재 PC의 Vercel CLI는
-로그인되어 있지 않으므로 앱에 legacy fallback을 추가하지 않고 아래 순서로 복구한다.
+2026-08-28 Vercel 접근 권한을 복구해 운영 환경의 격리 후보에서 health와 유효한
+`ARRIVAL_DEADLINE_V1` 추천 8건을 검증하고 동일 아티팩트를 Production으로 승격했다.
+SM-F776N 무선 ADB에서 Maestro 골든 플로우도 결과·한 곳 선택·최대 체류·출발 마감·알림
+문구·카카오맵 CTA까지 통과했다. 다음 실행 단위는 아래 순서다.
 
-1. Vercel 접근 권한을 복구한 뒤 Preview의 `BLOCKED/UNKNOWN` 원인을 대시보드에서 확인하고
-   Preview 전용 Supabase·Kakao 환경을 준비한다. Production은 건드리지 않는다.
-2. Gate 2 계획 Step 8의 health, V1 recommendation, legacy recommendation,
-   `/api/route` Preview smoke를 완료한다.
-3. 최신 debug APK와 Maestro로 `08_QA_AND_KNOWN_ISSUES.md`의 지도·GPS·한 곳 선택·외부
-   카카오맵·알림 실기기 회귀를 수행하고 OAuth는 수동 보안 단계와 분리한다.
-4. Gate 0의 release signingConfig·서명 AAB·release OAuth와 빈 DB 복구 리허설을
-   별도 승인 작업으로 마무리한다.
-5. 위 증거가 모인 뒤 Gate 3의 개인정보 최소 이벤트 계측과 10~15명 사용성 테스트를
+1. GPS 권한·설정 분기, 실제 외부 카카오맵 앱 전환과 알림 수신을 수동 실기기 회귀한다.
+2. Google·Kakao OAuth를 release 서명 기기에서 검증한다.
+3. Gate 0의 release signingConfig·서명 AAB와 빈 DB 복구 리허설을 별도 승인 작업으로
+   마무리한다.
+4. 위 증거가 모인 뒤 Gate 3의 개인정보 최소 이벤트 계측과 10~15명 사용성 테스트를
    새 설계로 확정한다. 앱 복귀 자동 재조회나 지오펜스는 먼저 구현하지 않는다.
