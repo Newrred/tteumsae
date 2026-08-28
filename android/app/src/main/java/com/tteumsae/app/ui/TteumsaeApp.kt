@@ -216,6 +216,7 @@ import com.tteumsae.app.ui.common.formatMinutes
 import com.tteumsae.app.ui.navigation.AppDestination
 import com.tteumsae.app.ui.navigation.MainTab
 import com.tteumsae.app.ui.navigation.previousDestination
+import com.tteumsae.app.ui.navigation.safeRestoredDestination
 import com.tteumsae.app.ui.saved.SavedPlacesScreen
 import com.tteumsae.app.ui.saved.SavedPlaceImage
 import com.tteumsae.app.ui.settings.SettingsScreen
@@ -340,6 +341,18 @@ fun TteumsaeApp() {
     var catalogLoadAttempt by rememberSaveable { mutableStateOf(0) }
     var showHomeIntro by rememberSaveable { mutableStateOf(shouldShowHomeIntro(context)) }
     val appScope = rememberCoroutineScope()
+
+    val hasRouteLocations = startLocation != null &&
+        (mode == SearchMode.NEARBY || endLocation != null)
+    val safeScreen = safeRestoredDestination(
+        current = screen,
+        hasLocations = hasRouteLocations,
+        hasResults = activeCriteria != null && baseRoute != null,
+        hasDetail = selected != null,
+    )
+    LaunchedEffect(safeScreen) {
+        if (screen != safeScreen) screen = safeScreen
+    }
 
     BackHandler(enabled = screen != AppDestination.HOME) {
         screen = previousDestination(screen)

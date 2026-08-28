@@ -47,6 +47,10 @@ flowchart LR
 | 관심 조건 | `remember`/`rememberSaveable` 혼합 | CONDITIONS 이후 | 복수 intent Set은 프로세스 종료 시 소실 |
 | 추천, warning, `baseRoute`, corridor | `remember` | RESULTS/DETAIL | 프로세스 종료 시 소실 |
 | 선택 경유 ID/현재 상세 | `remember` | RESULTS/DETAIL | 프로세스 종료 시 소실 |
+
+좌표와 결과 payload 자체는 아직 복원하지 않는다. 대신 `safeRestoredDestination`이
+복원된 화면과 현재 payload를 비교해 빈 RESULTS/DETAIL을 표시하지 않고 LOCATION,
+CONDITIONS 또는 RESULTS 중 데이터가 있는 가장 가까운 안전 화면으로 되돌린다.
 | 홈 GPS 대상 | 루트 `remember` | HOME | 루트가 살아 있으면 다른 탭을 다녀와도 유지 |
 | 저장 장소 | Room `GUEST` + lifecycle-aware Flow | 둘러보기/상세/설정 | 로컬 영속; 계정 동기화 없음 |
 

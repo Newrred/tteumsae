@@ -15,4 +15,40 @@ class AppDestinationTest {
         assertEquals(AppDestination.RESULTS, previousDestination(AppDestination.DETAIL))
         assertEquals(AppDestination.HOME, previousDestination(AppDestination.HOME))
     }
+
+    @Test
+    fun payload_less_route_destinations_fall_back_safely() {
+        assertEquals(
+            AppDestination.LOCATION,
+            safeRestoredDestination(AppDestination.CONDITIONS, false, false, false),
+        )
+        assertEquals(
+            AppDestination.LOCATION,
+            safeRestoredDestination(AppDestination.LOADING, false, false, false),
+        )
+        assertEquals(
+            AppDestination.LOCATION,
+            safeRestoredDestination(AppDestination.RESULTS, false, false, false),
+        )
+        assertEquals(
+            AppDestination.CONDITIONS,
+            safeRestoredDestination(AppDestination.RESULTS, true, false, false),
+        )
+        assertEquals(
+            AppDestination.RESULTS,
+            safeRestoredDestination(AppDestination.DETAIL, true, true, false),
+        )
+    }
+
+    @Test
+    fun complete_route_payload_keeps_the_requested_destination() {
+        assertEquals(
+            AppDestination.RESULTS,
+            safeRestoredDestination(AppDestination.RESULTS, true, true, false),
+        )
+        assertEquals(
+            AppDestination.DETAIL,
+            safeRestoredDestination(AppDestination.DETAIL, true, true, true),
+        )
+    }
 }

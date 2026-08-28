@@ -9,7 +9,7 @@
 |---|---|---|
 | Android `compileDebugKotlin` | 성공 | Room Flow UI 연결과 레거시 UI 저장 코드 제거 기준 |
 | Android `assembleDebug` | 성공 | `app-debug.apk` SHA-256 `F988EFB6F03E51DECD64280C230B14054BDF746A7C777DACEAFEE8EB61E2B602` |
-| Android `testDebugUnitTest` | 73/73 성공 | `2026-08-28`; 계정 문구·정책 URL, 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
+| Android `testDebugUnitTest` | 75/75 성공 | `2026-08-28`; 안전한 화면 복원, 계정 문구·정책 URL, 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
 | Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
 | 백엔드 Node 테스트 | 69/69 성공 | `2026-08-28`; TourAPI 증분 동기화, 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
@@ -334,7 +334,9 @@ pnpm run check
 
 #### 프로세스 복원
 
-- `screen`은 복원돼도 좌표·추천·baseRoute·선택 경유지는 복원되지 않아 빈 RESULTS/DETAIL 상태가 될 수 있다.
+- 좌표·추천·baseRoute·선택 경유지 payload 자체는 아직 복원되지 않는다.
+- 복원된 `screen`에 필요한 payload가 없으면 `safeRestoredDestination`이 LOCATION 또는
+  데이터가 남은 이전 화면으로 되돌려 빈 RESULTS/DETAIL 노출은 막는다.
 
 #### 정책·릴리스 체인
 

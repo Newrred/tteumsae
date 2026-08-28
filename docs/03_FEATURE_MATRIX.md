@@ -23,7 +23,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 기능 | 상태 | 현재 실제 동작 | 한계·다음 확인 | 코드 근거 |
 |---|---|---|---|---|
 | 활성 탐색 흐름 | `구현 및 코드 검증` | `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`. 홈에서 항상 `ON_THE_WAY`와 자동차 탐색을 시작한다 | `TimeScreen`, `NEARBY` 관련 코드는 남아 있으나 활성 UI에서 진입하지 않는 레거시다 | `ui/TteumsaeApp.kt`의 `AppScreen`, `TteumsaeApp` |
-| 화면 전환 | `부분 구현/추정` | 단일 Activity/컴포저블이 `AppScreen` enum 값으로 화면을 교체한다 | `NavHost`와 앱 내부 시스템 뒤로가기 백스택이 없고, 좌표·추천·경로는 프로세스 종료 후 복원되지 않는다 | `MainActivity.kt`, `ui/TteumsaeApp.kt` |
+| 화면 전환 | `부분 구현/추정` | 단일 Activity/컴포저블이 `AppDestination` enum 값으로 화면을 교체한다. 복원 payload가 없으면 RESULTS/DETAIL을 LOCATION 또는 이전 안전 화면으로 되돌린다 | `NavHost`와 시스템 백스택이 없고 좌표·추천·경로 payload 자체는 아직 프로세스 복원되지 않는다 | `ui/navigation/AppDestination.kt`, `ui/TteumsaeApp.kt` |
 | 내부 시간 기준 | `부분 구현/추정` | 홈에서 탐색을 시작할 때 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`로 고정한다. 사용자는 활성 흐름에서 시간을 입력하지 않는다 | 넓은 경로 주변 후보를 위한 API 호환값이다. 실제 도착 마감이나 남은 시간을 입력받지 않으므로 `늦지 않음 보장`으로 표현하면 안 된다 | `ui/TteumsaeApp.kt`의 `DEFAULT_EXTRA_TIME_MINUTES`, `HomeScreen.onStart`, `SearchCriteria` |
 | 브랜드 토큰 | `구현 및 코드 검증` | 기본색 `#E60F33`; 연한 강조색과 내비게이션 그림자에 파생 알파를 사용한다 | 신규 화면에서 임의 빨간색을 추가하지 말고 테마 토큰을 재사용한다 | `ui/theme/Theme.kt`, `ui/TteumsaeApp.kt` |
 | 서버 키 보호 | `구현 및 코드 검증` | TourAPI·Kakao REST·Supabase service-role 키는 백엔드에만 있다. Android에는 공개 API 주소, Kakao 네이티브 키, Supabase URL·publishable key만 있다 | CI·release 빌드에서도 네이티브 키와 공개 설정을 올바른 환경에 주입해야 한다 | `app/build.gradle.kts`, `data/TteumsaeApi.kt` |
@@ -121,7 +121,7 @@ Android 버전: `0.12.4` (`versionCode 25`)
 |---|---|---|---|
 | Kotlin 컴파일 | `구현 및 코드 검증` | 최신 통합 소스 `compileDebugKotlin` 성공 | CI로 고정 |
 | Debug APK | `구현 및 코드 검증` | 지역/찜 필터와 중앙 지도 비선택 상태를 포함한 최신 통합 소스 `assembleDebug` 성공 (`2026-08-20`) | 새 버전 번호, 실기기 회귀 후 배포 |
-| Android 단위 테스트 | `구현 및 코드 검증` | 계정 문구·정책 URL, 인증·프로필·계정 삭제를 포함한 73/73 통과 (`2026-08-28`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
+| Android 단위 테스트 | `구현 및 코드 검증` | 안전한 화면 복원, 계정 문구·정책 URL, 인증·프로필·계정 삭제를 포함한 75/75 통과 (`2026-08-28`) | Room 계측·OAuth는 연결 기기에서 별도 실행 필요 |
 | 백엔드 테스트 | `구현 및 코드 검증` | TourAPI 증분 동기화·정책·사용자 RLS 계약·계정 삭제를 포함한 Node 테스트 69/69 통과 (`2026-08-28`) | 실제 RLS는 새 Supabase에서 verifier 필요 |
 | Release 서명·AAB | `미구현` | signingConfig/키 전달/CI 없음 | 업로드 키, Play App Signing, `bundleRelease` |
 | 정책·스토어 자료 | `미구현` | 정책 URL·런처 아이콘·스토어 제출 체인 미완성 | 정책, 아이콘/스플래시, 데이터 안전, 스크린샷, AAB 준비 |

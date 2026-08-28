@@ -34,3 +34,29 @@ fun previousDestination(current: AppDestination): AppDestination = when (current
     AppDestination.DETAIL -> AppDestination.RESULTS
     AppDestination.HOME -> AppDestination.HOME
 }
+
+fun safeRestoredDestination(
+    current: AppDestination,
+    hasLocations: Boolean,
+    hasResults: Boolean,
+    hasDetail: Boolean,
+): AppDestination = when (current) {
+    AppDestination.CONDITIONS,
+    AppDestination.LOADING,
+    -> if (hasLocations) current else AppDestination.LOCATION
+
+    AppDestination.RESULTS -> when {
+        hasResults -> AppDestination.RESULTS
+        hasLocations -> AppDestination.CONDITIONS
+        else -> AppDestination.LOCATION
+    }
+
+    AppDestination.DETAIL -> when {
+        hasResults && hasDetail -> AppDestination.DETAIL
+        hasResults -> AppDestination.RESULTS
+        hasLocations -> AppDestination.CONDITIONS
+        else -> AppDestination.LOCATION
+    }
+
+    else -> current
+}
