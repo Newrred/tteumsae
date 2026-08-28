@@ -4,9 +4,11 @@ import {
   claimSyncJob,
   finishSyncJob,
   getGate1bOpsStatus,
+  listGangneungCurationCandidates,
   listPlaces,
   recordProviderUsageResult,
-  reserveProviderUsage
+  reserveProviderUsage,
+  upsertPlaceCurations
 } from "../lib/database.js";
 
 test("새 Supabase secret 키는 PostgREST Bearer 토큰으로 보내지 않는다", async () => {
@@ -302,6 +304,82 @@ test("공급자 결과와 운영 상태는 대응 RPC 인자를 그대로 보낸
       p_curation_target: 100
     });
     assert.deepEqual(status, { usage: [], syncJobs: [], dataQuality: {} });
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
+
+test("강릉 검수 후보를 effective view에서 읽고 검수값을 50개씩 upsert한다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const requests = [];
+  globalThis.fetch = async (url, init) => {
+    requests.push({ url: String(url), init });
+    if ((init?.method ?? "GET") === "GET") {
+      return Response.json([{ content_id: "1", name: "후보", category: "CULTURE" }]);
+    }
+    return new Response(null, { status: 204 });
+  };
+  try {
+    const candidates = await listGangneungCurationCandidates();
+    await upsertPlaceCurations(
+      Array.from({ length: 51 }, (_, index) => ({
+        content_id: String(index + 1),
+        operating_info_status: "UNKNOWN"
+      }))
+    );
+
+    assert.equal(candidates.length, 1);
+    assert.match(requests[0].url, /effective_places\?/);
+    assert.match(requests[0].url, /sigungu_code=eq\.1/);
+    assert.equal(requests.length, 3);
+    assert.match(requests[1].url, /place_curations\?on_conflict=content_id$/);
+    assert.equal(JSON.parse(requests[1].init.body).length, 50);
+    assert.equal(JSON.parse(requests[2].init.body).length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = originalKey;
+  }
+});
+
+test("검수 view가 아직 배포되지 않았으면 places에서 강릉 후보를 읽는다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const originalFetch = globalThis.fetch;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(String(url));
+    if (String(url).includes("/effective_places?")) {
+      return Response.json({
+        code: "PGRST205",
+        message: "Could not find the table 'public.effective_places' in the schema cache"
+      }, { status: 404 });
+    }
+    return Response.json([{ content_id: "legacy-1", name: "기존 장소", category: "CULTURE" }]);
+  };
+  try {
+    const candidates = await listGangneungCurationCandidates();
+
+    assert.deepEqual(candidates, [{
+      content_id: "legacy-1",
+      name: "기존 장소",
+      category: "CULTURE"
+    }]);
+    assert.equal(requests.length, 2);
+    assert.match(requests[0], /effective_places\?/);
+    assert.match(requests[1], /places\?/);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalUrl === undefined) delete process.env.SUPABASE_URL;

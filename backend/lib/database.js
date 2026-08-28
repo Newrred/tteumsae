@@ -130,6 +130,11 @@ async function databaseRequest(path, { method = "GET", body, prefer, signal } = 
   return result.text ? JSON.parse(result.text) : null;
 }
 
+function isMissingEffectiveView(error) {
+  return ["42P01", "PGRST205"].includes(error.code) ||
+    /effective_places/i.test(error.databaseMessage ?? "");
+}
+
 async function requestPublicPlaceRows(query, signal) {
   query.set("select", effectiveColumns);
   try {
@@ -142,10 +147,7 @@ async function requestPublicPlaceRows(query, signal) {
       query.set("select", legacyPublicColumns);
       return databaseRequest(`places?${query}`, { signal });
     }
-    const missingEffectiveView =
-      ["42P01", "PGRST205"].includes(error.code) ||
-      /effective_places/i.test(error.databaseMessage ?? "");
-    if (!missingEffectiveView) throw error;
+    if (!isMissingEffectiveView(error)) throw error;
     query.set("select", publicColumns);
     try {
       return await databaseRequest(`places?${query}`, { signal });
@@ -472,4 +474,43 @@ export async function getGate1bOpsStatus({
     },
     signal
   });
+}
+
+export async function listGangneungCurationCandidates({ signal } = {}) {
+  const query = new URLSearchParams({
+    select: [
+      "content_id",
+      "name",
+      "category",
+      "image_url",
+      "overview",
+      "intro_synced_at",
+      "opening_hours",
+      "closed_days",
+      "event_start_date",
+      "event_end_date"
+    ].join(","),
+    is_active: "eq.true",
+    sigungu_code: "eq.1",
+    order: "name.asc",
+    limit: "5000"
+  });
+  try {
+    return await databaseRequest(`effective_places?${query}`, { signal });
+  } catch (error) {
+    if (!isMissingEffectiveView(error)) throw error;
+    return databaseRequest(`places?${query}`, { signal });
+  }
+}
+
+export async function upsertPlaceCurations(rows, { signal } = {}) {
+  const chunkSize = 50;
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    await databaseRequest("place_curations?on_conflict=content_id", {
+      method: "POST",
+      body: rows.slice(index, index + chunkSize),
+      prefer: "resolution=merge-duplicates,return=minimal",
+      signal
+    });
+  }
 }

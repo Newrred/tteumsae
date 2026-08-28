@@ -10,7 +10,10 @@
   "scripts": {
     "dev": "vercel dev",
     "test": "node scripts/run-tests.js",
-    "check": "node scripts/check-project.js"
+    "check": "node scripts/check-project.js",
+    "curation:export": "node scripts/export-place-curations.mjs",
+    "curation:validate": "node scripts/validate-place-curations.mjs",
+    "curation:import": "node scripts/import-place-curations.mjs"
   },
   "devDependencies": {
     "vercel": "^48.0.0"
