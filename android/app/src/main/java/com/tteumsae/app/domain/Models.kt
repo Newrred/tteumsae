@@ -89,6 +89,7 @@ data class SearchCriteria(
     val categories: Set<PlaceCategory> = emptySet(),
     val startCoordinates: Coordinates? = null,
     val endCoordinates: Coordinates? = null,
+    val arrivalDeadlineEpochMillis: Long? = null,
 )
 
 data class SafeRecommendation(
@@ -98,4 +99,7 @@ data class SafeRecommendation(
     val safetyLevel: SafetyLevel,
     val routePoints: List<Coordinates> = emptyList(),
     val operationStatus: OperationStatus = OperationStatus.UNKNOWN,
+    val minimumStayMinutes: Int? = null,
+    val maximumStayMinutes: Int? = null,
+    val latestDepartureEpochMillis: Long? = null,
 )
