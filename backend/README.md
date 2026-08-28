@@ -30,6 +30,8 @@
 | DELETE | `/api/account` | 검증된 Bearer 사용자의 Supabase 계정 영구 삭제 |
 | GET | `/api/cron/tour-sync` | TourAPI 동기화, Bearer 인증 필요 |
 | GET | `/api/cron/tour-detail-sync` | 이미지·편의 태그 상세 동기화, Bearer 인증 필요 |
+| GET | `/api/cron/tour-catalog-sync` | TourAPI 증분 카탈로그 동기화, Bearer 인증 필요 |
+| GET | `/api/cron/tour-intro-sync` | 운영시간·휴무일 intro 보강, Bearer 인증 필요 |
 
 공개 운영 문서는 JavaScript나 로그인 없이 다음 clean URL로 제공합니다.
 
@@ -85,19 +87,43 @@ SUPABASE_SERVICE_ROLE_KEY
 CRON_SECRET
 TOUR_SYNC_MAX_PAGES=10
 TOUR_DETAIL_SYNC_BATCH_SIZE=10
-KAKAO_ROUTE_CANDIDATE_LIMIT=20
+TOUR_INTRO_SYNC_BATCH_SIZE=20
+TOUR_SYNC_CONCURRENCY=4
+KAKAO_ROUTE_CANDIDATE_LIMIT=8
 ```
 
 API 키와 서비스 역할 키, Cron 비밀값은 Sensitive로 저장합니다. 실제
 값은 GitHub, `.env.example`, Android 앱에 넣지 않습니다.
 
+### 런타임 안전 경계
+
+Gate 1-A의 운영값은 다음과 같습니다.
+
+```text
+Supabase 요청 timeout: 5초
+Kakao Local 요청 timeout: 5초
+Kakao Mobility 요청 timeout: 8초
+TourAPI 요청 timeout: 8초
+추천·통합 경로 전체 deadline: 25초
+Cron 전체 deadline: 50초
+동기화 DB lease: 90초
+정확 Kakao 후보 경로 상한: 8개
+카탈로그 Cron: 20 18 * * * UTC
+intro Cron: 20 22 * * * UTC
+```
+
+Cron은 종료 5초 전부터 새 페이지나 장소를 시작하지 않습니다. 두 Cron은 Vercel
+Hobby의 실행 시각 오차에 분 단위 순서로 의존하지 않도록 UTC 기준 4시간 떨어져
+있으며, 동일 작업의 중복 호출은 Supabase `claim_sync_job` RPC가 차단합니다.
+
 ## 로컬 검증
 
-Node.js 24.x:
+Node.js 24.x와 pnpm 11.19.0:
 
 ```powershell
-npm test
-npm run check
+pnpm install --frozen-lockfile
+pnpm test
+pnpm run check
 node scripts/verify-user-rls.js
 ```
 

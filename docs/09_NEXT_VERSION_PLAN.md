@@ -10,7 +10,7 @@
 
 - Android 활성 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
 - 시간 입력 없음, 내부 `extraTimeMinutes=1,440`, `safetyBufferMinutes=15`
-- Android 75/75, Backend 69/69, lint 오류 0
+- Android 75/75, Backend 94/94, lint 오류 0
 - 운영 장소 1,719곳, 이미지 72.8%, 운영시간 0.9%
 - `ARRIVAL_DEADLINE_V1` 요청 검증만 구현, 실제 최대 체류 계산과 Android 연결은 미구현
 - Release signingConfig·서명 AAB·실기기 전체 회귀 없음
@@ -21,14 +21,14 @@
 
 - [x] 현재 구현과 목표 제품 문서 분리
 - [x] 운영 백엔드 주소를 `tteumsae-backend-one.vercel.app`으로 정정
-- [x] 자동 테스트 기준을 Android 75/75, Backend 69/69로 갱신
+- [x] 자동 테스트 기준을 Android 75/75, Backend 94/94로 갱신
 - [x] 로그인 화면과 정책의 기기 간 저장 연속성 약속 제거, 개인정보처리방침 URL 연결
 - [x] `targetSdk`를 36으로 올리고 자동 테스트·lint·debug build 회귀
 - [x] 프로세스 복원 payload가 없으면 입력 화면 또는 데이터가 있는 이전 화면으로 안전 복귀
 - [x] GitHub CI에 Backend test/check와 Android unit/lint 워크플로 구성
 - [ ] Release signingConfig·서명 AAB와 release-signed OAuth 실기기 회귀
-- [ ] Production Branch 직접 배포 대신 Preview smoke 후 명시적 승격 절차 문서화
-- [ ] migration 001~004 전체로 빈 DB 복구 리허설
+- [x] Production Branch 직접 배포 대신 Preview smoke 후 명시적 승격 절차 문서화
+- [ ] migration 001~005 전체로 빈 DB 복구 리허설
 
 ### 통과 조건
 
@@ -44,10 +44,10 @@
 
 ### 작업
 
-- [ ] Vercel Hobby의 분 단위 Cron 순서에 의존하지 않도록 작업 시간 분리 또는 단일 오케스트레이터 적용
-- [ ] 중복 Cron을 막는 DB claim/lease 또는 멱등 실행 키 적용
-- [ ] Kakao·TourAPI·Supabase fetch에 요청별 timeout과 전체 요청 deadline 적용
-- [ ] 추천 한 건의 정확 Kakao 경로 후보 상한을 6~8개로 축소
+- [x] Vercel Hobby의 분 단위 Cron 순서에 의존하지 않도록 작업 시간을 UTC 기준 4시간 분리
+- [x] 중복 Cron을 막는 90초 DB claim/lease 적용
+- [x] Kakao·TourAPI·Supabase fetch에 요청별 timeout과 전체 요청 deadline 적용
+- [x] 추천 한 건의 정확 Kakao 경로 후보 상한을 8개로 축소
 - [ ] 일일 Kakao 호출 예산, 429/5xx, Cron 마지막 성공과 운영시간 보강률 기록
 - [ ] 운영시간 파서가 평일·주말, 계절, 입장 마감을 확실히 구분하지 못하면 `UNKNOWN`
 - [ ] 지난 축제와 날짜 불완전 축제를 추천에서 제외

@@ -1,6 +1,6 @@
 # QA와 알려진 문제
 
-기준일: `2026-08-27`
+기준일: `2026-08-28`
 대상 흐름: `HOME → LOCATION → CONDITIONS → LOADING → RESULTS → DETAIL`
 
 ## 1. 현재 검증 기준선
@@ -12,7 +12,8 @@
 | Android `testDebugUnitTest` | 75/75 성공 | `2026-08-28`; 안전한 화면 복원, 계정 문구·정책 URL, 저장 이전, 인증 상태, 프로필 RLS DTO, 계정 삭제 API·ViewModel 포함 |
 | Android `lintDebug` | 성공, 오류 0 | Kotlin 2.3.20, AGP 8.13.2, Lifecycle Compose 2.8.7 기준 |
 | Android instrumented 테스트 | 실행 미완료 | Room DAO 3개 테스트와 테스트 APK 컴파일은 성공했으나 연결 기기·에뮬레이터가 없어 `No connected devices!` |
-| 백엔드 Node 테스트 | 69/69 성공 | `2026-08-28`; TourAPI 증분 동기화, 계정 삭제, 사용자 RLS 계약, 정책 페이지 포함 |
+| 백엔드 Node 테스트 | 94/94 성공 | `2026-08-28`; provider timeout, 요청 deadline, DB lease, Cron 중복 차단, 후보 8개 상한 포함 |
+| 백엔드 구조 검사 | 62개 파일 통과 | migration 005, 공통 fetch policy, sync lease 포함 |
 | GitHub CI 구성 | 완료, 첫 원격 실행 대기 | Backend test/check와 Android unit/lint 워크플로를 추가했으며 push 후 Actions 결과 확인 필요 |
 | 운영 백엔드 계약 | 부분 배포 | `ARRIVAL_DEADLINE_V1` 요청 검증은 배포됐지만 최대 체류·출발 마감 계산과 Android 연결은 미구현 |
 | 최신 APK 실기기 전체 회귀 | 필요 | 빌드 성공과 사용자 흐름 통과는 별개 |
@@ -73,6 +74,16 @@ pnpm run check
 ```
 
 `validation`, `kakao-mobility`, `recommendations`, `route-api`, `routing` 테스트가 모두 포함되는지 확인한다. 실제 REST 키나 외부 응답 전문을 로그에 남기지 않는다.
+
+Gate 1-A 로컬 자동 검증은 외부 서비스 mock을 사용한다. 다음 항목은 별도 외부
+게이트이며 아직 완료로 표시하지 않는다.
+
+- [ ] 테스트 Supabase에 migration 001~005 적용
+- [ ] 동시 `claim_sync_job` 두 호출에서 단일 소유자 확인
+- [ ] Production Supabase migration 005 적용
+- [ ] Preview API와 수동 Cron 스모크
+- [ ] 명시적 Production 승격과 Vercel UI의 두 UTC Cron 확인
+- [ ] 첫 예약 Cron의 성공·부분 처리·실패 요약 확인
 
 ## 3. Android 핵심 스모크 테스트
 
@@ -228,7 +239,9 @@ pnpm run check
 - [ ] Kakao route가 null/비정상 sections/외부 실패일 때 공통 500과 requestId를 반환한다.
 - [ ] 같은 IP에서 추천 13번째 요청은 429, 경로 41번째 요청은 429와 `Retry-After`를 반환한다.
 - [ ] 공개 `/api/recommendations`와 `/api/route` 호출량/비용을 관찰한다.
-- [ ] Cron 인증과 `sync_state` 갱신을 확인한다.
+- [ ] 자동차 추천의 `meta.routeCandidateCount`가 최대 8인지 확인한다.
+- [ ] 외부 지연 시 추천·경로는 25초, Cron은 50초 안에 정리되는지 확인한다.
+- [ ] 중복 Cron 하나가 `already_running`으로 건너뛰고 `sync_state`가 갱신되는지 확인한다.
 
 ## 5. 알려진 문제
 
@@ -343,7 +356,7 @@ pnpm run check
 
 - 개인정보처리방침 HTML과 Android 운영 URL 연결은 완료됐다. 위치기반서비스 관련
   별도 공개 문서는 아직 준비되지 않았다.
-- 새 Supabase migrations 001~004, 2-user RLS verifier, 카카오·Google provider와
+- 새 Supabase migrations 001~005, 2-user RLS verifier, 카카오·Google provider와
   release-signed OAuth, 실제 계정 삭제는 아직 라이브 검증하지 않았다.
 - Backend test/check와 Android unit/lint를 수행하는 GitHub CI는 구성했다. 최초 원격 실행,
   branch protection, Preview 스모크와 명시적 Production 승격은 아직 검증하지 않았다.
@@ -358,8 +371,9 @@ pnpm run check
 
 #### TourAPI 운영 부채
 
-- 상세 동기화 기본 처리량이 작아 전체 보강 주기가 길 수 있다.
-- 원본에서 사라진 장소를 `is_active=false`로 정리하는 절차가 없다.
+- 일일 Kakao 호출 예산과 429/5xx·Cron 마지막 성공·운영시간 보강률의 영속 관측이 없다.
+- 운영시간 파서가 평일·주말·계절·입장 마감을 충분히 구분하지 못한다.
+- 지난 축제·날짜 불완전 축제 필터와 알파 핵심 장소 100~300개 검수가 남아 있다.
 
 ## 6. 회귀 기록 형식
 

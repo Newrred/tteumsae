@@ -40,7 +40,7 @@
 - Produces: `serverError(error)` maps `error.code === "UPSTREAM_TIMEOUT"` to HTTP 504.
 - Consumes: native `AbortController`, `AbortSignal.any`, and `setTimeout` available in Node.js 24.
 
-- [ ] **Step 1: Write failing timeout and response tests**
+- [x] **Step 1: Write failing timeout and response tests**
 
 Create `backend/tests/fetch-policy.test.js` with deterministic abort-aware fakes:
 
@@ -125,7 +125,7 @@ test("운영 timeout 상수는 설계값을 유지한다", () => {
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify red**
+- [x] **Step 2: Run the focused test and verify red**
 
 Run:
 
@@ -136,7 +136,7 @@ node --test tests/fetch-policy.test.js
 
 Expected: FAIL because `lib/fetch-policy.js` does not exist.
 
-- [ ] **Step 3: Implement the timeout policy**
+- [x] **Step 3: Implement the timeout policy**
 
 Create `backend/lib/fetch-policy.js` with these exact exports and semantics:
 
@@ -225,7 +225,7 @@ export function serverError(error) {
 
 Do not log provider URLs, response bodies, or keys.
 
-- [ ] **Step 4: Run focused and full Backend tests**
+- [x] **Step 4: Run focused and full Backend tests**
 
 Run:
 
@@ -236,7 +236,7 @@ pnpm test
 
 Expected: focused tests PASS and the existing 69 Backend tests still PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/lib/fetch-policy.js backend/lib/http.js backend/tests/fetch-policy.test.js
@@ -261,7 +261,7 @@ git commit -m "feat: 외부 요청 timeout 정책 추가"
 - Produces: `claim_sync_job(p_id text, p_token text, p_now timestamptz, p_lease_seconds integer) -> boolean`.
 - Produces: `finish_sync_job(p_id text, p_token text, p_status text, p_summary jsonb, p_finished_at timestamptz) -> boolean`.
 
-- [ ] **Step 1: Write the failing migration contract test**
+- [x] **Step 1: Write the failing migration contract test**
 
 Create `backend/tests/sync-runtime-migration.test.js`:
 
@@ -365,7 +365,7 @@ test("동기화 작업 finish는 소유 token과 결과 요약을 보낸다", as
 });
 ```
 
-- [ ] **Step 2: Run the focused tests and verify red**
+- [x] **Step 2: Run the focused tests and verify red**
 
 Run:
 
@@ -375,7 +375,7 @@ node --test tests/sync-runtime-migration.test.js tests/database.test.js
 
 Expected: FAIL because migration 005 and the two database exports do not exist.
 
-- [ ] **Step 3: Write migration 005**
+- [x] **Step 3: Write migration 005**
 
 Create `backend/migrations/005_sync_runtime_safety.sql` with:
 
@@ -473,7 +473,7 @@ grant execute on function public.finish_sync_job(text, text, text, jsonb, timest
   to service_role;
 ```
 
-- [ ] **Step 4: Add database timeout and RPC adapters**
+- [x] **Step 4: Add database timeout and RPC adapters**
 
 In `backend/lib/database.js`:
 
@@ -558,7 +558,7 @@ must reuse the same signal for the normalized-column request and legacy fallback
 
 Add migration 005 and `lib/fetch-policy.js` to `requiredFiles` in `backend/scripts/check-project.js`.
 
-- [ ] **Step 5: Run focused and full Backend verification**
+- [x] **Step 5: Run focused and full Backend verification**
 
 Run:
 
@@ -570,7 +570,7 @@ pnpm run check
 
 Expected: focused tests PASS; all Backend tests and project check PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add backend/migrations/005_sync_runtime_safety.sql backend/lib/database.js backend/tests/sync-runtime-migration.test.js backend/tests/database.test.js backend/scripts/check-project.js
@@ -596,7 +596,7 @@ git commit -m "feat: 동기화 작업 DB lease 계약 추가"
 - Produces: every provider function uses a provider timeout even when no overall signal is supplied.
 - Preserves: `verifySupabaseUser(token, fetchImpl)` and `deleteSupabaseUser(userId, fetchImpl)` positional compatibility; optional signal is the third argument.
 
-- [ ] **Step 1: Add failing signal propagation tests**
+- [x] **Step 1: Add failing signal propagation tests**
 
 Add the relevant function to each test file's import, then add one test per provider family:
 
@@ -666,7 +666,7 @@ test("Supabase 사용자 검증은 timeout signal을 전달한다", async () => 
 });
 ```
 
-- [ ] **Step 2: Run provider tests and verify red**
+- [x] **Step 2: Run provider tests and verify red**
 
 Run:
 
@@ -676,7 +676,7 @@ node --test tests/tour-api.test.js tests/kakao-local.test.js tests/kakao-mobilit
 
 Expected: FAIL because raw provider fetches do not create timeout signals.
 
-- [ ] **Step 3: Replace raw provider fetches**
+- [x] **Step 3: Replace raw provider fetches**
 
 Apply these exact provider mappings:
 
@@ -725,7 +725,7 @@ must also use their injected `fetchImpl`; no TourAPI path may retain a direct gl
 
 `fetchKakaoRoutes` must pass the same caller signal into every `fetchKakaoRoute` call. Do not swallow `UpstreamTimeoutError` when every candidate fails; preserve the current partial candidate behavior but let the existing all-failed branch throw.
 
-- [ ] **Step 4: Run provider and full Backend tests**
+- [x] **Step 4: Run provider and full Backend tests**
 
 Run:
 
@@ -736,7 +736,7 @@ pnpm test
 
 Expected: provider tests and the full suite PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/lib/tour-api.js backend/lib/kakao-local.js backend/lib/kakao-mobility.js backend/lib/supabase-auth.js backend/tests/tour-api.test.js backend/tests/kakao-local.test.js backend/tests/kakao-mobility.test.js backend/tests/account.test.js
@@ -758,7 +758,7 @@ git commit -m "feat: 외부 provider 요청에 timeout 적용"
 - `run()` returns an object whose `status` is `completed`, `partial`, or `idle`; `idle` is persisted as `completed`.
 - Duplicate claim returns `{ status: "skipped", reason: "already_running" }` without calling `run` or `finish`.
 
-- [ ] **Step 1: Write failing lease lifecycle tests**
+- [x] **Step 1: Write failing lease lifecycle tests**
 
 Create `backend/tests/sync-lease.test.js` with these cases:
 
@@ -830,7 +830,7 @@ test("finish 소유권 실패를 성공으로 위장하지 않는다", async () 
 });
 ```
 
-- [ ] **Step 2: Run the focused test and verify red**
+- [x] **Step 2: Run the focused test and verify red**
 
 Run:
 
@@ -840,7 +840,7 @@ node --test tests/sync-lease.test.js
 
 Expected: FAIL because `lib/sync-lease.js` does not exist.
 
-- [ ] **Step 3: Implement the lease lifecycle**
+- [x] **Step 3: Implement the lease lifecycle**
 
 Create `backend/lib/sync-lease.js`:
 
@@ -904,7 +904,7 @@ export async function runWithSyncLease({
 
 Add `lib/sync-lease.js` to `requiredFiles` in `backend/scripts/check-project.js`.
 
-- [ ] **Step 4: Run focused and full Backend verification**
+- [x] **Step 4: Run focused and full Backend verification**
 
 Run:
 
@@ -916,7 +916,7 @@ pnpm run check
 
 Expected: all checks PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add backend/lib/sync-lease.js backend/tests/sync-lease.test.js backend/scripts/check-project.js
@@ -943,7 +943,7 @@ git commit -m "feat: 동기화 lease 실행 경계 추가"
 - Produces: catalog uses `jobId="tour_catalog_delta"`; intro uses `jobId="tour_intro"`.
 - Produces: both jobs stop admitting new pages/places once less than 5 seconds remain (the 45-second admission boundary).
 
-- [ ] **Step 1: Write failing batch admission tests**
+- [x] **Step 1: Write failing batch admission tests**
 
 Extend `backend/tests/tour-sync.test.js`:
 
@@ -970,7 +970,7 @@ test("intro 배치는 deadline 뒤 새 장소를 시작하지 않는다", async 
 
 Update the two existing expected count objects to include `deferred: 0`.
 
-- [ ] **Step 2: Write failing Cron lease/deadline/schedule tests**
+- [x] **Step 2: Write failing Cron lease/deadline/schedule tests**
 
 Add to the existing Cron test files:
 
@@ -1053,7 +1053,7 @@ assert.equal(catalogCron.schedule, "20 18 * * *");
 assert.equal(introCron.schedule, "20 22 * * *");
 ```
 
-- [ ] **Step 3: Run focused tests and verify red**
+- [x] **Step 3: Run focused tests and verify red**
 
 Run:
 
@@ -1063,7 +1063,7 @@ node --test tests/tour-sync.test.js tests/tour-catalog-sync.test.js tests/policy
 
 Expected: FAIL because batch admission, lease dependencies, and the 22:20 UTC schedule are absent.
 
-- [ ] **Step 4: Make `runIntroBatch` deadline-aware**
+- [x] **Step 4: Make `runIntroBatch` deadline-aware**
 
 Change its inputs and counts:
 
@@ -1130,7 +1130,7 @@ export async function runIntroBatch({
 Keep concurrency at maximum 4. Increment `updated` for non-null intro saved successfully,
 `empty` for null intro saved successfully, and `failed` only when fetch or save throws.
 
-- [ ] **Step 5: Wrap both handlers in lease and deadline boundaries**
+- [x] **Step 5: Wrap both handlers in lease and deadline boundaries**
 
 For each handler:
 
@@ -1176,7 +1176,7 @@ and `runIntroJob` each own and dispose exactly one 50-second deadline.
 
 Update `backend/vercel.json` intro schedule from `40 18 * * *` to `20 22 * * *`.
 
-- [ ] **Step 6: Run focused and full Backend verification**
+- [x] **Step 6: Run focused and full Backend verification**
 
 Run:
 
@@ -1188,7 +1188,7 @@ pnpm run check
 
 Expected: focused and full checks PASS; both Cron tests prove auth-before-claim and duplicate skip.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```powershell
 git add backend/lib/tour-sync.js backend/api/cron/tour-catalog-sync.js backend/api/cron/tour-intro-sync.js backend/vercel.json backend/tests/tour-sync.test.js backend/tests/tour-catalog-sync.test.js backend/tests/policy-pages.test.js
@@ -1211,7 +1211,7 @@ git commit -m "feat: Cron 중복 실행과 작업 deadline 차단"
 - Produces: `listPlaces({ limit, offset, category, sigunguCode, minLatitude, maxLatitude, minLongitude, maxLongitude, signal })` passes caller cancellation into Supabase timeout.
 - Produces: `KAKAO_ROUTE_CANDIDATE_LIMIT` effective range 1–8, default 8.
 
-- [ ] **Step 1: Write failing candidate cap and signal tests**
+- [x] **Step 1: Write failing candidate cap and signal tests**
 
 Add this regression to `backend/tests/recommendations.test.js`. It places all 12 candidates
 on the mocked direct-route corridor, sets an intentionally excessive environment value, and
@@ -1334,7 +1334,7 @@ globalThis.fetch = async (_url, options) => {
 The public 504/no-provider-details regression belongs to Task 1's `http.test.js`; do not
 duplicate it in these handler tests.
 
-- [ ] **Step 2: Run API tests and verify red**
+- [x] **Step 2: Run API tests and verify red**
 
 Run:
 
@@ -1344,7 +1344,7 @@ node --test tests/recommendations.test.js tests/route-api.test.js
 
 Expected: FAIL because the current cap is 20 and handlers do not create an overall signal.
 
-- [ ] **Step 3: Propagate the 25-second deadline**
+- [x] **Step 3: Propagate the 25-second deadline**
 
 In both handlers, create `const deadline = createDeadline(NETWORK_TIMEOUT_MS.RECOMMENDATION)`
 immediately before the first upstream call. Wrap the complete upstream calculation in `try/finally`
@@ -1377,7 +1377,7 @@ const route = await fetchKakaoRoute(
 );
 ```
 
-- [ ] **Step 4: Enforce the candidate cap**
+- [x] **Step 4: Enforce the candidate cap**
 
 Replace the current limit calculation with:
 
@@ -1390,7 +1390,7 @@ const routeLimit = Math.min(
 
 Keep `recommendations.slice(0, 20)` for response compatibility; only exact route evaluation is capped.
 
-- [ ] **Step 5: Run API and full Backend verification**
+- [x] **Step 5: Run API and full Backend verification**
 
 Run:
 
@@ -1402,7 +1402,7 @@ pnpm run check
 
 Expected: candidate requests are at most 8, signals are present, and all checks PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add backend/api/recommendations.js backend/api/route.js backend/tests/recommendations.test.js backend/tests/route-api.test.js
@@ -1426,7 +1426,7 @@ git commit -m "feat: 추천 경로 호출량과 전체 deadline 제한"
 - Consumes: Tasks 1–6 commits and fresh verification output.
 - Produces: current-state documentation that separates local completion, migration application, Preview verification, and Production Cron verification.
 
-- [ ] **Step 1: Update Backend configuration and deployment docs**
+- [x] **Step 1: Update Backend configuration and deployment docs**
 
 Record exact values:
 
@@ -1453,7 +1453,7 @@ In the deployment guide, state the required order:
 
 Do not mark migration or production verification complete without live evidence.
 
-- [ ] **Step 2: Update Gate status accurately**
+- [x] **Step 2: Update Gate status accurately**
 
 In `docs/09_NEXT_VERSION_PLAN.md`, mark these complete only after code and local tests pass:
 
@@ -1466,7 +1466,7 @@ Kakao 후보 상한 8
 
 Leave daily API budget/429/5xx persistence, operating-hours coverage, parser hardening, festival filtering, and curated core-place review unchecked for Gate 1-B.
 
-- [ ] **Step 3: Run fresh full verification**
+- [x] **Step 3: Run fresh full verification**
 
 Run Backend with Node 24/pnpm 11.19.0:
 
@@ -1502,7 +1502,7 @@ Expected:
 - Debug APK exists at `android/app/build/outputs/apk/debug/app-debug.apk`.
 - Only deliberate documentation/checklist edits and pre-existing `output/`, `tmp/` remain.
 
-- [ ] **Step 4: Record the local checkpoint evidence**
+- [x] **Step 4: Record the local checkpoint evidence**
 
 Append an execution record with:
 
@@ -1517,7 +1517,7 @@ Unverified external gates: migration 005 live apply, concurrent RPC proof,
 Preview smoke, Production promotion, first scheduled Cron results
 ```
 
-- [ ] **Step 5: Commit docs and stop for review**
+- [x] **Step 5: Commit docs and stop for review**
 
 ```powershell
 git add backend/README.md backend/.env.example docs/07_BUILD_TEST_DEPLOY.md docs/08_QA_AND_KNOWN_ISSUES.md docs/09_NEXT_VERSION_PLAN.md docs/10_DECISION_LOG.md docs/superpowers/plans/2026-08-28-gate-1-runtime-safety.md
@@ -1525,3 +1525,42 @@ git commit -m "docs: Gate 1 런타임 안전 검증 결과 기록"
 ```
 
 Stop before Gate 1-B or Gate 2. Report exact local evidence and the external migration/deployment gates; do not claim production completion.
+
+## Execution record — 2026-08-28 local Gate 1-A checkpoint
+
+### Task commits
+
+| Task | Commit |
+|---|---|
+| Plan | `ac38b2d` |
+| Task 1 — timeout policy | `f02be37` |
+| Task 2 — DB lease contract | `45a1ad8` |
+| Task 3 — provider timeout | `e43251b` |
+| Task 4 — lease lifecycle | `1eb9f08` |
+| Task 5 — Cron lease/deadline | `335a49e` |
+| Task 6 — candidate cap/request deadline | `6ecd9c8` |
+
+### Fresh local evidence
+
+```text
+Node: 24.19.0
+pnpm: 11.19.0
+Backend tests: 94 passed, 0 failed
+Backend project check: 62 files passed
+Android unit tests: 75 passed, 0 failed, 0 skipped
+Android lint: 0 errors, 31 warnings
+Android debug build: successful
+APK: android/app/build/outputs/apk/debug/app-debug.apk
+APK SHA-256: 843821A80816EF61613960C589A689530F81919C3F659F9BAA496A155F324E33
+```
+
+### Unverified external gates
+
+- migration 005를 테스트·Production Supabase에 실제 적용
+- 서로 다른 세션의 동시 `claim_sync_job` 호출로 단일 소유자 증명
+- Preview API와 수동 Cron 스모크
+- 검증 배포의 명시적 Production 승격
+- Vercel UI의 두 UTC Cron 스케줄과 첫 예약 실행 결과 확인
+
+로컬 Gate 1-A 구현과 회귀 검증만 완료했다. 위 외부 게이트의 실행 증거가 없으므로
+Production 완료로 간주하지 않는다.

@@ -35,8 +35,8 @@
 | JDK | 17, Android Studio 내장 JBR 사용 가능 |
 | Android SDK Platform | 35 |
 | Android SDK Build Tools | SDK 35와 호환되는 최신 버전 |
-| Node.js | 20 이상 |
-| pnpm | Corepack 또는 별도 설치 |
+| Node.js | 24.x |
+| pnpm | 11.19.0, Corepack 또는 별도 설치 |
 | Vercel CLI | 백엔드 `devDependency` 또는 `pnpm dlx` |
 | ADB | Android SDK Platform Tools |
 
@@ -254,11 +254,11 @@ pnpm test
 pnpm run check
 ```
 
-2026-08-28 Gate 0 검증 결과:
+2026-08-28 Gate 1-A 로컬 검증 결과:
 
 ```text
-Node 테스트: 69개 통과, 0개 실패
-Project check: 56개 파일 통과
+Node 테스트: 94개 통과, 0개 실패
+Project check: 62개 파일 통과
 ```
 
 테스트 범위:
@@ -270,6 +270,9 @@ Project check: 56개 파일 통과
 - TourAPI 기본 행 변환과 상세 이미지·태그 정규화
 - Kakao Local 장소·행정구역 변환
 - Kakao Mobility 구간 변환, 인증 헤더, 후보별 부분 실패
+- Supabase·Kakao·TourAPI 요청별 timeout과 25초 전체 요청 deadline
+- 동기화 lease의 소유권·완료·실패 수명주기와 Cron 중복 실행 차단
+- Cron 45초 이후 신규 작업 유예와 정확 Kakao 후보 경로 8개 상한
 
 이 테스트는 실제 TourAPI, Kakao, Supabase에 연결하지 않는 단위 테스트다.
 Production 배포 후 API 스모크 테스트가 별도로 필요하다.
@@ -310,18 +313,38 @@ backend/migrations/001_initial.sql
 backend/migrations/002_detail_sync_state.sql
 backend/migrations/003_user_accounts.sql
 backend/migrations/004_tour_enrichment.sql
+backend/migrations/005_sync_runtime_safety.sql
 ```
 
 적용 후 확인:
 
 - `public.places`, `public.sync_state`, `public.profiles`, `public.user_saved_places` 존재
 - 네 테이블 RLS 활성화
-- `sync_state`에 `tour_api`, `tour_details` 두 행 존재
+- `sync_state`에 `tour_api`, `tour_details`, `tour_catalog_delta`, `tour_intro` 행 존재
+- `sync_state`에 lease·마지막 실행 상태 열이 존재
+- `claim_sync_job`, `finish_sync_job` RPC는 `service_role`만 실행 가능
 - 익명 공개 정책 없음
 - `node scripts/verify-user-rls.js`가 임시 사용자 2명의 교차 접근 차단 `PASS`
 
 마이그레이션을 Production에 적용하기 전에 백업 또는 Supabase 복구 지점을
 확인한다.
+
+### 6.1 Gate 1-A migration 005 적용 순서
+
+운영 DB에 바로 적용하지 않고 다음 순서를 지킨다.
+
+1. 테스트 또는 빈 Supabase에 migration 001~005를 순서대로 적용한다.
+2. 서로 다른 두 DB 세션에서 같은 작업 ID로 `claim_sync_job`을 동시에 호출해
+   한 호출만 `true`이고 다른 호출은 `false`인지 확인한다.
+3. 백업·복구 지점을 확인한 Production Supabase에 migration 005를 적용한다.
+4. Preview를 수동 스모크 테스트한다. Vercel은 Preview 배포에서 Cron을 자동
+   실행하지 않으므로 필요하면 승인 후 Bearer 인증으로 직접 호출한다.
+5. 검증된 배포를 명시적으로 Production에 승격하고 Vercel UI에서 카탈로그
+   `20 18 * * *`, intro `20 22 * * *` UTC 스케줄을 확인한다.
+
+로컬 migration 계약 테스트 통과는 실제 Supabase 적용 증거가 아니다. Production
+migration, 동시 RPC, Preview, Production Cron 결과는 각각 실행 로그를 남긴 뒤에만
+완료로 표시한다.
 
 ## 7. 백엔드 배포
 
@@ -338,11 +361,15 @@ pnpm exec vercel
 운영 환경변수를 공유하지 않으면 연동 플래그가 false이거나 DB 요청이 실패하는
 것이 정상일 수 있다.
 
+Preview 배포에는 Vercel Cron이 자동 실행되지 않는다. Cron 검증은 migration 005가
+적용된 테스트 DB를 대상으로 수동 실행하고, 운영 Cron 실행 결과로 간주하지 않는다.
+
 ### 7.2 Production 배포
 
-Vercel 프로젝트는 `Newrred/tteumsae`와 연결되어 있다. 현재 통합 기간에는
-`agent/new-route-flow-ui` push가 Production 배포를 생성하며, 통합 후 Production
-Branch를 `main`으로 되돌린다. 저장소 루트 `.vercelignore`는 Android 빌드 산출물,
+Vercel 프로젝트는 `Newrred/tteumsae`와 연결되어 있다. `agent/new-route-flow-ui`
+push 또는 CLI 배포는 먼저 Preview 검증 대상으로 취급하고, 자동 Production 배포에
+의존하지 않는다. Vercel Production Branch가 아직 작업 브랜치를 가리키면 Preview
+검증 전에 `main`으로 되돌린다. 저장소 루트 `.vercelignore`는 Android 빌드 산출물,
 `node_modules`, `output/`, `tmp/`가 CLI 업로드에 포함되지 않게 하므로 삭제하지
 않는다. Vercel Build and Deployment의 Node.js 버전과 `backend/package.json`의
 `engines.node`는 모두 `24.x`를 사용한다.
@@ -351,6 +378,10 @@ Branch를 `main`으로 되돌린다. 저장소 루트 `.vercelignore`는 Android
 git push newrred agent/new-route-flow-ui
 ```
 
+연결된 Preview 배포의 스모크 테스트와 migration 호환성을 확인한 뒤 Vercel UI에서
+해당 검증 배포를 명시적으로 Production으로 승격한다. Preview URL 확인 없이 브랜치
+push만으로 운영 완료를 선언하지 않는다.
+
 운영 기준 주소:
 
 ```text
@@ -358,6 +389,8 @@ https://tteumsae-backend-one.vercel.app
 ```
 
 환경변수를 추가·교체한 경우 코드 변경이 없어도 새 배포를 생성한다.
+Production 승격 후 Vercel Settings의 Cron 목록에서 두 UTC 스케줄을 직접 확인하고,
+첫 예약 실행의 `sync_state.last_status`, `last_finished_at`, `last_run_summary`를 기록한다.
 
 ### 7.3 읽기 전용 스모크 테스트
 
@@ -412,8 +445,8 @@ Cron은 DB를 변경하고 외부 API 쿼터를 사용한다. 운영 담당자�
 $base = 'https://tteumsae-backend-one.vercel.app'
 $headers = @{ Authorization = "Bearer $env:TTEUMSAE_CRON_CALL_SECRET" }
 
-Invoke-RestMethod -Headers $headers "$base/api/cron/tour-sync"
-Invoke-RestMethod -Headers $headers "$base/api/cron/tour-detail-sync"
+Invoke-RestMethod -Headers $headers "$base/api/cron/tour-catalog-sync"
+Invoke-RestMethod -Headers $headers "$base/api/cron/tour-intro-sync"
 ```
 
 `TTEUMSAE_CRON_CALL_SECRET`는 실행 세션용 이름일 뿐 Vercel의 실제 변수 이름은
@@ -423,8 +456,9 @@ Invoke-RestMethod -Headers $headers "$base/api/cron/tour-detail-sync"
 Remove-Item Env:TTEUMSAE_CRON_CALL_SECRET
 ```
 
-응답의 `status`, 처리 수, `nextPage`와 Supabase `sync_state`를 대조한다. 상세
-동기화는 기본 장소가 먼저 있어야 한다.
+응답의 `status`, 처리 수, `nextPage`와 Supabase `sync_state`를 대조한다. 동일
+작업을 겹쳐 호출했을 때 한 요청은 `already_running`으로 건너뛰어야 한다. intro
+동기화는 카탈로그 장소가 먼저 있어야 한다.
 
 ## 8. 테스트 APK 다운로드 페이지 배포
 
