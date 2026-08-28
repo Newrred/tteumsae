@@ -1,5 +1,6 @@
 import { listPlaces } from "../lib/database.js";
 import { integerEnv } from "../lib/env.js";
+import { createDeadline, NETWORK_TIMEOUT_MS } from "../lib/fetch-policy.js";
 import {
   badRequest,
   json,
@@ -36,6 +37,7 @@ export default {
       );
     }
 
+    const deadline = createDeadline(NETWORK_TIMEOUT_MS.RECOMMENDATION);
     try {
       let bounds = createSearchBounds(
         criteria.start,
@@ -48,7 +50,8 @@ export default {
         baseRoute = await fetchKakaoRoute(
           criteria.start,
           criteria.destination,
-          []
+          [],
+          { signal: deadline.signal }
         );
         if (!baseRoute) {
           throw new Error("Kakao Mobility could not calculate the base route");
@@ -83,7 +86,11 @@ export default {
           corridorRadiusMeters / 1_000
         );
       }
-      const boundedCandidates = await listPlaces({ ...bounds, limit: 500 });
+      const boundedCandidates = await listPlaces({
+        ...bounds,
+        limit: 500,
+        signal: deadline.signal
+      });
       const candidates = corridorRadiusMeters
         ? boundedCandidates.filter((place) =>
             distanceToPathKm(place, baseRoute.path) <= corridorRadiusMeters / 1_000
@@ -97,8 +104,8 @@ export default {
 
       if (criteria.transport === "CAR") {
         const routeLimit = Math.min(
-          integerEnv("KAKAO_ROUTE_CANDIDATE_LIMIT", 20),
-          20
+          Math.max(integerEnv("KAKAO_ROUTE_CANDIDATE_LIMIT", 8), 1),
+          8
         );
         const routeCandidates = selectRouteCandidates(
           effectiveCriteria,
@@ -109,7 +116,7 @@ export default {
           criteria.start,
           criteria.destination,
           routeCandidates,
-          { baseRoute }
+          { baseRoute, signal: deadline.signal }
         );
         routeCandidateCount = routeCandidates.length;
         routeFailureCount = routeResult.failedCount;
@@ -151,6 +158,8 @@ export default {
       });
     } catch (error) {
       return serverError(error);
+    } finally {
+      deadline.dispose();
     }
   }
 };

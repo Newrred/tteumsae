@@ -6,6 +6,7 @@ import {
   readJson,
   serverError
 } from "../lib/http.js";
+import { createDeadline, NETWORK_TIMEOUT_MS } from "../lib/fetch-policy.js";
 import { fetchKakaoRoute } from "../lib/kakao-mobility.js";
 import { parseRouteRequest } from "../lib/validation.js";
 
@@ -24,16 +25,20 @@ export default {
       );
     }
 
+    const deadline = createDeadline(NETWORK_TIMEOUT_MS.RECOMMENDATION);
     try {
       const route = await fetchKakaoRoute(
         routeRequest.start,
         routeRequest.destination,
-        routeRequest.waypoints
+        routeRequest.waypoints,
+        { signal: deadline.signal }
       );
       if (!route) throw new Error("Kakao Mobility could not calculate the route");
       return json({ data: route });
     } catch (error) {
       return serverError(error);
+    } finally {
+      deadline.dispose();
     }
   }
 };

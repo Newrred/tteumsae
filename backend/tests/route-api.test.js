@@ -8,9 +8,10 @@ const destination = { latitude: 37.7644, longitude: 128.8996 };
 test("경로 API가 카카오 요약과 기존 Android 호환 필드를 반환한다", async () => {
   const originalFetch = globalThis.fetch;
   process.env.KAKAO_REST_API_KEY = "test-key";
-  globalThis.fetch = async () => ({
+  globalThis.fetch = async (_url, options) => ({
     ok: true,
     async json() {
+      assert.ok(options.signal instanceof AbortSignal);
       return {
         routes: [{
           result_code: 0,

@@ -101,6 +101,97 @@ test("순수 여유시간으로 자동차 추천의 유효 마감과 corridor를
   }
 });
 
+test("자동차 추천은 Kakao 후보 경로를 최대 8개만 요청한다", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalRouteLimit = process.env.KAKAO_ROUTE_CANDIDATE_LIMIT;
+  process.env.KAKAO_REST_API_KEY = "test-key";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  process.env.KAKAO_ROUTE_CANDIDATE_LIMIT = "999";
+  const candidateRouteRequests = [];
+  const seenSignals = [];
+  const candidates = Array.from({ length: 12 }, (_, index) => ({
+    content_id: String(100 + index),
+    source: "TOUR_API",
+    name: `후보 ${index}`,
+    category: "ATTRACTION",
+    latitude: 37.75,
+    longitude: 128.875 + index * 0.001,
+    default_stay_minutes: 20,
+    raw: {}
+  }));
+
+  globalThis.fetch = async (url, options = {}) => {
+    seenSignals.push(options.signal);
+    const parsed = new URL(url);
+    if (parsed.hostname === "supabase.test") {
+      return {
+        ok: true,
+        status: 200,
+        async text() {
+          return JSON.stringify(candidates);
+        }
+      };
+    }
+
+    const waypoints = parsed.searchParams.get("waypoints");
+    if (waypoints) candidateRouteRequests.push(parsed);
+    const waypointCount = waypoints?.split("|").length ?? 0;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          routes: [{
+            result_code: 0,
+            summary: {
+              distance: waypointCount ? 3500 : 3000,
+              duration: waypointCount ? 720 : 600,
+              fare: { toll: 0 }
+            },
+            sections: Array.from({ length: waypointCount + 1 }, () => ({
+              distance: waypointCount ? 1750 : 3000,
+              duration: waypointCount ? 360 : 600,
+              roads: [{ vertexes: [128.87, 37.75, 128.9, 37.75] }]
+            }))
+          }]
+        };
+      }
+    };
+  };
+
+  try {
+    const response = await recommendationsApi.fetch(new Request(
+      "https://example.test/api/recommendations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "ON_THE_WAY",
+          start,
+          destination,
+          extraTimeMinutes: 90,
+          safetyBufferMinutes: 10,
+          transport: "CAR",
+          categories: []
+        })
+      }
+    ));
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(candidateRouteRequests.length, 8);
+    assert.equal(payload.meta.routeCandidateCount, 8);
+    assert.ok(seenSignals.every((signal) => signal instanceof AbortSignal));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalRouteLimit === undefined) {
+      delete process.env.KAKAO_ROUTE_CANDIDATE_LIMIT;
+    } else {
+      process.env.KAKAO_ROUTE_CANDIDATE_LIMIT = originalRouteLimit;
+    }
+  }
+});
+
 test("고비용 추천 요청을 IP별 분당 12회로 제한한다", async () => {
   const headers = { "x-forwarded-for": "203.0.113.42" };
   for (let count = 0; count < 12; count += 1) {
