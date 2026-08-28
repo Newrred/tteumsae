@@ -33,8 +33,10 @@ Android 패키지: `com.tteumsae.app`
 [도착 마감 플로우 설계](superpowers/specs/2026-08-26-deadline-aware-route-flow-design.md),
 실행 순서는 [다음 버전 계획](09_NEXT_VERSION_PLAN.md)을 따릅니다.
 
-Play Store 제출 준비는 끝나지 않았습니다. 릴리스 서명, AAB,
-정책 URL, 스토어 리소스와 실기기 회귀 테스트가 남아 있습니다.
+Play Store 제출 준비는 끝나지 않았습니다. 로컬 조직 소유 업로드 키와 서명 AAB,
+릴리스 서명 실기기의 핵심 경로·카카오맵 전환까지는 검증했습니다. 업로드 키의 독립된
+보안 백업, Play App Signing 인증서의 카카오 키 해시, release Google OAuth 동의·복귀,
+정책 URL 최종 점검과 스토어 리소스가 남아 있습니다.
 
 현재 소스 기준 확인용 APK는 `tteumsae-apk.vercel.app`에 배포돼 있습니다. APK는 Git에서 제외되므로 소스가 바뀌면 새 파일명으로 다시 빌드·배포하세요.
 
@@ -123,6 +125,15 @@ android/app/build/outputs/apk/debug/app-debug.apk
 `lintDebug` 오류 0과 debug APK 빌드를 확인했습니다. 자동 테스트는 실제 지도,
 OAuth, 카카오맵 복귀와 알림 실기기 QA를 대신하지 않습니다.
 
+같은 날 새 업로드 키로 `bundleRelease`와 `assembleRelease`를 통과하고, SM-F776N에
+release APK를 설치해 GPS 거부 직접 입력부터 한 곳 선택, 실제 카카오맵의
+출발지·경유지·도착지 전달까지 Maestro로 재검증했습니다. 키스토어와
+`android/keystore.properties`는 로컬 Git 제외 파일이며 별도 보안 백업이 필요합니다.
+
+같은 release APK에서 카카오 로그인 동의와 앱 복귀, 앱 프로세스 재시작 후 세션 복원도
+확인했습니다. Kakao Developers의 닉네임·프로필 사진·이메일 동의항목은 현재 모두
+선택 동의로 설정돼 있습니다. Google 로그인 계정 동의·복귀는 아직 남아 있습니다.
+
 ## 5. 카카오 Android 플랫폼 확인
 
 카카오 네이티브 지도는 다음 두 값이 일치해야 합니다.
@@ -136,6 +147,11 @@ OAuth, 카카오맵 복귀와 알림 실기기 QA를 대신하지 않습니다.
 2. 새 디버그 키 해시를 Kakao Developers 애플리케이션에 추가합니다.
 
 키스토어는 Git에 올리지 않습니다.
+
+현재 카카오 앱의 `com.tteumsae.app` Android 플랫폼에는 2026-08-28 생성한 로컬
+릴리스 업로드 키 해시가 등록돼 있습니다. Google Play에 첫 AAB를 올리고 Play App
+Signing이 활성화되면 Play가 실제 배포 APK에 사용하는 별도 앱 서명 인증서의 키 해시도
+같은 플랫폼에 추가해야 합니다.
 
 ## 6. 백엔드 준비와 검증
 
