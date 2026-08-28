@@ -1,4 +1,5 @@
 import { requiredEnv } from "./env.js";
+import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
 
 const endpoint = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2";
 const serviceBaseUrl = "https://apis.data.go.kr/B551011/KorService2";
@@ -16,6 +17,30 @@ const CAFE_CAT3_CODES = new Set(["A05020900"]);
 function numeric(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+async function fetchTourPayload(
+  url,
+  failureLabel,
+  { signal, fetchImpl = fetch } = {}
+) {
+  const result = await fetchWithTimeout(url, {
+    headers: { accept: "application/json" }
+  }, {
+    provider: "TOUR_API",
+    timeoutMs: NETWORK_TIMEOUT_MS.TOUR_API,
+    signal,
+    fetchImpl,
+    consume: async (response) => ({
+      ok: response.ok,
+      status: response.status,
+      payload: response.ok ? await response.json() : null
+    })
+  });
+  if (!result.ok) {
+    throw new Error(`TourAPI ${failureLabel} request failed (${result.status})`);
+  }
+  return result.payload;
 }
 
 export function mapTourItem(item, syncedAt = new Date().toISOString()) {
@@ -57,7 +82,11 @@ export function mapTourItem(item, syncedAt = new Date().toISOString()) {
   };
 }
 
-export async function fetchTourPage(pageNo, numOfRows = 100) {
+export async function fetchTourPage(
+  pageNo,
+  numOfRows = 100,
+  { signal, fetchImpl = fetch } = {}
+) {
   const query = new URLSearchParams({
     serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
     MobileOS: "ETC",
@@ -68,14 +97,11 @@ export async function fetchTourPage(pageNo, numOfRows = 100) {
     pageNo: String(pageNo),
     numOfRows: String(numOfRows)
   });
-  const response = await fetch(`${endpoint}?${query}`, {
-    headers: { accept: "application/json" }
-  });
-  if (!response.ok) {
-    throw new Error(`TourAPI request failed (${response.status})`);
-  }
-
-  const payload = await response.json();
+  const payload = await fetchTourPayload(
+    `${endpoint}?${query}`,
+    "areaBasedList2",
+    { signal, fetchImpl }
+  );
   const { body, items } = parseTourListPayload(payload, "areaBasedList2");
   const syncedAt = new Date().toISOString();
 
@@ -88,7 +114,11 @@ export async function fetchTourPage(pageNo, numOfRows = 100) {
   };
 }
 
-async function fetchTourDetail(path, parameters) {
+async function fetchTourDetail(
+  path,
+  parameters,
+  { signal, fetchImpl = fetch } = {}
+) {
   const query = new URLSearchParams({
     serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
     MobileOS: "ETC",
@@ -96,14 +126,11 @@ async function fetchTourDetail(path, parameters) {
     _type: "json",
     ...parameters
   });
-  const response = await fetch(`${serviceBaseUrl}/${path}?${query}`, {
-    headers: { accept: "application/json" }
-  });
-  if (!response.ok) {
-    throw new Error(`TourAPI ${path} request failed (${response.status})`);
-  }
-
-  const payload = await response.json();
+  const payload = await fetchTourPayload(
+    `${serviceBaseUrl}/${path}?${query}`,
+    path,
+    { signal, fetchImpl }
+  );
   const header = payload?.response?.header;
   if (!header || String(header.resultCode) !== "0000") {
     throw new Error(
@@ -114,41 +141,54 @@ async function fetchTourDetail(path, parameters) {
   return Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
 }
 
-export async function fetchTourIntro(contentId, contentTypeId) {
+export async function fetchTourIntro(
+  contentId,
+  contentTypeId,
+  { signal, fetchImpl = fetch } = {}
+) {
   const items = await fetchTourDetail("detailIntro2", {
     contentId: String(contentId),
     contentTypeId: String(contentTypeId),
     numOfRows: "10",
     pageNo: "1"
-  });
+  }, { signal, fetchImpl });
   return items[0] ?? null;
 }
 
-export async function fetchTourCommon(contentId) {
+export async function fetchTourCommon(
+  contentId,
+  { signal, fetchImpl = fetch } = {}
+) {
   const items = await fetchTourDetail("detailCommon2", {
     contentId: String(contentId),
     numOfRows: "10",
     pageNo: "1"
-  });
+  }, { signal, fetchImpl });
   return items[0] ?? null;
 }
 
-export async function fetchTourImages(contentId) {
+export async function fetchTourImages(
+  contentId,
+  { signal, fetchImpl = fetch } = {}
+) {
   return fetchTourDetail("detailImage2", {
     contentId: String(contentId),
     imageYN: "Y",
     subImageYN: "Y",
     numOfRows: "20",
     pageNo: "1"
-  });
+  }, { signal, fetchImpl });
 }
 
-export async function fetchPetTourDetail(contentId) {
+export async function fetchPetTourDetail(
+  contentId,
+  { signal, fetchImpl = fetch } = {}
+) {
   const items = await fetchTourDetail("detailPetTour2", {
     contentId: String(contentId),
     numOfRows: "10",
     pageNo: "1"
-  });
+  }, { signal, fetchImpl });
   return items[0] ?? null;
 }
 
@@ -255,7 +295,13 @@ export function normalizeTourIntro({ contentTypeId, intro, syncedAt }) {
   };
 }
 
-export async function fetchTourSyncPage({ pageNo = 1, numOfRows = 100, modifiedTime } = {}) {
+export async function fetchTourSyncPage({
+  pageNo = 1,
+  numOfRows = 100,
+  modifiedTime,
+  signal,
+  fetchImpl = fetch
+} = {}) {
   const query = new URLSearchParams({
     serviceKey: requiredEnv("TOUR_API_SERVICE_KEY"),
     MobileOS: "ETC",
@@ -269,14 +315,11 @@ export async function fetchTourSyncPage({ pageNo = 1, numOfRows = 100, modifiedT
   });
   if (modifiedTime) query.set("modifiedtime", String(modifiedTime));
 
-  const response = await fetch(`${serviceBaseUrl}/areaBasedSyncList2?${query}`, {
-    headers: { accept: "application/json" }
-  });
-  if (!response.ok) {
-    throw new Error(`TourAPI areaBasedSyncList2 request failed (${response.status})`);
-  }
-
-  const payload = await response.json();
+  const payload = await fetchTourPayload(
+    `${serviceBaseUrl}/areaBasedSyncList2?${query}`,
+    "areaBasedSyncList2",
+    { signal, fetchImpl }
+  );
   const { body, items } = parseTourListPayload(payload, "areaBasedSyncList2");
   const syncedAt = new Date().toISOString();
   return {

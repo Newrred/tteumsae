@@ -74,3 +74,26 @@ test("좌표 행정구역이 강원특별자치도인지 판정한다", async ()
   });
   assert.equal(region.address, "강원특별자치도 강릉시 중앙동");
 });
+
+test("Kakao Local 검색·행정구역 요청은 caller signal과 timeout을 결합한다", async () => {
+  const controller = new AbortController();
+  const signals = [];
+  const fetchImpl = async (_url, options) => {
+    signals.push(options.signal);
+    return Response.json({ documents: [] });
+  };
+
+  await searchKakaoPlaces("강릉역", {
+    apiKey: "test-key",
+    signal: controller.signal,
+    fetchImpl
+  });
+  await lookupKakaoRegion(37.75, 128.88, {
+    apiKey: "test-key",
+    signal: controller.signal,
+    fetchImpl
+  });
+
+  assert.equal(signals.length, 2);
+  assert.ok(signals.every((signal) => signal instanceof AbortSignal));
+});

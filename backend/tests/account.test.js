@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { verifySupabaseUser } from "../lib/supabase-auth.js";
 
 async function loadHandler() {
   const module = await import("../api/account.js").catch(() => null);
@@ -87,6 +88,7 @@ test("검증된 토큰 사용자만 삭제하고 204를 반환한다", async () 
     assert.equal(calls[1].init.method, "DELETE");
     assert.equal(calls[1].init.headers.apikey, "service-role-key");
     assert.equal(calls[1].init.headers.authorization, "Bearer service-role-key");
+    assert.ok(calls.every(({ init }) => init.signal instanceof AbortSignal));
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -193,4 +195,23 @@ test("같은 IP의 회원탈퇴 요청은 분당 3회로 제한한다", async ()
     headers
   }));
   assert.equal(limited.status, 429);
+});
+
+test("Supabase 사용자 검증은 timeout signal을 전달한다", async () => {
+  const originalUrl = process.env.SUPABASE_URL;
+  const originalKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_PUBLISHABLE_KEY = "publishable-key";
+  try {
+    const user = await verifySupabaseUser("user-token", async (_url, options) => {
+      assert.ok(options.signal instanceof AbortSignal);
+      return Response.json({ id: "user-1" });
+    });
+    assert.deepEqual(user, { id: "user-1" });
+  } finally {
+    if (originalUrl === undefined) delete process.env.SUPABASE_URL;
+    else process.env.SUPABASE_URL = originalUrl;
+    if (originalKey === undefined) delete process.env.SUPABASE_PUBLISHABLE_KEY;
+    else process.env.SUPABASE_PUBLISHABLE_KEY = originalKey;
+  }
 });

@@ -208,3 +208,48 @@ test("공통 상세 조회는 현재 KorService2 계약과 단일 객체 응답�
     else process.env.TOUR_API_SERVICE_KEY = originalServiceKey;
   }
 });
+
+test("TourAPI 목록·상세·증분 요청은 모두 timeout signal을 전달한다", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalServiceKey = process.env.TOUR_API_SERVICE_KEY;
+  process.env.TOUR_API_SERVICE_KEY = "service-key";
+  const signals = [];
+  const fetchImpl = async (url, options) => {
+    signals.push(options.signal);
+    const pathname = new URL(String(url)).pathname;
+    const item = pathname.endsWith("/detailCommon2")
+      ? { contentid: "123", overview: "소개" }
+      : {
+          contentid: "123",
+          contenttypeid: "12",
+          title: "테스트 장소",
+          mapx: "128.87",
+          mapy: "37.75",
+          showflag: "1"
+        };
+    return Response.json({
+      response: {
+        header: { resultCode: "0000", resultMsg: "OK" },
+        body: {
+          pageNo: 1,
+          numOfRows: 100,
+          totalCount: 1,
+          items: { item: [item] }
+        }
+      }
+    });
+  };
+  globalThis.fetch = fetchImpl;
+
+  try {
+    await tourApi.fetchTourPage(1, 100, { fetchImpl });
+    await tourApi.fetchTourCommon("123", { fetchImpl });
+    await tourApi.fetchTourSyncPage({ pageNo: 1, fetchImpl });
+    assert.equal(signals.length, 3);
+    assert.ok(signals.every((signal) => signal instanceof AbortSignal));
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalServiceKey === undefined) delete process.env.TOUR_API_SERVICE_KEY;
+    else process.env.TOUR_API_SERVICE_KEY = originalServiceKey;
+  }
+});

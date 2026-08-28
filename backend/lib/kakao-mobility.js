@@ -1,4 +1,5 @@
 import { requiredEnv } from "./env.js";
+import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
 import { estimateRoute } from "./routing.js";
 
 const directionsUrl = "https://apis-navi.kakaomobility.com/v1/directions";
@@ -114,6 +115,7 @@ export async function fetchKakaoRoute(
   placeOrWaypoints = [],
   {
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
+    signal,
     fetchImpl = fetch
   } = {}
 ) {
@@ -132,28 +134,39 @@ export async function fetchKakaoRoute(
   if (waypoints.length > 0) {
     query.set("waypoints", waypoints.map(coordinateString).join("|"));
   }
-  const response = await fetchImpl(`${directionsUrl}?${query}`, {
+  const result = await fetchWithTimeout(`${directionsUrl}?${query}`, {
     headers: {
       authorization: `KakaoAK ${apiKey}`,
       "content-type": "application/json"
     }
+  }, {
+    provider: "KAKAO_MOBILITY",
+    timeoutMs: NETWORK_TIMEOUT_MS.KAKAO_MOBILITY,
+    signal,
+    fetchImpl,
+    consume: async (response) => ({
+      ok: response.ok,
+      status: response.status,
+      payload: response.ok ? await response.json() : null
+    })
   });
 
-  if (!response.ok) {
-    throw new Error(`Kakao Mobility request failed (${response.status})`);
+  if (!result.ok) {
+    throw new Error(`Kakao Mobility request failed (${result.status})`);
   }
 
-  return parseKakaoRoute(await response.json(), start, destination, waypoints);
+  return parseKakaoRoute(result.payload, start, destination, waypoints);
 }
 
 export async function fetchKakaoRoutes(
   start,
   destination,
   places,
-  { concurrency = 5, apiKey, fetchImpl = fetch, baseRoute } = {}
+  { concurrency = 5, apiKey, signal, fetchImpl = fetch, baseRoute } = {}
 ) {
   const routes = new Map();
   let failedCount = 0;
+  let timeoutError = null;
   let nextIndex = 0;
   const workerCount = Math.min(Math.max(concurrency, 1), places.length);
 
@@ -164,6 +177,7 @@ export async function fetchKakaoRoutes(
       try {
         const route = await fetchKakaoRoute(start, destination, place, {
           apiKey,
+          signal,
           fetchImpl
         });
         if (route && baseRoute) {
@@ -175,8 +189,9 @@ export async function fetchKakaoRoutes(
         }
         if (route) routes.set(String(place.content_id), route);
         else failedCount += 1;
-      } catch {
+      } catch (error) {
         failedCount += 1;
+        if (error?.code === "UPSTREAM_TIMEOUT") timeoutError ??= error;
       }
     }
   }
@@ -184,6 +199,7 @@ export async function fetchKakaoRoutes(
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   if (places.length > 0 && routes.size === 0) {
+    if (timeoutError) throw timeoutError;
     throw new Error("Kakao Mobility could not calculate any candidate routes");
   }
 

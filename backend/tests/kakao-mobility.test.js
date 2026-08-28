@@ -5,6 +5,7 @@ import {
   fetchKakaoRoutes,
   parseKakaoRoute
 } from "../lib/kakao-mobility.js";
+import { UpstreamTimeoutError } from "../lib/fetch-policy.js";
 
 const start = { latitude: 37.7519, longitude: 128.8761 };
 const destination = { latitude: 37.7644, longitude: 128.8996 };
@@ -159,4 +160,26 @@ test("후보별 실패는 제외하고 성공한 경로만 반환한다", async 
   assert.equal(result.routes.size, 1);
   assert.equal(result.routes.get("100").provider, "KAKAO_MOBILITY");
   assert.equal(result.failedCount, 1);
+});
+
+test("Kakao Mobility 요청은 timeout signal을 전달한다", async () => {
+  const route = await fetchKakaoRoute(start, destination, place, {
+    apiKey: "test-key",
+    fetchImpl: async (_url, options) => {
+      assert.ok(options.signal instanceof AbortSignal);
+      return Response.json(successPayload);
+    }
+  });
+  assert.equal(route.provider, "KAKAO_MOBILITY");
+});
+
+test("후보 경로가 모두 timeout이면 정규화 오류를 보존한다", async () => {
+  const timeout = new UpstreamTimeoutError("KAKAO_MOBILITY");
+  await assert.rejects(
+    fetchKakaoRoutes(start, destination, [place], {
+      apiKey: "test-key",
+      fetchImpl: async () => { throw timeout; }
+    }),
+    (error) => error === timeout
+  );
 });

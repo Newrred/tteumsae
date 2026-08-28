@@ -1,7 +1,33 @@
 import { requiredEnv } from "./env.js";
+import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
 
 const keywordSearchUrl = "https://dapi.kakao.com/v2/local/search/keyword.json";
 const regionSearchUrl = "https://dapi.kakao.com/v2/local/geo/coord2regioncode.json";
+
+async function fetchKakaoLocalPayload(
+  url,
+  apiKey,
+  failureLabel,
+  { signal, fetchImpl = fetch } = {}
+) {
+  const result = await fetchWithTimeout(url, {
+    headers: { authorization: `KakaoAK ${apiKey}` }
+  }, {
+    provider: "KAKAO_LOCAL",
+    timeoutMs: NETWORK_TIMEOUT_MS.KAKAO_LOCAL,
+    signal,
+    fetchImpl,
+    consume: async (response) => ({
+      ok: response.ok,
+      status: response.status,
+      payload: response.ok ? await response.json() : null
+    })
+  });
+  if (!result.ok) {
+    throw new Error(`Kakao Local ${failureLabel} request failed (${result.status})`);
+  }
+  return result.payload;
+}
 
 export function parseKakaoPlaces(payload) {
   if (!Array.isArray(payload?.documents)) return [];
@@ -31,6 +57,7 @@ export async function searchKakaoPlaces(
     latitude,
     longitude,
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
+    signal,
     fetchImpl = fetch
   } = {}
 ) {
@@ -47,16 +74,13 @@ export async function searchKakaoPlaces(
     parameters.set("radius", "20000");
   }
 
-  const response = await fetchImpl(`${keywordSearchUrl}?${parameters}`, {
-    headers: {
-      authorization: `KakaoAK ${apiKey}`
-    }
-  });
-  if (!response.ok) {
-    throw new Error(`Kakao Local request failed (${response.status})`);
-  }
-
-  return parseKakaoPlaces(await response.json());
+  const payload = await fetchKakaoLocalPayload(
+    `${keywordSearchUrl}?${parameters}`,
+    apiKey,
+    "keyword",
+    { signal, fetchImpl }
+  );
+  return parseKakaoPlaces(payload);
 }
 
 export function parseKakaoRegion(payload) {
@@ -77,6 +101,7 @@ export async function lookupKakaoRegion(
   longitude,
   {
     apiKey = requiredEnv("KAKAO_REST_API_KEY"),
+    signal,
     fetchImpl = fetch
   } = {}
 ) {
@@ -84,12 +109,11 @@ export async function lookupKakaoRegion(
     x: String(longitude),
     y: String(latitude)
   });
-  const response = await fetchImpl(`${regionSearchUrl}?${parameters}`, {
-    headers: { authorization: `KakaoAK ${apiKey}` }
-  });
-  if (!response.ok) {
-    throw new Error(`Kakao Local region request failed (${response.status})`);
-  }
-
-  return parseKakaoRegion(await response.json());
+  const payload = await fetchKakaoLocalPayload(
+    `${regionSearchUrl}?${parameters}`,
+    apiKey,
+    "region",
+    { signal, fetchImpl }
+  );
+  return parseKakaoRegion(payload);
 }
