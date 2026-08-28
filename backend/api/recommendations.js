@@ -17,10 +17,14 @@ import {
   estimateRoute
 } from "../lib/routing.js";
 import {
+  MINIMUM_STAY_MINUTES,
   recommendPlaces,
   selectRouteCandidates
 } from "../lib/time-safe.js";
-import { parseRecommendationRequest } from "../lib/validation.js";
+import {
+  ARRIVAL_DEADLINE_TIME_MODEL,
+  parseRecommendationRequest
+} from "../lib/validation.js";
 
 export default {
   async fetch(request) {
@@ -28,16 +32,18 @@ export default {
     const limited = rateLimit(request, "recommendations", 12);
     if (limited) return limited;
 
+    const requestNow = new Date();
     let criteria;
     try {
-      criteria = parseRecommendationRequest(await readJson(request));
+      criteria = parseRecommendationRequest(await readJson(request), {
+        nowEpochMillis: requestNow.getTime()
+      });
     } catch (error) {
       return badRequest(
         error instanceof Error ? error.message : "요청 값이 올바르지 않습니다."
       );
     }
 
-    const requestNow = new Date();
     const deadline = createDeadline(NETWORK_TIMEOUT_MS.RECOMMENDATION);
     try {
       let bounds = createSearchBounds(
@@ -154,6 +160,14 @@ export default {
           recommendationCount: recommendations.length,
           routeProvider,
           baseRouteMinutes,
+          ...(criteria.timeModel === ARRIVAL_DEADLINE_TIME_MODEL
+            ? {
+                timeModel: ARRIVAL_DEADLINE_TIME_MODEL,
+                calculatedAtEpochMillis: requestNow.getTime(),
+                arrivalDeadlineEpochMillis: criteria.arrivalDeadlineEpochMillis,
+                minimumStayMinutes: MINIMUM_STAY_MINUTES
+              }
+            : {}),
           ...(criteria.extraTimeMinutes == null
             ? {}
             : { extraTimeMinutes: criteria.extraTimeMinutes }),

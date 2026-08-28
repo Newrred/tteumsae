@@ -117,6 +117,93 @@ test("순수 여유시간으로 자동차 추천의 유효 마감과 corridor를
   }
 });
 
+test("V1 추천은 절대 마감 기준 최대 체류와 계산 시각 메타를 반환한다", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.KAKAO_REST_API_KEY = "test-key";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  const beforeRequest = Date.now();
+  const arrivalDeadlineEpochMillis = beforeRequest + 60 * 60_000 + 30_000;
+
+  globalThis.fetch = async (url) => {
+    const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
+    if (parsed.hostname === "supabase.test") {
+      return Response.json([{
+        content_id: "v1-100",
+        source: "TOUR_API",
+        name: "도착 마감 후보",
+        category: "ATTRACTION",
+        latitude: 37.7505,
+        longitude: 128.885,
+        default_stay_minutes: 30,
+        raw: {}
+      }]);
+    }
+
+    const waypointCount = parsed.searchParams.get("waypoints")?.split("|").length ?? 0;
+    return Response.json({
+      routes: [{
+        result_code: 0,
+        summary: {
+          distance: waypointCount ? 3_500 : 3_000,
+          duration: waypointCount ? 720 : 600,
+          fare: { toll: 0 }
+        },
+        sections: Array.from({ length: waypointCount + 1 }, () => ({
+          distance: waypointCount ? 1_750 : 3_000,
+          duration: waypointCount ? 360 : 600,
+          roads: [{ vertexes: [128.87, 37.75, 128.9, 37.75] }]
+        }))
+      }]
+    });
+  };
+
+  try {
+    const response = await recommendationsApi.fetch(new Request(
+      "https://example.test/api/recommendations",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-forwarded-for": "203.0.113.101"
+        },
+        body: JSON.stringify({
+          mode: "ON_THE_WAY",
+          start,
+          destination,
+          arrivalDeadlineEpochMillis,
+          timeModel: "ARRIVAL_DEADLINE_V1",
+          transport: "CAR",
+          categories: []
+        })
+      }
+    ));
+    const afterRequest = Date.now();
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.data.length, 1);
+    assert.equal(body.data[0].minimumStayMinutes, 15);
+    assert.equal(body.data[0].maximumStayMinutes, 35);
+    assert.equal(
+      body.data[0].latestDepartureEpochMillis,
+      arrivalDeadlineEpochMillis - 16 * 60_000
+    );
+    assert.equal(Object.hasOwn(body.data[0], "stayMinutes"), false);
+    assert.equal(body.meta.timeModel, "ARRIVAL_DEADLINE_V1");
+    assert.equal(body.meta.arrivalDeadlineEpochMillis, arrivalDeadlineEpochMillis);
+    assert.equal(body.meta.safetyBufferMinutes, 10);
+    assert.equal(body.meta.minimumStayMinutes, 15);
+    assert.equal(Object.hasOwn(body.meta, "extraTimeMinutes"), false);
+    assert.ok(body.meta.calculatedAtEpochMillis >= beforeRequest);
+    assert.ok(body.meta.calculatedAtEpochMillis <= afterRequest);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("자동차 추천은 Kakao 후보 경로를 최대 8개만 요청한다", async () => {
   const originalFetch = globalThis.fetch;
   const originalRouteLimit = process.env.KAKAO_ROUTE_CANDIDATE_LIMIT;
