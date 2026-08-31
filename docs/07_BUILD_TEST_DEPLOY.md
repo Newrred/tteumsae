@@ -687,9 +687,14 @@ Play Console에서 `versionCode`를 되돌릴 수 없다. 문제를 수정한 �
 | 인증 ops HTTP | 200, curation 100/100, Mobility 예약/성공 10/10 |
 | 수동 운영 Cron | catalog 200/completed, intro 200/completed·20건 갱신·실패 0 |
 | 실행 요약 영속화 | catalog 4,240ms, intro 10,663ms, 두 작업 모두 `lastStatus=completed` |
+| 후속 catalog 예약 주기 | `2026-08-31T19:01:25.674Z` 시작, `19:01:32.498Z` 완료, 6,824ms, `completed`, 1페이지·0건 |
+| 후속 intro 예약 주기 | `2026-08-30T22:47:02.803Z` 시작, `22:47:15.026Z` 완료, 12,223ms, `completed`, 처리/갱신 20/20·실패 0 |
 
 운영 `CRON_SECRET`은 원문을 파일이나 로그에 남기지 않고 프로세스 메모리에서 생성해
 Vercel Sensitive 환경 변수로 회전했다. 동일 프로세스에서 재배포와 인증 요청을 수행해
 `/api/ops/status`, catalog Cron, intro Cron의 실제 Production HTTP 경계를 검증했다.
-수동 실행 뒤 ops에는 catalog와 intro의 완료 시각·소요시간·요약이 저장됐다. Vercel
-예약 트리거 자체의 실행 증거는 다음 UTC 예약 시각 이후 별도로 확인한다.
+수동 실행 뒤 ops에는 catalog와 intro의 완료 시각·소요시간·요약이 저장됐다. 이후
+Vercel에서 두 Production Cron이 활성화되고 `20 18 * * *`, `20 22 * * *` UTC 스케줄을
+유지하는지 확인했다. Supabase `sync_state`에는 수동 시각 `2026-08-28T04:08Z`와 별개인
+후속 실행 시각, `completed` 상태와 `last_run_summary`가 저장돼 Gate 1 예약 실행
+운영 점검을 완료했다.

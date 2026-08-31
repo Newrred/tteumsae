@@ -1,6 +1,6 @@
 # QA와 알려진 문제
 
-기준일: `2026-08-28`
+기준일: `2026-09-01`
 대상 흐름: `HOME → LOCATION → LOADING → RESULTS → DETAIL`
 
 ## 1. 자동 검증 기준선
@@ -9,7 +9,7 @@
 |---|---|---|
 | Android `testDebugUnitTest` | 116/116 성공 | 도착 마감 경계, V1 직렬화/파싱, ViewModel 복원·취소, 단일 선택, 만료 알림·백업·오류 계약 포함 |
 | Android `lintDebug` | 오류 0 | 경고 35개; deprecated 아이콘·API 등은 후속 정리 |
-| Android `assembleDebug` | 성공 | APK SHA-256 `12E3D987C82417D928A0B7D07E01A9FCA837E5D5D614F8C14CE1F4B2CCC82B93` |
+| Android `assembleDebug` | 성공 | APK SHA-256 `61DBE3E24C638BEE3CFF38AB3043CBD978C3DB5F0750CDB7412AE55C68C49EE8` |
 | Backend `pnpm test` | 154/154 성공 | V1·legacy·운영시간·route 호환, 보수적 우회시간과 작업공간 인수인계 포함 |
 | Backend `pnpm check` | 84개 파일 통과 | 구조·보안·마이그레이션 검사 포함 |
 | 실기기 회귀 | 미실행 | 지도, GPS, 카카오맵, 알림, OAuth는 기기 확인 필요 |
@@ -90,6 +90,18 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - [ ] legacy `extraTimeMinutes` 요청이 회귀하지 않는다.
 - [ ] `POST /api/route`의 경유지 0~5개 호환이 유지된다.
 - [ ] Preview에서 health와 V1 recommendations 계약을 확인한 뒤 Production을 승격한다.
+
+### Gate 1 예약 Cron 운영 증거
+
+- Vercel Production Cron은 활성 상태이며 catalog `20 18 * * *`, intro `20 22 * * *`
+  UTC 스케줄을 유지한다.
+- 수동 실행 시각 `2026-08-28T04:08Z` 이후 별도 운영 실행으로 catalog는
+  `2026-08-31T19:01:25.674Z` 시작, `2026-08-31T19:01:32.498Z` 완료,
+  `completed`, 6,824ms와 1페이지·0건 요약을 저장했다.
+- intro는 `2026-08-30T22:47:02.803Z` 시작, `2026-08-30T22:47:15.026Z` 완료,
+  `completed`, 12,223ms와 처리/갱신 20/20·실패 0 요약을 저장했다.
+- 이 증거는 Supabase `sync_state`의 실행 시각·상태·요약과 Vercel의 활성 Cron
+  설정을 교차 확인한 결과다. 실제 비밀값과 전체 외부 응답은 기록하지 않았다.
 
 ## 5. 알려진 문제와 비범위
 
