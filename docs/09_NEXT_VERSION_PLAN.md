@@ -156,8 +156,8 @@
 
 ## 바로 다음 실행 단위
 
-1. Vercel Preview의 `BLOCKED/UNKNOWN` 원인을 대시보드에서 확인하고 Preview 전용
-   Supabase·Kakao 환경을 준비한다. Production은 건드리지 않는다.
+1. `Ready` 상태의 Gate 2 Preview에 Supabase·Kakao·`CRON_SECRET`을 Preview 범위로
+   준비하고 새 배포를 만든다. Production은 건드리지 않는다.
 2. Gate 2 계획 Step 8의 health, V1 recommendation, legacy recommendation,
    `/api/route` Preview smoke를 완료한다.
 3. 최신 debug APK로 `08_QA_AND_KNOWN_ISSUES.md`의 지도·GPS·한 곳 선택·외부

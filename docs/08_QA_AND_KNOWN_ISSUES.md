@@ -110,8 +110,11 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - release signingConfig와 서명 AAB가 없다.
 - API 36 실제 기기 전체 회귀가 없다.
 - Google·Kakao OAuth release 서명 회귀가 없다.
-- Gate 2 Preview 배포는 Vercel에서 `BLOCKED/UNKNOWN` 상태로 멈췄고, 기존 Ready
-  Preview는 Supabase·Kakao Preview 환경변수가 없어 V1 유효 요청 smoke를 할 수 없다.
+- Gate 2 최신 Preview `dpl_qrH7j8gFvGVn8BNsNqGpiFux5Qbg`는 `Ready`이며 health는
+  200이다. 다만 Preview 범위에는 Supabase·Kakao·`CRON_SECRET`이 없어 health의
+  `databaseConfigured`·`kakaoRoutingConfigured`가 false이고, V1·legacy·route는 500,
+  ops 무인증 요청은 기대한 401 대신 500이다. 14분 59초 요청의 400 경계만 확인했다.
+  Preview 환경을 준비하기 전에는 Step 8을 완료하거나 Production을 승격하지 않는다.
   Production은 변경하지 않았다.
 
 ### P1 — 핵심 UX 검증

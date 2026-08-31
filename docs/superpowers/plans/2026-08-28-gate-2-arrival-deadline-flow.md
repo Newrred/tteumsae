@@ -188,10 +188,13 @@ Deploy the committed Backend as a Vercel Preview. Verify one literal V1 request,
 that exact deployment only if every check passes, then repeat V1 and legacy smoke through
 `tteumsae-backend-one.vercel.app`. Record only non-secret request summaries in the deployment doc.
 
-2026-08-28 실행 기록: 새 Preview 두 건이 Vercel API에서 `BLOCKED/UNKNOWN`으로
-빌드를 시작하지 못했다. 기존 Ready Preview의 health 200은 확인했지만 Preview에는
-Supabase·Kakao 환경변수가 없고 배포 코드도 V1 이전 버전이라 유효 V1 smoke로
-대체할 수 없다. Production은 승격하거나 변경하지 않았으며 이 단계는 미완료로 남긴다.
+2026-09-01 재검증: commit `3141023`의 최신 Preview
+`dpl_qrH7j8gFvGVn8BNsNqGpiFux5Qbg`는 `Ready`이고 health 200을 반환했다. 따라서 과거
+`BLOCKED/UNKNOWN` 배포 상태는 현재 차단 원인이 아니다. 그러나 Preview 범위에는
+Supabase·Kakao·`CRON_SECRET`이 없어 V1·legacy·route는 500, ops 무인증 요청은
+기대한 401 대신 500이다. 14분 59초 요청의 400 경계만 통과했다. Preview 연동값을
+준비해 새 배포에서 전체 요청을 다시 통과시키기 전까지 Production은 승격하거나
+변경하지 않으며 이 단계는 미완료로 남긴다.
 
 ---
 

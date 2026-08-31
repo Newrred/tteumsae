@@ -391,6 +391,19 @@ https://tteumsae-backend-one.vercel.app
 Production 승격 후 Vercel Settings의 Cron 목록에서 두 UTC 스케줄을 직접 확인하고,
 첫 예약 실행의 `sync_state.last_status`, `last_finished_at`, `last_run_summary`를 기록한다.
 
+#### Gate 2 Preview 실행 기록 — 2026-09-01
+
+- commit `3141023`의 Preview `dpl_qrH7j8gFvGVn8BNsNqGpiFux5Qbg`는 `Ready`다.
+- `/api/health`는 200이며 TourAPI만 configured, Supabase DB와 Kakao routing은
+  configured가 아니다.
+- V1과 legacy recommendations, 경유지 0개 route는 Preview 연동값 부재로 500이다.
+- 도착 마감 14분 59초 요청은 400과 최소 15분 오류를 반환했다.
+- `/api/ops/status` 무인증 요청은 Preview `CRON_SECRET` 부재로 기대한 401 대신 500이다.
+- 이 결과로 Preview smoke는 미완료다. Production은 승격하거나 변경하지 않았다.
+
+다음 smoke에서는 Supabase·Kakao 연동과 `CRON_SECRET`을 Preview 범위에만 준비해 새 배포를 만든 뒤,
+동일 요청 세트를 반복한다. 비밀값 원문과 외부 응답 전문은 기록하지 않는다.
+
 ### 7.3 읽기 전용 스모크 테스트
 
 ```powershell
