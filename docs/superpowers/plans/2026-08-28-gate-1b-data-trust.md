@@ -10,14 +10,14 @@
 
 **Spec:** `docs/superpowers/specs/2026-08-28-gate-1b-data-trust-design.md`
 
-## Execution Status — 2026-08-28
+## Execution Status — 2026-09-01
 
 | Task | 상태 | 근거 |
 |---|---|---|
 | 1–7 | 완료 | schema, provider tracking, ops API, 보수적 시간·축제 판정, CSV 도구 커밋 |
 | 8 | 완료 | `9ed9d53`, 강릉 검수 100행, validator와 데이터 계약 테스트 통과 |
 | 9 local | 완료 | Backend 143/143, project check 88 files, Android 75/75·lint·assemble 성공 |
-| 9 live | 조건부 완료 | migration 005~006, 예산 env, 100행 import, 인증 ops·수동 Cron smoke 완료 |
+| 9 live | 완료 | migration 005~006, 예산 env, 100행 import, 인증 ops·수동/예약 주기 Cron smoke 완료 |
 
 운영 적용 중 실제 DB에 migration 005가 빠져 006 ops RPC가 `sync_state.last_started_at`
 부재로 실패했다. 005 미적용을 스키마와 함수 존재 여부로 확인한 뒤 005를 먼저 적용했고,
@@ -27,8 +27,10 @@
 운영 증거: 강릉 활성 474곳, 검수 100/100, 운영시간 VERIFIED 75, 주차 VERIFIED 71,
 Mobility 예약/성공 10/10, 후보 배포 route/recommendations 성공, Production health와
 curation 상세 성공. 인증된 `/api/ops/status`와 수동 Production catalog·intro Cron은
-200을 반환했고 두 작업의 `completed` 요약이 영속화됐다. 다음 실제 예약 트리거 실행
-이력 확인만 후속 운영 점검으로 남는다.
+200을 반환했고 두 작업의 `completed` 요약이 영속화됐다. 수동 시각
+`2026-08-28T04:08Z`와 별개로 catalog `2026-08-31T19:01:25.674Z`, intro
+`2026-08-30T22:47:02.803Z` 후속 실행도 `completed`와 비어 있지 않은 실행 요약을
+저장했다. Vercel의 활성 Production Cron과 두 UTC 스케줄도 함께 확인했다.
 
 ## Global Constraints
 
@@ -943,7 +945,7 @@ git commit -m "data: 강릉 핵심 장소 100개 검수"
 - Consumes: all prior tasks
 - Produces: repeatable migration/deploy/import runbook and evidence-backed Gate 1 status
 
-- [ ] **Step 1: Add configuration and API contracts to docs**
+- [x] **Step 1: Add configuration and API contracts to docs**
 
 Add:
 
@@ -955,7 +957,7 @@ KAKAO_MOBILITY_DAILY_BUDGET=8000
 Document `/api/ops/status` Bearer auth, 503 budget/quota errors, `Retry-After`, KST reset, curation
 commands, migration order, and rollback principle. Never paste actual secrets or live response bodies.
 
-- [ ] **Step 2: Document the production application order**
+- [x] **Step 2: Document the production application order**
 
 The runbook order is exact:
 
@@ -973,7 +975,7 @@ The runbook order is exact:
 Rollback is code rollback plus disabling the new ops endpoint; do not drop usage or curation tables,
 because they are operational evidence and the old code ignores them.
 
-- [ ] **Step 3: Run the complete local backend suite**
+- [x] **Step 3: Run the complete local backend suite**
 
 ```powershell
 Set-Location C:\app\tteumsae\backend
@@ -983,7 +985,7 @@ pnpm run check
 
 Expected: every backend test passes and project check includes all Gate 1-B files.
 
-- [ ] **Step 4: Run Android regression because API errors and place fields changed**
+- [x] **Step 4: Run Android regression because API errors and place fields changed**
 
 ```powershell
 Set-Location C:\app\tteumsae\android
@@ -992,13 +994,13 @@ Set-Location C:\app\tteumsae\android
 
 Expected: unit tests PASS, lint reports zero errors, Debug APK assembles.
 
-- [ ] **Step 5: Apply external gates only with captured evidence**
+- [x] **Step 5: Apply external gates only with captured evidence**
 
 Apply migration 006, configure Vercel, deploy, call authenticated ops status, and import the 100-row
 CSV. Record timestamps and non-secret summaries in `docs/07_BUILD_TEST_DEPLOY.md`. If live access is
 unavailable, leave these checkboxes and Gate 1 status unchecked and report the exact blocker.
 
-- [ ] **Step 6: Update Gate truth without overclaiming**
+- [x] **Step 6: Update Gate truth without overclaiming**
 
 Mark each item in `docs/09_NEXT_VERSION_PLAN.md` complete only when its evidence exists:
 
@@ -1012,7 +1014,7 @@ festival filter: automated matrix green
 Add the adopted 8,000/7,000 policy, conservative parser, overlay strategy, and Gangneung-first scope
 to `docs/10_DECISION_LOG.md`.
 
-- [ ] **Step 7: Self-review the plan execution record and commit docs**
+- [x] **Step 7: Self-review the plan execution record and commit docs**
 
 Search for unchecked items and unsupported completion claims:
 

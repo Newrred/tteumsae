@@ -57,7 +57,7 @@
 - [x] Kakao·TourAPI·Supabase fetch에 요청별 timeout과 전체 요청 deadline 적용
 - [x] 추천 한 건의 정확 Kakao 경로 후보 상한을 8개로 축소
 - [x] 일일 Kakao 호출 예산, 429/5xx와 운영시간 보강률 영속 기록
-- [ ] 다음 예약 Cron 실행 후 마지막 성공·요약이 ops에 쌓이는지 확인
+- [x] 다음 예약 Cron 실행 후 마지막 성공·요약이 ops에 쌓이는지 확인
 - [x] 운영시간 파서가 평일·주말, 계절, 입장 마감을 확실히 구분하지 못하면 `UNKNOWN`
 - [x] 지난 축제와 날짜 불완전 축제를 추천에서 제외
 - [x] 강릉 알파 핵심 장소 100개 운영시간·주차·입장 정보 검수
@@ -72,9 +72,10 @@
 
 2026-08-28 운영 적용으로 migration 005~006, 7,000/8,000 호출 경계, 검수 overlay
 100행과 Production 승격을 확인했다. 후보 배포의 실제 route·recommendations가 성공했고
-인증된 ops HTTP는 검수 100/100과 Mobility 예약/성공 10/10을 반환했다. 실제 Production
-Cron 수동 실행에서 catalog와 intro 모두 200/completed였고 intro 20건 갱신·실패 0과
-두 작업의 마지막 완료 요약 영속화를 확인했다. 다음 예약 트리거 실행 이력만 남아 있다.
+인증된 ops HTTP는 검수 100/100과 Mobility 예약/성공 10/10을 반환했다. 수동 실행과 별개인
+후속 예약 주기에서 catalog는 `2026-08-31T19:01:25.674Z`, intro는
+`2026-08-30T22:47:02.803Z`에 시작했다. 두 작업 모두 `completed`로 끝났고 catalog는
+1페이지·0건, intro는 처리/갱신 20/20·실패 0의 `last_run_summary`를 영속화했다.
 
 ## Gate 2 — 도착 마감 1곳 핵심 플로우
 
