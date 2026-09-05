@@ -132,6 +132,11 @@ class TteumsaeApi(
             )
         }
 
+    suspend fun place(contentId: String): PlaceCandidate = withContext(Dispatchers.IO) {
+        val encoded = URLEncoder.encode(contentId, StandardCharsets.UTF_8.name())
+        parsePlaceResponse(request("GET", "/api/places/$encoded"))
+    }
+
     private fun request(
         method: String,
         path: String,
@@ -306,8 +311,6 @@ private fun JSONObject.toLocationSearchResult() = LocationSearchResult(
 private fun JSONObject.toRecommendation(requireV1Fields: Boolean): SafeRecommendation {
     val place = getJSONObject("place")
     val route = getJSONObject("route")
-    val address = place.optString("address")
-    val routeProvider = route.optString("provider", "ESTIMATE")
     val minimumStayMinutes = if (requireV1Fields) {
         requiredPositiveInt("minimumStayMinutes")
     } else {
@@ -331,28 +334,13 @@ private fun JSONObject.toRecommendation(requireV1Fields: Boolean): SafeRecommend
         throw ApiException("추천 응답의 최대 체류시간이 최소 체류시간보다 짧습니다.")
     }
     return SafeRecommendation(
-        place = PlaceCandidate(
-            id = place.getString("content_id"),
-            name = place.getString("name"),
-            category = placeCategory(place.optString("category")),
+        place = place.toPlaceCandidate(
             stayMinutes = if (requireV1Fields) 0 else getInt("stayMinutes"),
             firstLegMinutes = route.getInt("firstLegMinutes"),
             secondLegMinutes = route.getInt("secondLegMinutes"),
             detourMinutes = route.getInt("detourMinutes"),
             firstLegDistanceMeters = route.optInt("firstLegDistanceMeters"),
             secondLegDistanceMeters = route.optInt("secondLegDistanceMeters"),
-            reason = if (routeProvider == "KAKAO_MOBILITY") {
-                "카카오 실시간 차량 이동시간을 반영했어요."
-            } else {
-                "도보 거리 추정 시간을 반영했어요."
-            },
-            tags = place.optJSONArray("tags")?.mapStrings().orEmpty(),
-            address = address,
-            imageUrl = place.optString("image_url"),
-            latitude = place.optDouble("latitude").takeUnless { it.isNaN() },
-            longitude = place.optDouble("longitude").takeUnless { it.isNaN() },
-            openingHours = place.optString("opening_hours"),
-            closedDays = place.optString("closed_days"),
         ),
         totalMinutes = if (requireV1Fields) {
             route.getInt("firstLegMinutes") + route.getInt("secondLegMinutes")
@@ -390,23 +378,48 @@ private fun JSONObject.requiredPositiveLong(name: String): Long {
         ?: throw ApiException("추천 응답의 $name 값이 올바르지 않습니다.")
 }
 
-private fun JSONObject.toPlaceCandidate() = PlaceCandidate(
+private fun JSONObject.toPlaceCandidate(
+    stayMinutes: Int = optInt("default_stay_minutes", 40),
+    firstLegMinutes: Int = 0,
+    secondLegMinutes: Int = 0,
+    detourMinutes: Int = 0,
+    firstLegDistanceMeters: Int = 0,
+    secondLegDistanceMeters: Int = 0,
+) = PlaceCandidate(
     id = getString("content_id"),
     name = getString("name"),
     category = placeCategory(optString("category")),
-    stayMinutes = optInt("default_stay_minutes", 40),
-    firstLegMinutes = 0,
-    secondLegMinutes = 0,
-    detourMinutes = 0,
-    reason = "한국관광공사 TourAPI에서 제공한 강원도 장소예요.",
+    stayMinutes = stayMinutes,
+    firstLegMinutes = firstLegMinutes,
+    secondLegMinutes = secondLegMinutes,
+    detourMinutes = detourMinutes,
+    firstLegDistanceMeters = firstLegDistanceMeters,
+    secondLegDistanceMeters = secondLegDistanceMeters,
+    reason = "",
     tags = optJSONArray("tags")?.mapStrings().orEmpty(),
-    address = optString("address"),
-    imageUrl = optString("image_url"),
+    address = optText("address"),
+    imageUrl = optText("image_url"),
     latitude = optDouble("latitude").takeUnless { it.isNaN() },
     longitude = optDouble("longitude").takeUnless { it.isNaN() },
-    openingHours = optString("opening_hours"),
-    closedDays = optString("closed_days"),
+    openingHours = optText("opening_hours"),
+    closedDays = optText("closed_days"),
+    telephone = optText("tel"),
+    homepageUrl = optText("homepage_url"),
+    overview = optText("overview"),
+    imageUrls = optJSONArray("image_urls")?.mapStrings().orEmpty(),
+    lastAdmission = optText("last_admission"),
+    parkingInfo = optText("parking_info"),
+    eventStartDate = optText("event_start_date"),
+    eventEndDate = optText("event_end_date"),
+    dataProvenance = optText("data_provenance"),
+    operatingInfoStatus = optText("operating_info_status"),
+    admissionInfoStatus = optText("admission_info_status"),
+    parkingInfoStatus = optText("parking_info_status"),
+    reviewedAt = optText("reviewed_at"),
 )
+
+internal fun parsePlaceResponse(response: JSONObject): PlaceCandidate =
+    response.getJSONObject("data").toPlaceCandidate()
 
 private fun JSONObject.toRouteSummary() = RouteSummary(
     provider = optString("provider", "KAKAO_MOBILITY"),
@@ -445,3 +458,6 @@ private fun JSONArray.mapStrings(): List<String> =
             optString(index).takeIf { it.isNotBlank() }?.let(::add)
         }
     }
+
+private fun JSONObject.optText(name: String): String =
+    if (!has(name) || isNull(name)) "" else optString(name).trim()

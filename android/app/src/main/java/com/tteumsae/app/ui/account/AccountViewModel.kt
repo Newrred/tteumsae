@@ -154,6 +154,12 @@ class AccountViewModel(
         mutableState.update { it.copy(errorMessage = null) }
     }
 
+    fun retryProfileLoad() {
+        val session = mutableState.value.session as? AccountSession.SignedIn ?: return
+        if (mutableState.value.isLoading) return
+        viewModelScope.launch { loadProfile(session) }
+    }
+
     private suspend fun handleSession(session: AccountSession) {
         when (session) {
             AccountSession.Guest -> {
@@ -194,7 +200,7 @@ class AccountViewModel(
 
     private suspend fun loadProfile(session: AccountSession.SignedIn) {
         val repository = profileRepository ?: return
-        mutableState.update { it.copy(isLoading = true) }
+        mutableState.update { it.copy(isLoading = true, errorMessage = null) }
         try {
             val profile = repository.loadOrCreate(session)
             loadedUserId = session.userId

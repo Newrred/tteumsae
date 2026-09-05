@@ -44,6 +44,16 @@ for (const file of requiredFiles) {
   await readFile(new URL(file, root), "utf8");
 }
 
+const envExample = await readFile(new URL(".env.example", root), "utf8");
+assert.match(envExample, /^TOUR_PRESENTATION_SYNC_BATCH_SIZE=\d+$/m);
+const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", root), "utf8"));
+assert.ok(
+  vercelConfig.crons?.some(
+    (cron) => cron.path === "/api/cron/tour-intro-sync?stage=presentation"
+  ),
+  "TourAPI presentation Cron 설정이 필요합니다."
+);
+
 async function collectFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
   const files = [];

@@ -394,7 +394,7 @@ export function normalizeTourMedia({
   syncedAt
 }) {
   const tags = introTags(intro);
-  if (pet) tags.push("반려동물 동반");
+  if (hasPositiveValue(pet, ["acmpyTypeCd"])) tags.push("반려동물 동반");
   if (Number(contentTypeId) === 14) tags.push("실내 활동");
 
   const imageItems = Array.isArray(images) ? images : [];

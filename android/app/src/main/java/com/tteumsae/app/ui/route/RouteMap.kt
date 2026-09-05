@@ -2,6 +2,7 @@ package com.tteumsae.app.ui.route
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SearchCriteria
@@ -21,7 +22,11 @@ internal fun RouteMapCanvas(
     selectedPlaceId: String?,
     focusedPlaceId: String?,
     corridorRadiusMeters: Int,
+    overviewRequestId: Int,
+    mapBottomPadding: Dp,
     onCandidateClick: (String) -> Unit,
+    onClusterClick: (List<String>) -> Unit,
+    onMapInteraction: () -> Unit,
 ) {
     RouteMap(
         modifier = modifier,
@@ -32,6 +37,10 @@ internal fun RouteMapCanvas(
         selectedIds = listOfNotNull(selectedPlaceId),
         focusedPlaceId = focusedPlaceId,
         corridorRadiusMeters = corridorRadiusMeters,
+        overviewRequestId = overviewRequestId,
+        mapBottomPadding = mapBottomPadding,
+        onMapInteraction = onMapInteraction,
         onCandidateClick = onCandidateClick,
+        onClusterClick = onClusterClick,
     )
 }

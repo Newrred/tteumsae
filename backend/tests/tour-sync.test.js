@@ -257,7 +257,7 @@ test("빈 intro도 완료 처리하되 기존 정상 상세값은 지우지 않�
   }
 });
 
-test("부분 intro는 응답에 없는 정상 상세값과 태그를 덮어쓰지 않는다", async () => {
+test("부분 intro는 응답에 없는 상세값을 보존하고 담당 태그는 최신 응답으로 교체한다", async () => {
   const { savePlaceIntro } = await import("../lib/database.js");
   process.env.SUPABASE_URL = "https://supabase.test";
   process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
@@ -287,7 +287,8 @@ test("부분 intro는 응답에 없는 정상 상세값과 태그를 덮어쓰�
     );
 
     assert.equal(body.closed_days, "매주 화요일");
-    for (const field of ["opening_hours", "event_start_date", "event_end_date", "tags"]) {
+    assert.deepEqual(body.tags, ["반려동물 동반"]);
+    for (const field of ["opening_hours", "event_start_date", "event_end_date"]) {
       assert.equal(field in body, false, `${field}는 부분 응답으로 덮어쓰면 안 됩니다.`);
     }
   } finally {

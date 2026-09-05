@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -29,21 +30,24 @@ import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -51,14 +55,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TimePicker
-import androidx.compose.material3.rememberTimePickerState
+import androidx.compose.material3.rememberBottomSheetScaffoldState
+import androidx.compose.material3.rememberStandardBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -78,7 +86,6 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
 import com.tteumsae.app.domain.Coordinates
 import com.tteumsae.app.domain.LocationSearchResult
 import com.tteumsae.app.domain.PlaceCategory
@@ -93,6 +100,7 @@ import com.tteumsae.app.ui.networkFailureMessage
 import com.tteumsae.app.ui.requestCurrentLocation
 import com.tteumsae.app.ui.shouldAutoLocateStart
 import com.tteumsae.app.ui.theme.TteumInk
+import com.tteumsae.app.ui.theme.TteumHandle
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
@@ -113,6 +121,20 @@ internal fun canContinueRouteInput(
     input.arrivalDeadlineEpochMillis?.let {
         isValidArrivalDeadline(it, nowEpochMillis)
     } == true
+
+internal fun routeInputGuidance(
+    input: RouteFlowInput,
+    nowEpochMillis: Long,
+    isBusy: Boolean,
+): String? = when {
+    isBusy -> null
+    input.start == null -> "출발지를 선택해 주세요"
+    input.destination == null -> "목적지를 선택해 주세요"
+    input.arrivalDeadlineEpochMillis == null -> "도착 시각을 정해 주세요"
+    !isValidArrivalDeadline(input.arrivalDeadlineEpochMillis, nowEpochMillis) ->
+        "도착 시각은 지금부터 15분 이후로 정해 주세요"
+    else -> null
+}
 
 @OptIn(
     ExperimentalFoundationApi::class,
@@ -138,20 +160,39 @@ internal fun RouteLocationScreen(
     val keyboardController = LocalSoftwareKeyboardController.current
     val isImeVisible = WindowInsets.isImeVisible
     var startQuery by rememberSaveable {
-        mutableStateOf(input.start?.name ?: "현재 위치")
+        mutableStateOf(
+            input.start?.name
+                ?: if (hasLocationPermission(context)) "현재 위치" else "",
+        )
     }
     var destinationQuery by rememberSaveable {
         mutableStateOf(input.destination?.name.orEmpty())
     }
     var isLocating by remember { mutableStateOf(false) }
+    var cancelLocationRequest by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     var showPermissionSettingsDialog by remember { mutableStateOf(false) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    val nowEpochMillis = System.currentTimeMillis()
+    val initialDeadlineClock = remember {
+        Instant.ofEpochMilli(
+            input.arrivalDeadlineEpochMillis
+                ?: System.currentTimeMillis() + 60L * 60L * 1_000L,
+        ).atZone(ZoneId.of("Asia/Seoul"))
+    }
+    var selectedHour by rememberSaveable { mutableIntStateOf(initialDeadlineClock.hour) }
+    var selectedMinute by rememberSaveable { mutableIntStateOf(initialDeadlineClock.minute) }
+    var nowEpochMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            nowEpochMillis = System.currentTimeMillis()
+        }
+    }
 
     val locateCurrentPosition: () -> Unit = {
+        cancelLocationRequest?.invoke()
         isLocating = true
-        requestCurrentLocation(
+        val cancel = requestCurrentLocation(
             context = context,
             onSuccess = { location ->
                 val routeLocation = RouteLocation(
@@ -160,13 +201,16 @@ internal fun RouteLocationScreen(
                 )
                 startQuery = routeLocation.name
                 onStartSelected(routeLocation)
+                cancelLocationRequest = null
                 isLocating = false
             },
             onLocationDisabled = {
+                cancelLocationRequest = null
                 isLocating = false
                 showLocationSettingsDialog = true
             },
             onUnavailable = {
+                cancelLocationRequest = null
                 isLocating = false
                 Toast.makeText(
                     context,
@@ -175,6 +219,13 @@ internal fun RouteLocationScreen(
                 ).show()
             },
         )
+        cancelLocationRequest = cancel.takeIf { isLocating }
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            cancelLocationRequest?.invoke()
+            cancelLocationRequest = null
+        }
     }
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -209,8 +260,25 @@ internal fun RouteLocationScreen(
         }
     }
 
+    LaunchedEffect(Unit) {
+        if (input.arrivalDeadlineEpochMillis == null) {
+            onDeadlineSelected(
+                resolveArrivalDeadline(
+                    selectedHour = selectedHour,
+                    selectedMinute = selectedMinute,
+                    nowEpochMillis = System.currentTimeMillis(),
+                ),
+            )
+        }
+    }
+
     LaunchedEffect(startQuery, input.start) {
-        if (shouldAutoLocateStart(startQuery, input.start != null)) useCurrentLocation()
+        if (
+            hasLocationPermission(context) &&
+            shouldAutoLocateStart(startQuery, input.start != null)
+        ) {
+            useCurrentLocation()
+        }
     }
     LaunchedEffect(input.start?.coordinates, input.start?.name) {
         val start = input.start ?: return@LaunchedEffect
@@ -229,66 +297,168 @@ internal fun RouteLocationScreen(
 
     val busy = isChecking || isLocating
     val canContinue = canContinueRouteInput(input, nowEpochMillis, busy)
+    val continueGuidance = routeInputGuidance(input, nowEpochMillis, busy)
+    val panelState = rememberStandardBottomSheetState(
+        initialValue = SheetValue.Expanded,
+        skipHiddenState = true,
+    )
+    val panelScaffoldState = rememberBottomSheetScaffoldState(panelState)
+    val collapsedRouteTitle = listOfNotNull(input.start?.name, input.destination?.name)
+        .joinToString(" → ")
+        .ifBlank { "경로를 확인해 보세요" }
+    val collapsedRouteSummary = input.arrivalDeadlineEpochMillis?.let(::formatDeadline)
+        ?.let { "$it · $collapsedRouteTitle" }
+        ?: collapsedRouteTitle
+
+    LaunchedEffect(isImeVisible) {
+        if (isImeVisible && panelState.currentValue != SheetValue.Expanded) {
+            panelState.expand()
+        }
+    }
+    LaunchedEffect(panelState.currentValue) {
+        if (panelState.currentValue == SheetValue.PartiallyExpanded) {
+            focusManager.clearFocus(force = true)
+            keyboardController?.hide()
+        }
+    }
     BackHandler(enabled = isImeVisible) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
     }
 
-    Scaffold(
-        containerColor = androidx.compose.ui.graphics.Color.White,
-        bottomBar = {
-            if (!isImeVisible) {
-                Surface(color = androidx.compose.ui.graphics.Color.White) {
-                    Button(
-                        onClick = {
-                            focusManager.clearFocus(force = true)
-                            keyboardController?.hide()
-                            onNext()
-                        },
-                        enabled = canContinue,
-                        modifier = Modifier
-                            .navigationBarsPadding()
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 16.dp)
-                            .height(56.dp),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Text(
-                            if (isChecking) "경로 확인 중..." else "틈새 찾기",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
-                }
-            }
-        },
-    ) { padding ->
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The drag-handle slot adds about 45dp outside sheetContent. Subtract it
+        // together with a 37dp top reveal so the rounded edge starts below the
+        // status area instead of being clamped to y=0.
+        val expandedPanelHeight = maxHeight - 82.dp
+        BottomSheetScaffold(
+            scaffoldState = panelScaffoldState,
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
+            sheetContainerColor = androidx.compose.ui.graphics.Color.White,
+            sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            sheetShadowElevation = 16.dp,
+            sheetPeekHeight = 110.dp,
+            sheetDragHandle = {
+                BottomSheetDefaults.DragHandle(color = TteumHandle)
+            },
+            sheetContent = {
+                Scaffold(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(expandedPanelHeight),
+                    containerColor = androidx.compose.ui.graphics.Color.White,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
+                    bottomBar = {
+                        if (!isImeVisible) {
+                            Surface(color = androidx.compose.ui.graphics.Color.White) {
+                                Column(
+                                    modifier = Modifier
+                                        .navigationBarsPadding()
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                ) {
+                                    continueGuidance?.let { guidance ->
+                                        Text(
+                                            guidance,
+                                            color = TteumMuted,
+                                            fontSize = 12.sp,
+                                            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                        )
+                                        Spacer(Modifier.height(8.dp))
+                                    }
+                                    Button(
+                                        onClick = {
+                                            focusManager.clearFocus(force = true)
+                                            keyboardController?.hide()
+                                            onNext()
+                                        },
+                                        enabled = canContinue,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = 56.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                    ) {
+                                        Text(
+                                            if (isChecking) "경로 확인 중..." else "틈새 찾기",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .statusBarsPadding()
                 .imePadding(),
             contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 24.dp),
         ) {
             item {
-                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "뒤로", modifier = Modifier.size(30.dp))
+                Row(
+                    modifier = if (panelState.currentValue == SheetValue.PartiallyExpanded) {
+                        Modifier.heightIn(min = 62.dp)
+                    } else {
+                        Modifier
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "뒤로",
+                            modifier = Modifier.size(28.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    if (panelState.currentValue == SheetValue.PartiallyExpanded) {
+                        Text(
+                            collapsedRouteSummary,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            fontSize = 15.sp,
+                            lineHeight = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    } else {
+                        Column {
+                        Text(
+                            "어디로, 몇 시까지 가나요?",
+                            fontSize = 24.sp,
+                            lineHeight = 30.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            "늦지 않는 선에서 들를 곳을 찾아드려요.",
+                            color = TteumMuted,
+                            fontSize = 13.sp,
+                        )
+                        }
+                    }
                 }
-                Spacer(Modifier.height(16.dp))
-                Text(
-                    "어디로, 몇 시까지 가나요?",
-                    fontSize = 31.sp,
-                    lineHeight = 39.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Spacer(Modifier.height(10.dp))
-                Text(
-                    "도착 시간에 늦지 않는 선에서 들를 곳을 찾아드려요.",
-                    color = TteumMuted,
-                    fontSize = 16.sp,
-                )
-                Spacer(Modifier.height(28.dp))
+                if (panelState.currentValue != SheetValue.PartiallyExpanded) {
+                    Spacer(Modifier.height(18.dp))
+                }
+                if (!errorMessage.isNullOrBlank()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = TteumRedSoft,
+                        shape = RoundedCornerShape(14.dp),
+                    ) {
+                        Text(
+                            errorMessage,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                            color = TteumRed,
+                            fontSize = 13.sp,
+                            lineHeight = 19.sp,
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                }
                 Surface(
                     color = androidx.compose.ui.graphics.Color(0xFFF5F6F8),
                     shape = RoundedCornerShape(14.dp),
@@ -338,39 +508,46 @@ internal fun RouteLocationScreen(
 
                 Spacer(Modifier.height(24.dp))
                 Text("도착 마감", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Spacer(Modifier.height(10.dp))
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { showTimePicker = true },
-                    color = TteumRedSoft,
-                    contentColor = TteumRed,
-                    border = BorderStroke(1.dp, TteumRed.copy(alpha = 0.35f)),
-                    shape = RoundedCornerShape(14.dp),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Default.Schedule, contentDescription = null)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                input.arrivalDeadlineEpochMillis?.let(::formatDeadline)
-                                    ?: "도착해야 하는 시각 선택",
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                "선택한 시각은 확인을 눌러야 적용돼요.",
-                                color = TteumMuted,
-                                fontSize = 12.sp,
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    input.arrivalDeadlineEpochMillis?.let(::formatDeadline)
+                        ?: "도착 시각을 정해 주세요.",
+                    color = TteumRed,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(8.dp))
+                ArrivalDeadlineWheel(
+                    hour = selectedHour,
+                    minute = selectedMinute,
+                    onHourChanged = { hour ->
+                        if (selectedHour != hour) {
+                            selectedHour = hour
+                            onDeadlineSelected(
+                                resolveArrivalDeadline(
+                                    selectedHour = hour,
+                                    selectedMinute = selectedMinute,
+                                    nowEpochMillis = System.currentTimeMillis(),
+                                ),
                             )
                         }
-                    }
-                }
+                    },
+                    onMinuteChanged = { minute ->
+                        if (selectedMinute != minute) {
+                            selectedMinute = minute
+                            onDeadlineSelected(
+                                resolveArrivalDeadline(
+                                    selectedHour = selectedHour,
+                                    selectedMinute = minute,
+                                    nowEpochMillis = System.currentTimeMillis(),
+                                ),
+                            )
+                        }
+                    },
+                )
 
                 Spacer(Modifier.height(24.dp))
-                Text("원하는 분위기 · 선택", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("들르고 싶은 곳 · 선택", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                 Spacer(Modifier.height(6.dp))
                 Text("고르지 않아도 바로 추천받을 수 있어요.", color = TteumMuted, fontSize = 13.sp)
                 Spacer(Modifier.height(10.dp))
@@ -396,98 +573,66 @@ internal fun RouteLocationScreen(
                         )
                     }
                 }
-                if (!errorMessage.isNullOrBlank()) {
-                    Spacer(Modifier.height(18.dp))
-                    Text(errorMessage, color = TteumRed, fontSize = 13.sp)
-                }
             }
         }
+                }
+            },
+        ) { }
     }
 
-    if (showTimePicker) {
-        ArrivalDeadlinePickerDialog(
-            onDismiss = { showTimePicker = false },
-            onConfirm = { hour, minute ->
-                onDeadlineSelected(
-                    resolveArrivalDeadline(
-                        selectedHour = hour,
-                        selectedMinute = minute,
-                        nowEpochMillis = System.currentTimeMillis(),
-                    ),
-                )
-                showTimePicker = false
-            },
-        )
-    }
     if (showLocationSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showLocationSettingsDialog = false },
+            modifier = Modifier.widthIn(max = 420.dp),
             title = { Text("위치 서비스를 켜 주세요") },
             text = { Text("현재 위치를 자동으로 설정하려면 휴대폰의 위치 서비스가 필요해요.") },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         showLocationSettingsDialog = false
                         context.startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
                     },
+                    modifier = Modifier.heightIn(min = 48.dp),
                 ) { Text("위치 설정 열기") }
             },
             dismissButton = {
-                TextButton(onClick = { showLocationSettingsDialog = false }) { Text("취소") }
+                TextButton(
+                    onClick = { showLocationSettingsDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = TteumMuted),
+                ) { Text("취소") }
             },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = androidx.compose.ui.graphics.Color.White,
+            tonalElevation = 0.dp,
         )
     }
     if (showPermissionSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionSettingsDialog = false },
+            modifier = Modifier.widthIn(max = 420.dp),
             title = { Text("위치 권한을 켜 주세요") },
             text = { Text("앱 설정에서 위치 권한을 허용하거나 출발지를 직접 검색해 주세요.") },
             confirmButton = {
-                TextButton(
+                Button(
                     onClick = {
                         showPermissionSettingsDialog = false
                         openAppSettings(context)
                     },
+                    modifier = Modifier.heightIn(min = 48.dp),
                 ) { Text("앱 설정 열기") }
             },
             dismissButton = {
-                TextButton(onClick = { showPermissionSettingsDialog = false }) { Text("직접 검색") }
+                TextButton(
+                    onClick = { showPermissionSettingsDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp),
+                    colors = ButtonDefaults.textButtonColors(contentColor = TteumMuted),
+                ) { Text("직접 검색") }
             },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = androidx.compose.ui.graphics.Color.White,
+            tonalElevation = 0.dp,
         )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun ArrivalDeadlinePickerDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (Int, Int) -> Unit,
-) {
-    val initial = Instant.ofEpochMilli(System.currentTimeMillis())
-        .atZone(ZoneId.of("Asia/Seoul"))
-        .plusHours(1)
-    val pickerState = rememberTimePickerState(
-        initialHour = initial.hour,
-        initialMinute = initial.minute,
-        is24Hour = false,
-    )
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp)) {
-            Column(modifier = Modifier.padding(24.dp)) {
-                Text("도착 마감 선택", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(18.dp))
-                TimePicker(state = pickerState)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(onClick = onDismiss) { Text("취소") }
-                    TextButton(onClick = { onConfirm(pickerState.hour, pickerState.minute) }) {
-                        Text("확인")
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -498,7 +643,13 @@ private fun RouteFilterChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.clickable(role = Role.Checkbox, onClick = onClick),
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .toggleable(
+                value = selected,
+                role = Role.Checkbox,
+                onValueChange = { onClick() },
+            ),
         color = if (selected) TteumRedSoft else androidx.compose.ui.graphics.Color(0xFFF5F6F8),
         contentColor = if (selected) TteumRed else TteumMuted,
         border = if (selected) BorderStroke(1.dp, TteumRed) else null,
@@ -506,7 +657,7 @@ private fun RouteFilterChip(
     ) {
         Text(
             label,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
             fontWeight = FontWeight.SemiBold,
         )
     }
@@ -533,7 +684,7 @@ private fun RouteLocationSearchField(
     var isLoading by remember { mutableStateOf(false) }
     var searchMessage by remember { mutableStateOf<String?>(null) }
     var searchFailed by remember { mutableStateOf(false) }
-    var searchAttempt by remember { mutableStateOf(0) }
+    var searchAttempt by remember { mutableIntStateOf(0) }
     var focusAfterClear by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val firstResultRequester = remember { BringIntoViewRequester() }
@@ -598,12 +749,7 @@ private fun RouteLocationSearchField(
                 if (selected != null) {
                     Text(
                         value,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                focusAfterClear = true
-                                onValueChange("")
-                            },
+                        modifier = Modifier.fillMaxWidth(),
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -636,10 +782,29 @@ private fun RouteLocationSearchField(
                 Spacer(Modifier.width(8.dp))
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             }
+            if (value.isNotBlank() && !isLoading) {
+                IconButton(
+                    onClick = {
+                        focusAfterClear = true
+                        onValueChange("")
+                    },
+                    modifier = Modifier.size(48.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "$label 지우기",
+                        tint = TteumMuted,
+                    )
+                }
+            }
             if (onUseCurrentLocation != null) {
                 Spacer(Modifier.width(10.dp))
                 Surface(
-                    modifier = Modifier.clickable(enabled = !isLocating, onClick = onUseCurrentLocation),
+                    modifier = Modifier.clickable(
+                        enabled = !isLocating,
+                        role = Role.Button,
+                        onClick = onUseCurrentLocation,
+                    ),
                     color = TteumRedSoft,
                     shape = RoundedCornerShape(8.dp),
                 ) {
@@ -707,5 +872,5 @@ private fun formatDeadline(epochMillis: Long): String {
         today.plusDays(1) -> "내일"
         else -> selected.format(DateTimeFormatter.ofPattern("M월 d일", Locale.KOREAN))
     }
-    return "$dayPrefix ${selected.format(DateTimeFormatter.ofPattern("a h:mm", Locale.KOREAN))}까지"
+    return "$dayPrefix ${selected.format(DateTimeFormatter.ofPattern("HH:mm", Locale.KOREAN))}까지"
 }

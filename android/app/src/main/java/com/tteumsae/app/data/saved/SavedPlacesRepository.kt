@@ -43,7 +43,7 @@ class RoomSavedPlacesRepository(
                 guestEntity(
                     place = place,
                     desiredSaved = shouldSave,
-                    savedAtMillis = if (shouldSave) nowMillis else existing?.savedAtMillis ?: nowMillis,
+                    savedAtMillis = if (shouldSave) nowMillis else existing.savedAtMillis,
                     localRevision = dao.nextRevision(GUEST_SCOPE),
                 ),
             )

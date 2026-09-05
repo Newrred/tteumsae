@@ -1,6 +1,6 @@
 # 새 담당자 시작 안내
 
-기준일: `2026-08-28`
+기준일: `2026-09-05`
 Android 버전: `0.12.4` (`versionCode 25`)
 Android 패키지: `com.tteumsae.app`
 
@@ -23,8 +23,10 @@ Android 패키지: `com.tteumsae.app`
 현재 소스의 활성 경로 흐름은
 `HOME → LOCATION → LOADING → RESULTS → DETAIL`입니다. `LOCATION` 한 화면에서
 출발지, 목적지, 절대 도착 마감과 선택 관심 필터를 입력합니다. 결과에서는 경유지
-한 곳만 선택할 수 있고, 핀의 `+N분`, 선택 장소의 최대 체류시간과 늦어도 출발할
-시각을 보여줍니다. 선택하지 않고 목적지로 바로 안내할 수도 있습니다.
+한 곳만 선택할 수 있습니다. 지도 핀은 장소 종류를 그림으로 구분하고, 묶음 핀은
+현재 배율에서 가까운 후보를 대표 카테고리와 개수로 보여줍니다. 추가 이동시간,
+최대 체류시간과 늦어도 출발할 시각은 비교하기 쉬운 결과 목록에서 제공합니다.
+선택하지 않고 목적지로 바로 안내할 수도 있습니다.
 
 이 흐름의 API 시간 모델은 `ARRIVAL_DEADLINE_V1`입니다. 서버가 요청 수신시각을
 기준으로 고정 안전여유 10분과 최소 체류 15분을 적용합니다. 기존
@@ -121,9 +123,12 @@ APK 위치:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-2026-08-28 Gate 2 작업 경로에서 `testDebugUnitTest` 116/116,
-`lintDebug` 오류 0과 debug APK 빌드를 확인했습니다. 자동 테스트는 실제 지도,
+2026-09-05 결과 지도·목록·상세 V2 반영 뒤 `testDebugUnitTest` 142/142,
+`lintDebug` 오류 0과 debug·release APK 빌드를 확인했습니다. 자동 테스트는 실제 지도,
 OAuth, 카카오맵 복귀와 알림 실기기 QA를 대신하지 않습니다.
+
+결과 화면의 최신 동작과 데이터 원칙은 [지도 후보·결과 목록·장소 상세 V2](13_RESULTS_MAP_DETAIL_V2.md),
+실기기 화면 회귀 절차는 [빌드·테스트·배포](07_BUILD_TEST_DEPLOY.md)를 기준으로 합니다.
 
 같은 날 새 업로드 키로 `bundleRelease`와 `assembleRelease`를 통과하고, SM-F776N에
 release APK를 설치해 GPS 거부 직접 입력부터 한 곳 선택, 실제 카카오맵의
@@ -211,5 +216,6 @@ pnpm dlx vercel env pull .env.local
 6. [QA와 알려진 문제](08_QA_AND_KNOWN_ISSUES.md)
 7. [다음 버전 계획](09_NEXT_VERSION_PLAN.md)
 8. [결정 기록](10_DECISION_LOG.md)
+9. [UI 사용성 개선 기준](11_UI_USABILITY_REFRESH.md)
 
 기능을 수정하면 구현표·QA·변경 기록도 같은 커밋에서 갱신합니다.

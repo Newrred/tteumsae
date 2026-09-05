@@ -30,6 +30,17 @@ class SavedPlaceSnapshotCodecTest {
             isOpen = false,
             openingHours = "09:00-18:00",
             closedDays = "매주 월요일",
+            telephone = "033-123-4567",
+            homepageUrl = "https://example.com",
+            overview = "바다 옆 관광지",
+            imageUrls = listOf("https://example.com/1.jpg", "https://example.com/2.jpg"),
+            lastAdmission = "17:30",
+            parkingInfo = "무료 주차",
+            eventStartDate = "2026-09-05",
+            eventEndDate = "2026-09-07",
+            dataProvenance = "CURATION",
+            operatingInfoStatus = "VERIFIED",
+            reviewedAt = "2026-08-28T00:00:00Z",
         )
 
         val encoded = SavedPlaceSnapshotCodec.encode(original)
@@ -46,6 +57,17 @@ class SavedPlaceSnapshotCodecTest {
         assertEquals(original.longitude, decoded.longitude)
         assertEquals(original.openingHours, decoded.openingHours)
         assertEquals(original.closedDays, decoded.closedDays)
+        assertEquals(original.telephone, decoded.telephone)
+        assertEquals(original.homepageUrl, decoded.homepageUrl)
+        assertEquals(original.overview, decoded.overview)
+        assertEquals(original.imageUrls, decoded.imageUrls)
+        assertEquals(original.lastAdmission, decoded.lastAdmission)
+        assertEquals(original.parkingInfo, decoded.parkingInfo)
+        assertEquals(original.eventStartDate, decoded.eventStartDate)
+        assertEquals(original.eventEndDate, decoded.eventEndDate)
+        assertEquals(original.dataProvenance, decoded.dataProvenance)
+        assertEquals(original.operatingInfoStatus, decoded.operatingInfoStatus)
+        assertEquals(original.reviewedAt, decoded.reviewedAt)
     }
 
     @Test
@@ -80,6 +102,18 @@ class SavedPlaceSnapshotCodecTest {
         assertNull(decoded.longitude)
         assertNull(SavedPlaceSnapshotCodec.decode("not-json"))
         assertNull(SavedPlaceSnapshotCodec.decode("""{"id":"missing-fields"}"""))
+    }
+
+    @Test
+    fun `old snapshots remain readable with empty new detail fields`() {
+        val decoded = SavedPlaceSnapshotCodec.decode(
+            """{"id":"old","name":"예전 저장","category":"CAFE","stayMinutes":30,"tags":[]}""",
+        )!!
+
+        assertEquals("old", decoded.id)
+        assertEquals("", decoded.overview)
+        assertEquals(emptyList<String>(), decoded.imageUrls)
+        assertEquals("", decoded.parkingInfo)
     }
 
     private fun placeWithRouteMetrics() = PlaceCandidate(

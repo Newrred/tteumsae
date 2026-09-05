@@ -37,15 +37,25 @@ internal fun openKakaoMapInstallPage(context: Context) {
     }
 }
 
-internal fun openKakaoMap(context: Context, placeName: String) {
+internal fun openKakaoMap(
+    context: Context,
+    placeName: String,
+    coordinates: Coordinates? = null,
+) {
     val encoded = Uri.encode(placeName)
-    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse("kakaomap://search?q=$encoded"))
+    val appUri = coordinates?.let {
+        "kakaomap://look?p=${it.latitude},${it.longitude}"
+    } ?: "kakaomap://search?q=$encoded"
+    val webUri = coordinates?.let {
+        "https://m.map.kakao.com/scheme/look?p=${it.latitude},${it.longitude}"
+    } ?: "https://map.kakao.com/link/search/$encoded"
+    val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(appUri))
     try {
         context.startActivity(appIntent)
     } catch (_: ActivityNotFoundException) {
         val webIntent = Intent(
             Intent.ACTION_VIEW,
-            Uri.parse("https://map.kakao.com/link/search/$encoded"),
+            Uri.parse(webUri),
         )
         try {
             context.startActivity(webIntent)

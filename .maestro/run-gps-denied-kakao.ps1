@@ -31,4 +31,7 @@ try {
 } finally {
     & $adb -s $DeviceId shell pm grant $packageName android.permission.ACCESS_COARSE_LOCATION
     & $adb -s $DeviceId shell pm grant $packageName android.permission.ACCESS_FINE_LOCATION
+    foreach ($permission in $permissions) {
+        & $adb -s $DeviceId shell pm clear-permission-flags $packageName $permission user-set user-fixed
+    }
 }

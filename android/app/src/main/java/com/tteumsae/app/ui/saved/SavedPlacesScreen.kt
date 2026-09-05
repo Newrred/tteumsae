@@ -14,15 +14,16 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
@@ -30,14 +31,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -46,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
@@ -85,6 +88,8 @@ private enum class SavedSort {
     NAME,
 }
 
+private val SavedCardMinWidth = 156.dp
+
 private data class PlaceCardItem(
     val place: PlaceCandidate,
     val savedEntry: SavedPlace?,
@@ -101,9 +106,11 @@ internal fun SavedPlacesScreen(
     isLoading: Boolean,
     isLoadingMore: Boolean,
     hasMore: Boolean,
+    loadMoreFailed: Boolean,
     errorMessage: String?,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
+    onRetryLoadMore: () -> Unit,
     onToggleSave: (PlaceCandidate) -> Unit,
     onRestore: (SavedPlace) -> Unit,
     onOpenMap: (PlaceCandidate) -> Unit,
@@ -117,29 +124,33 @@ internal fun SavedPlacesScreen(
     var savedOnly by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf(SavedSort.DEFAULT) }
-    var selectedPlace by remember { mutableStateOf<PlaceCandidate?>(null) }
+    var selectedPlaceId by rememberSaveable { mutableStateOf<String?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val gridState = rememberLazyGridState()
 
-    BackHandler(enabled = isImeVisible && selectedPlace == null) {
+    BackHandler(enabled = isImeVisible && selectedPlaceId == null) {
         focusManager.clearFocus(force = true)
         keyboardController?.hide()
     }
-    BackHandler(enabled = selectedPlace != null) { selectedPlace = null }
+    BackHandler(enabled = selectedPlaceId != null) { selectedPlaceId = null }
+
+    val savedById = savedPlaces.associateBy { it.place.id }
+    val catalogIds = catalogPlaces.mapTo(mutableSetOf()) { it.id }
+    val allPlaces = (catalogPlaces + savedPlaces.map { it.place }).distinctBy { it.id }
+    val selectedPlace = allPlaces.firstOrNull { it.id == selectedPlaceId }
 
     selectedPlace?.let { place ->
         SavedPlaceDetailScreen(
             place = place,
-            onBack = { selectedPlace = null },
+            isSaved = place.id in savedById,
+            onBack = { selectedPlaceId = null },
+            onToggleSave = { onToggleSave(place) },
             onOpenMap = { onOpenMap(place) },
         )
         return
     }
 
-    val savedById = savedPlaces.associateBy { it.place.id }
-    val catalogIds = catalogPlaces.mapTo(mutableSetOf()) { it.id }
-    val allPlaces = (catalogPlaces + savedPlaces.map { it.place }).distinctBy { it.id }
     val visiblePlaces = allPlaces
         .asSequence()
         .filter { it.id in catalogIds || matchesGangwonRegion(it.address, selectedRegion) }
@@ -168,10 +179,22 @@ internal fun SavedPlacesScreen(
             }
         }
         .toList()
-    val shouldLoadMore by remember(visiblePlaces.size, hasMore, isLoadingMore) {
+    val hasActiveSearchOrFilter = query.isNotBlank() || savedOnly || selectedCategory != null
+    val shouldLoadMore by remember(
+        visiblePlaces.size,
+        hasMore,
+        loadMoreFailed,
+        isLoading,
+        isLoadingMore,
+        errorMessage,
+    ) {
         derivedStateOf {
             val lastVisibleIndex = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
-            hasMore && !isLoadingMore &&
+            !isLoading &&
+                errorMessage == null &&
+                !loadMoreFailed &&
+                hasMore &&
+                !isLoadingMore &&
                 (visiblePlaces.isEmpty() || lastVisibleIndex >= visiblePlaces.lastIndex - 6)
         }
     }
@@ -201,7 +224,6 @@ internal fun SavedPlacesScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color.White)
-                    .statusBarsPadding()
                     .padding(top = 12.dp, bottom = 16.dp),
             ) {
                 OutlinedTextField(
@@ -209,6 +231,21 @@ internal fun SavedPlacesScreen(
                     onValueChange = { query = it },
                     placeholder = { Text("탐색 위치 검색", color = TteumMuted) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    trailingIcon = if (query.isNotBlank()) {
+                        {
+                            IconButton(
+                                onClick = {
+                                    query = ""
+                                    focusManager.clearFocus(force = true)
+                                    keyboardController?.hide()
+                                },
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = "검색어 지우기")
+                            }
+                        }
+                    } else {
+                        null
+                    },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(
                         onSearch = {
@@ -227,6 +264,7 @@ internal fun SavedPlacesScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
+                        .heightIn(min = 56.dp)
                         .shadow(8.dp, RoundedCornerShape(18.dp)),
                 )
                 Spacer(Modifier.height(20.dp))
@@ -234,6 +272,7 @@ internal fun SavedPlacesScreen(
                     Row(
                         modifier = Modifier
                             .clickable { regionMenuExpanded = true }
+                            .heightIn(min = 48.dp)
                             .padding(vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -301,7 +340,9 @@ internal fun SavedPlacesScreen(
                                 else -> category.label
                             },
                             selected = selectedCategory == category,
-                            onClick = { selectedCategory = category },
+                            onClick = {
+                                selectedCategory = category.takeUnless { it == selectedCategory }
+                            },
                         )
                     }
                 }
@@ -316,7 +357,7 @@ internal fun SavedPlacesScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "스팟 (${visiblePlaces.size})",
+                        if (isLoading) "불러오는 중" else "스팟 (${visiblePlaces.size})",
                         color = TteumMuted,
                         fontWeight = FontWeight.Bold,
                     )
@@ -348,7 +389,7 @@ internal fun SavedPlacesScreen(
                     },
                 ) {
                     Text(
-                        if (sort == SavedSort.DEFAULT) "기본순⌄" else "이름순⌄",
+                        if (sort == SavedSort.DEFAULT) "추천순" else "이름순",
                         color = TteumMuted,
                         fontWeight = FontWeight.Bold,
                     )
@@ -356,9 +397,7 @@ internal fun SavedPlacesScreen(
             }
 
             if (isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = TteumRed)
-                }
+                SavedPlacesLoadingGrid()
             } else if (errorMessage != null) {
                 Column(
                     modifier = Modifier
@@ -369,18 +408,58 @@ internal fun SavedPlacesScreen(
                 ) {
                     Text(errorMessage, color = TteumMuted)
                     Spacer(Modifier.height(12.dp))
-                    OutlinedButton(onClick = onRetry) { Text("다시 불러오기") }
+                    OutlinedButton(
+                        onClick = onRetry,
+                        modifier = Modifier.heightIn(min = 48.dp),
+                    ) {
+                        Text("다시 불러오기")
+                    }
                 }
             } else if (visiblePlaces.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
                     Text(
-                        if (catalogPlaces.isEmpty()) "등록된 장소가 아직 없어요." else "조건에 맞는 장소가 없어요.",
+                        if (hasActiveSearchOrFilter) {
+                            "조건에 맞는 장소가 없어요"
+                        } else {
+                            "등록된 장소가 아직 없어요"
+                        },
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        if (hasActiveSearchOrFilter) {
+                            "검색어나 필터를 초기화하고 다른 장소를 둘러보세요."
+                        } else {
+                            "다른 지역을 선택하면 새로운 장소를 볼 수 있어요."
+                        },
                         color = TteumMuted,
                     )
+                    if (hasActiveSearchOrFilter) {
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = {
+                                query = ""
+                                selectedCategory = null
+                                savedOnly = false
+                                focusManager.clearFocus(force = true)
+                                keyboardController?.hide()
+                            },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
+                            Text("검색·필터 초기화")
+                        }
+                    }
                 }
             } else {
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
+                    columns = GridCells.Adaptive(minSize = SavedCardMinWidth),
                     state = gridState,
                     modifier = Modifier
                         .fillMaxSize()
@@ -397,7 +476,7 @@ internal fun SavedPlacesScreen(
                         SavedPlaceCard(
                             place = place.place,
                             isSaved = place.savedEntry != null,
-                            onClick = { selectedPlace = place.place },
+                            onClick = { selectedPlaceId = place.place.id },
                             onToggleSave = {
                                 val removedEntry = place.savedEntry
                                 onToggleSave(place.place)
@@ -415,6 +494,73 @@ internal fun SavedPlacesScreen(
                                 }
                             },
                         )
+                    }
+                    if (loadMoreFailed) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Text(
+                                    "장소를 더 불러오지 못했어요.",
+                                    color = TteumMuted,
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = onRetryLoadMore,
+                                    modifier = Modifier.heightIn(min = 48.dp),
+                                ) {
+                                    Text("다시 시도")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SavedPlacesLoadingGrid() {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = SavedCardMinWidth),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        userScrollEnabled = false,
+    ) {
+        items(6) { index ->
+            Surface(
+                color = Color.White,
+                shape = RoundedCornerShape(18.dp),
+            ) {
+                Column {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(128.dp)
+                            .background(
+                                if (index % 2 == 0) Color(0xFFF0E8EA) else Color(0xFFE9EBEF),
+                            ),
+                    )
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.72f).height(18.dp),
+                            color = Color(0xFFE9EBEF),
+                            shape = RoundedCornerShape(5.dp),
+                        ) {}
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(0.45f).height(13.dp),
+                            color = Color(0xFFF0F1F3),
+                            shape = RoundedCornerShape(5.dp),
+                        ) {}
                     }
                 }
             }

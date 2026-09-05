@@ -78,6 +78,47 @@ class TteumsaeApiTest {
     }
 
     @Test
+    fun `장소 상세의 실용 필드를 빠짐없이 파싱한다`() {
+        val place = parsePlaceResponse(
+            JSONObject(
+                """
+                {"data":{
+                  "content_id":"tour:321",
+                  "name":"바다 미술관",
+                  "category":"CULTURE",
+                  "default_stay_minutes":60,
+                  "tel":"033-123-4567",
+                  "homepage_url":"https://example.com",
+                  "overview":"실제 장소 소개",
+                  "image_url":"https://example.com/hero.jpg",
+                  "image_urls":["https://example.com/one.jpg","https://example.com/two.jpg"],
+                  "opening_hours":"09:00~18:00",
+                  "closed_days":"월요일",
+                  "last_admission":"17:30",
+                  "parking_info":"무료 주차",
+                  "event_start_date":"2026-09-05",
+                  "event_end_date":"2026-09-07",
+                  "data_provenance":"CURATION",
+                  "operating_info_status":"VERIFIED",
+                  "reviewed_at":"2026-08-28T00:00:00Z"
+                }}
+                """.trimIndent(),
+            ),
+        )
+
+        assertEquals("033-123-4567", place.telephone)
+        assertEquals("https://example.com", place.homepageUrl)
+        assertEquals("실제 장소 소개", place.overview)
+        assertEquals(2, place.imageUrls.size)
+        assertEquals("17:30", place.lastAdmission)
+        assertEquals("무료 주차", place.parkingInfo)
+        assertEquals("2026-09-05", place.eventStartDate)
+        assertEquals("CURATION", place.dataProvenance)
+        assertEquals("VERIFIED", place.operatingInfoStatus)
+        assertEquals("", place.reason)
+    }
+
+    @Test
     fun `구조화 오류는 상태 코드와 요청 식별자와 재시도 시간을 보존한다`() {
         val error = parseApiErrorResponse(
             status = 503,

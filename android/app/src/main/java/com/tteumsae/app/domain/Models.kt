@@ -50,6 +50,19 @@ data class PlaceCandidate(
     val isOpen: Boolean = true,
     val openingHours: String = "",
     val closedDays: String = "",
+    val telephone: String = "",
+    val homepageUrl: String = "",
+    val overview: String = "",
+    val imageUrls: List<String> = emptyList(),
+    val lastAdmission: String = "",
+    val parkingInfo: String = "",
+    val eventStartDate: String = "",
+    val eventEndDate: String = "",
+    val dataProvenance: String = "",
+    val operatingInfoStatus: String = "",
+    val admissionInfoStatus: String = "",
+    val parkingInfoStatus: String = "",
+    val reviewedAt: String = "",
 )
 
 data class RouteLeg(

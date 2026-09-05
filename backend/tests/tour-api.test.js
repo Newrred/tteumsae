@@ -166,6 +166,18 @@ test("미디어 상세는 이미지와 표현 태그만 정규화한다", () => 
   assert.equal(result.syncedAt, "2026-08-27T00:00:00.000Z");
 });
 
+test("반려동물 상세가 동반 불가이면 동반 태그를 만들지 않는다", () => {
+  const result = tourApi.normalizeTourMedia({
+    contentTypeId: 12,
+    intro: {},
+    images: [],
+    pet: { acmpyTypeCd: "동반불가" },
+    syncedAt: "2026-08-27T00:00:00.000Z"
+  });
+
+  assert.deepEqual(result.tags, []);
+});
+
 test("공통 상세 조회는 현재 KorService2 계약과 단일 객체 응답을 처리한다", async () => {
   const originalFetch = globalThis.fetch;
   const originalServiceKey = process.env.TOUR_API_SERVICE_KEY;

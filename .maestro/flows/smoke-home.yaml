@@ -19,7 +19,7 @@ tags:
 - runFlow:
     label: Leave recommendation results when they are open
     when:
-      visible: "한 곳만 골라 가볍게 들러보세요"
+      visible: "들를 곳을 골라보세요"
     commands:
       - back
 - runFlow:
@@ -29,7 +29,7 @@ tags:
     commands:
       - back
 - assertVisible: "목적지 검색"
-- assertVisible: "틈새 발견"
+- assertVisible: "장소 탐색"
 - assertVisible: "설정"
 - takeScreenshot:
     path: home-map

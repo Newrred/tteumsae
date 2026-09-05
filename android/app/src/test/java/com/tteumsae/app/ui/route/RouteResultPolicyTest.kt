@@ -4,9 +4,14 @@ import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SafetyLevel
+import com.tteumsae.app.domain.SearchCriteria
+import com.tteumsae.app.domain.SearchMode
+import com.tteumsae.app.domain.TransportMode
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RouteResultPolicyTest {
@@ -23,15 +28,23 @@ class RouteResultPolicyTest {
     }
 
     @Test
+    fun `선택 결과 시트는 큰 글자에서 높아지고 지도 영역을 위해 상한을 둔다`() {
+        assertEquals(420f, selectedResultPeekHeightDp(0.9f))
+        assertEquals(420f, selectedResultPeekHeightDp(1f))
+        assertEquals(546f, selectedResultPeekHeightDp(1.3f))
+        assertEquals(590f, selectedResultPeekHeightDp(2f))
+    }
+
+    @Test
     fun `선택 요약은 최대 체류와 출발 권장시각을 사용한다`() {
         val recommendation = recommendation("one", detour = 8)
 
         assertEquals(
-            "이동 기준 최대 약 35분",
+            "여기서 최대 약 35분 머물 수 있어요",
             maximumStayLabel(recommendation),
         )
         assertEquals(
-            "오후 6시 20분까지 출발하면 돼요",
+            "늦어도 오후 6시 20분 출발을 권장해요",
             latestDepartureLabel(
                 recommendation,
                 zoneId = ZoneId.of("Asia/Seoul"),
@@ -51,6 +64,46 @@ class RouteResultPolicyTest {
             productNavigationRecommendations("two", recommendations).map { it.place.id },
         )
         assertEquals(emptyList<SafeRecommendation>(), productNavigationRecommendations(null, recommendations))
+    }
+
+    @Test
+    fun `출발 권장 시각은 경계 시각부터 지난 것으로 본다`() {
+        val recommendation = recommendation("one", detour = 5)
+
+        assertFalse(recommendationDepartureHasPassed(recommendation, 1_787_908_799_999))
+        assertTrue(recommendationDepartureHasPassed(recommendation, 1_787_908_800_000))
+    }
+
+    @Test
+    fun `도착 마감은 경계 시각부터 지난 것으로 본다`() {
+        val criteria = SearchCriteria(
+            mode = SearchMode.ON_THE_WAY,
+            startName = "출발지",
+            endName = "목적지",
+            deadlineMinutesFromNow = 60,
+            safetyBufferMinutes = 10,
+            transportMode = TransportMode.CAR,
+            arrivalDeadlineEpochMillis = 2_000,
+        )
+
+        assertFalse(arrivalDeadlineHasPassed(criteria, 1_999))
+        assertTrue(arrivalDeadlineHasPassed(criteria, 2_000))
+    }
+
+    @Test
+    fun `도착 마감이 15분보다 적게 남으면 재검색할 수 없다`() {
+        val criteria = SearchCriteria(
+            mode = SearchMode.ON_THE_WAY,
+            startName = "출발지",
+            endName = "목적지",
+            deadlineMinutesFromNow = 60,
+            safetyBufferMinutes = 10,
+            transportMode = TransportMode.CAR,
+            arrivalDeadlineEpochMillis = 1_000_000,
+        )
+
+        assertFalse(arrivalDeadlineCannotBeRechecked(criteria, 100_000))
+        assertTrue(arrivalDeadlineCannotBeRechecked(criteria, 100_001))
     }
 
     private fun recommendation(id: String, detour: Int) = SafeRecommendation(

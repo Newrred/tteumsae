@@ -263,7 +263,7 @@ GET /api/places?page=1&pageSize=100&category=ATTRACTION&sigunguCode=1
 `지원하지 않는 강원도 지역입니다.`를 반환한다. 숫자가 아닌 `page`/`pageSize`의
 명시적 400 검증은 현재 없어서 DB 오류로 500이 될 수 있다.
 
-Android 틈새 발견 화면은 최초 `강릉`을 선택해 `sigunguCode=1`을 요청한다.
+Android 장소 탐색 화면은 최초 `강릉`을 선택해 `sigunguCode=1`을 요청한다.
 지역을 바꾸면 페이지를 1로 초기화하고 이후 추가 페이지에도 같은 코드를
 유지하며, `강원도 전체`에서는 코드를 생략한다. 서버 카탈로그는 코드로
 필터링하지만 Android가 로컬에 저장한 장소 사본에는 `sigungu_code`가 없으므로,

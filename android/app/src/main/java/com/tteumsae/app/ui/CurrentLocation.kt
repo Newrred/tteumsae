@@ -15,6 +15,10 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import java.util.concurrent.atomic.AtomicBoolean
 
+private const val IMMEDIATE_LOCATION_MAX_AGE_MILLIS = 60_000L
+private const val FALLBACK_LOCATION_MAX_AGE_MILLIS = 120_000L
+private const val LOCATION_CLOCK_SKEW_TOLERANCE_MILLIS = 10_000L
+
 internal data class RequestedMapLocation(
     val latitude: Double,
     val longitude: Double,
@@ -37,10 +41,10 @@ internal fun requestCurrentLocation(
     onSuccess: (Location) -> Unit,
     onLocationDisabled: () -> Unit,
     onUnavailable: () -> Unit,
-) {
+): () -> Unit {
     if (!hasLocationPermission(context)) {
         onUnavailable()
-        return
+        return {}
     }
 
     val locationManager =
@@ -53,7 +57,7 @@ internal fun requestCurrentLocation(
     }
     if (!locationEnabled) {
         onLocationDisabled()
-        return
+        return {}
     }
 
     val hasFinePermission = ContextCompat.checkSelfPermission(
@@ -70,7 +74,7 @@ internal fun requestCurrentLocation(
     }
     if (providers.isEmpty()) {
         onLocationDisabled()
-        return
+        return {}
     }
 
     val lastKnownLocation = providers
@@ -78,12 +82,24 @@ internal fun requestCurrentLocation(
             runCatching { locationManager.getLastKnownLocation(provider) }.getOrNull()
         }
         .maxByOrNull { it.time }
+    val nowEpochMillis = System.currentTimeMillis()
+    val fallbackLocation = lastKnownLocation?.takeIf {
+        isLocationTimestampFresh(
+            locationEpochMillis = it.time,
+            nowEpochMillis = nowEpochMillis,
+            maxAgeMillis = FALLBACK_LOCATION_MAX_AGE_MILLIS,
+        )
+    }
     if (
         lastKnownLocation != null &&
-        System.currentTimeMillis() - lastKnownLocation.time <= 60_000L
+        isLocationTimestampFresh(
+            locationEpochMillis = lastKnownLocation.time,
+            nowEpochMillis = nowEpochMillis,
+            maxAgeMillis = IMMEDIATE_LOCATION_MAX_AGE_MILLIS,
+        )
     ) {
         onSuccess(lastKnownLocation)
-        return
+        return {}
     }
 
     val completed = AtomicBoolean(false)
@@ -117,7 +133,7 @@ internal fun requestCurrentLocation(
         override fun onStatusChanged(provider: String?, status: Int, extras: Bundle?) = Unit
     }
 
-    timeout = Runnable { finish(lastKnownLocation) }
+    timeout = Runnable { finish(fallbackLocation) }
     handler.postDelayed(timeout, 12_000L)
 
     var requested = false
@@ -129,8 +145,24 @@ internal fun requestCurrentLocation(
         }
     }
     if (!requested) {
-        finish(lastKnownLocation)
+        finish(fallbackLocation)
     }
+    return {
+        if (completed.compareAndSet(false, true)) {
+            handler.removeCallbacks(timeout)
+            runCatching { locationManager.removeUpdates(listener) }
+        }
+    }
+}
+
+internal fun isLocationTimestampFresh(
+    locationEpochMillis: Long,
+    nowEpochMillis: Long,
+    maxAgeMillis: Long,
+): Boolean {
+    if (locationEpochMillis <= 0L || maxAgeMillis < 0L) return false
+    val ageMillis = nowEpochMillis - locationEpochMillis
+    return ageMillis in -LOCATION_CLOCK_SKEW_TOLERANCE_MILLIS..maxAgeMillis
 }
 
 internal fun createCurrentLocationMarkerBitmap(context: Context): Bitmap {

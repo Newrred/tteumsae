@@ -4,6 +4,8 @@ import com.tteumsae.app.domain.Coordinates
 import com.tteumsae.app.domain.route.RouteFlowInput
 import com.tteumsae.app.domain.route.RouteLocation
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -75,5 +77,41 @@ class LocationContinuePolicyTest {
         )
 
         assertTrue(canContinueRouteInput(manuallySelected, now, isBusy = false))
+    }
+
+    @Test
+    fun `비활성 버튼은 사용자가 다음에 할 일을 설명한다`() {
+        assertEquals("출발지를 선택해 주세요", routeInputGuidance(RouteFlowInput(), now, false))
+        assertEquals(
+            "목적지를 선택해 주세요",
+            routeInputGuidance(RouteFlowInput(start = start), now, false),
+        )
+        assertEquals(
+            "도착 시각을 정해 주세요",
+            routeInputGuidance(RouteFlowInput(start = start, destination = destination), now, false),
+        )
+        assertEquals(
+            "도착 시각은 지금부터 15분 이후로 정해 주세요",
+            routeInputGuidance(
+                RouteFlowInput(
+                    start = start,
+                    destination = destination,
+                    arrivalDeadlineEpochMillis = now + 14 * 60_000,
+                ),
+                now,
+                false,
+            ),
+        )
+        assertNull(
+            routeInputGuidance(
+                RouteFlowInput(
+                    start = start,
+                    destination = destination,
+                    arrivalDeadlineEpochMillis = now + 60 * 60_000,
+                ),
+                now,
+                false,
+            ),
+        )
     }
 }

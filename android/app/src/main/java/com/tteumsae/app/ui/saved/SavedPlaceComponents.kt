@@ -8,10 +8,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -46,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.PlaceCandidate
+import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.platform.savedImageCache
 import com.tteumsae.app.ui.common.compactTags
 import com.tteumsae.app.ui.theme.TteumInk
@@ -56,6 +60,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SavedFilterChip(
     text: String,
@@ -64,17 +69,19 @@ internal fun SavedFilterChip(
     onClick: () -> Unit,
 ) {
     Surface(
-        modifier = Modifier.selectable(
-            selected = selected,
-            role = Role.Checkbox,
-            onClick = onClick,
-        ),
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .selectable(
+                selected = selected,
+                role = Role.Checkbox,
+                onClick = onClick,
+            ),
         color = if (selected) TteumInk else Color(0xFFF4F5F7),
         shape = RoundedCornerShape(50),
         border = if (selected) null else BorderStroke(1.dp, Color(0xFFE1E3E8)),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 15.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 15.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -95,6 +102,7 @@ internal fun SavedFilterChip(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun SavedPlaceCard(
     place: PlaceCandidate,
@@ -104,7 +112,12 @@ internal fun SavedPlaceCard(
 ) {
     val (visibleTags, hiddenTagCount) = compactTags(place.tags)
     Card(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                role = Role.Button,
+                onClick = onClick,
+            ),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         shape = RoundedCornerShape(18.dp),
     ) {
@@ -112,6 +125,7 @@ internal fun SavedPlaceCard(
             Box {
                 SavedPlaceImage(
                     imageUrl = place.imageUrl,
+                    category = place.category,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(128.dp),
@@ -130,31 +144,72 @@ internal fun SavedPlaceCard(
                     )
                 }
             }
-            Column(Modifier.padding(12.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
+            ) {
                 Text(
                     place.name,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .widthIn(max = 155.dp),
-                    maxLines = 1,
+                        .heightIn(min = 44.dp),
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     fontSize = 18.sp,
+                    lineHeight = 22.sp,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(4.dp))
-                Text(place.category.label, color = Color(0xFF55585F), fontSize = 14.sp)
-                Spacer(Modifier.height(8.dp))
-                val compactItems = visibleTags + if (hiddenTagCount > 0) listOf("+ $hiddenTagCount") else emptyList()
-                compactItems.chunked(2).forEach { rowTags ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        rowTags.forEach { tag ->
+                Text(
+                    place.category.label,
+                    color = Color(0xFF55585F),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                if (place.address.isNotBlank()) {
+                    Spacer(Modifier.height(7.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                    ) {
+                        Icon(
+                            Icons.Default.Place,
+                            contentDescription = null,
+                            tint = TteumMuted,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Spacer(Modifier.width(3.dp))
+                        Text(
+                            place.address,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            color = TteumMuted,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                        )
+                    }
+                }
+
+                val compactItems = visibleTags +
+                    if (hiddenTagCount > 0) listOf("+${hiddenTagCount}개") else emptyList()
+                if (compactItems.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        compactItems.forEach { tag ->
                             Surface(
                                 color = Color(0xFFF1F2F4),
-                                shape = RoundedCornerShape(3.dp),
+                                shape = RoundedCornerShape(4.dp),
                             ) {
                                 Text(
                                     tag,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                                    modifier = Modifier
+                                        .widthIn(max = 124.dp)
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     fontSize = 12.sp,
@@ -163,7 +218,6 @@ internal fun SavedPlaceCard(
                             }
                         }
                     }
-                    Spacer(Modifier.height(5.dp))
                 }
             }
         }
@@ -173,6 +227,7 @@ internal fun SavedPlaceCard(
 @Composable
 internal fun SavedPlaceImage(
     imageUrl: String,
+    category: PlaceCategory? = null,
     modifier: Modifier = Modifier,
 ) {
     var bitmap by remember(imageUrl) {
@@ -198,8 +253,18 @@ internal fun SavedPlaceImage(
     }
 
     if (bitmap == null) {
+        val placeholderColor = when (category) {
+            PlaceCategory.ATTRACTION -> Color(0xFFFFE5EA)
+            PlaceCategory.RESTAURANT -> Color(0xFFFFEBDD)
+            PlaceCategory.CAFE -> Color(0xFFF4E7DB)
+            PlaceCategory.CULTURE -> Color(0xFFEAE5F8)
+            PlaceCategory.FESTIVAL -> Color(0xFFFFF0C9)
+            PlaceCategory.SHOPPING -> Color(0xFFE2ECFA)
+            PlaceCategory.LEISURE -> Color(0xFFE1F1E8)
+            null -> TteumRedSoft
+        }
         Box(
-            modifier = modifier.background(TteumRedSoft),
+            modifier = modifier.background(placeholderColor),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -210,7 +275,7 @@ internal fun SavedPlaceImage(
                     modifier = Modifier.size(32.dp),
                 )
                 Spacer(Modifier.height(4.dp))
-                Text("틈새", color = TteumRed, fontWeight = FontWeight.Bold)
+                Text(category?.label ?: "틈새", color = TteumRed, fontWeight = FontWeight.Bold)
             }
         }
     } else {

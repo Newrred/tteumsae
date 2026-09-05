@@ -60,7 +60,11 @@ test("Vercel은 기존 설정을 유지하면서 정책 페이지 clean URL을 �
   assert.ok(config.rewrites.some((rewrite) => rewrite.source.includes("downloads")));
   assert.deepEqual(config.crons, [
     { path: "/api/cron/tour-catalog-sync", schedule: "20 18 * * *" },
-    { path: "/api/cron/tour-intro-sync", schedule: "20 22 * * *" }
+    { path: "/api/cron/tour-intro-sync", schedule: "20 22 * * *" },
+    {
+      path: "/api/cron/tour-intro-sync?stage=presentation",
+      schedule: "40 22 * * *"
+    }
   ]);
 });
 

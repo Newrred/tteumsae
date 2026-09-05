@@ -44,7 +44,7 @@ Android에는 카카오 네이티브 지도 키와 Supabase Project URL·publish
 | `android/app/src/main/java/com/tteumsae/app/data/account/` | 검증된 토큰 기반 계정 삭제 HTTP 클라이언트 |
 | `android/app/src/main/java/com/tteumsae/app/data/local/` | 저장 장소 Room 엔티티·DAO·스냅샷·기존 JSON 이전 |
 | `android/app/src/main/java/com/tteumsae/app/data/saved/SavedPlacesRepository.kt` | 게스트 저장·해제·복원·전체 비우기 진입점 |
-| `android/app/src/main/java/com/tteumsae/app/ui/saved/` | 틈새 발견·저장 목록과 카탈로그 상세 UI |
+| `android/app/src/main/java/com/tteumsae/app/ui/saved/` | 장소 탐색·저장 목록과 카탈로그 상세 UI |
 | `android/app/src/main/java/com/tteumsae/app/ui/settings/` | 설정 UI와 기기 로컬 저장 안내 |
 | `android/app/src/main/java/com/tteumsae/app/ui/account/` | 로그인 시트, 프로필 편집, 탈퇴 확인과 AccountViewModel |
 | `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt` | 루트 화면 조립, 홈·상세·공용 지도 연결 |

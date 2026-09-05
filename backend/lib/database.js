@@ -243,6 +243,15 @@ export async function updatePlaceEnrichment(place, enrichment, { signal } = {}) 
 }
 
 const introOwnedTags = new Set(["주차 가능", "아이 동반"]);
+const mediaOwnedTags = new Set(["반려동물 동반", "실내 활동"]);
+
+function replaceOwnedTags(existingTags, ownedTags, nextTags) {
+  const retainedTags = (Array.isArray(existingTags) ? existingTags : [])
+    .filter((tag) => !ownedTags.has(tag));
+  const replacements = (Array.isArray(nextTags) ? nextTags : [])
+    .filter((tag) => ownedTags.has(tag));
+  return [...new Set([...retainedTags, ...replacements])];
+}
 
 export async function listPlacesForIntroSync({ limit = 20, now = new Date(), signal } = {}) {
   const dueAt = now instanceof Date ? now : new Date(now);
@@ -275,11 +284,92 @@ export async function savePlaceIntro(place, enrichment, { signal } = {}) {
     if (enrichment.closedDays != null) body.closed_days = enrichment.closedDays;
     if (enrichment.eventStartDate != null) body.event_start_date = enrichment.eventStartDate;
     if (enrichment.eventEndDate != null) body.event_end_date = enrichment.eventEndDate;
-    if (Array.isArray(enrichment.tags) && enrichment.tags.length > 0) {
-      const retainedTags = (Array.isArray(place.tags) ? place.tags : [])
-        .filter((tag) => !introOwnedTags.has(tag));
-      body.tags = [...new Set([...retainedTags, ...enrichment.tags])];
-    }
+    body.tags = replaceOwnedTags(place.tags, introOwnedTags, enrichment.tags);
+  }
+
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
+    method: "PATCH",
+    body,
+    prefer: "return=minimal",
+    signal
+  });
+}
+
+export async function listPlacesForPresentationSync({
+  limit = 5,
+  now = new Date(),
+  signal
+} = {}) {
+  const dueAt = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(dueAt.getTime())) {
+    throw new Error("Invalid presentation sync reference time");
+  }
+  const query = new URLSearchParams({
+    select: [
+      "content_id",
+      "content_type_id",
+      "image_url",
+      "tags",
+      "enrichment_raw",
+      "common_synced_at",
+      "media_synced_at",
+      "enrichment_attempts"
+    ].join(","),
+    is_active: "eq.true",
+    intro_synced_at: "not.is.null",
+    and: [
+      "(or(common_synced_at.is.null,media_synced_at.is.null)",
+      `or(next_enrichment_at.is.null,next_enrichment_at.lte.${dueAt.toISOString()}))`
+    ].join(","),
+    order: "next_enrichment_at.asc.nullsfirst,content_id.asc",
+    limit: String(Math.min(Math.max(Number.parseInt(limit, 10) || 1, 1), 10))
+  });
+  return databaseRequest(`places?${query}`, { signal });
+}
+
+export async function savePlaceCommon(place, enrichment, { signal } = {}) {
+  const body = {
+    enrichment_raw: {
+      ...(place.enrichment_raw ?? {}),
+      common: enrichment.common
+    },
+    common_synced_at: enrichment.syncedAt,
+    enrichment_attempts: 0,
+    enrichment_last_error: null,
+    next_enrichment_at: null
+  };
+
+  if (enrichment.common !== null) {
+    if (enrichment.overview != null) body.overview = enrichment.overview;
+    if (enrichment.homepageUrl != null) body.homepage_url = enrichment.homepageUrl;
+  }
+
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
+    method: "PATCH",
+    body,
+    prefer: "return=minimal",
+    signal
+  });
+}
+
+export async function savePlaceMedia(place, enrichment, { signal } = {}) {
+  const imageUrls = Array.isArray(enrichment.imageUrls) ? enrichment.imageUrls : [];
+  const body = {
+    tags: replaceOwnedTags(place.tags, mediaOwnedTags, enrichment.tags),
+    enrichment_raw: {
+      ...(place.enrichment_raw ?? {}),
+      images: Array.isArray(enrichment.images) ? enrichment.images : [],
+      pet: enrichment.pet ?? null
+    },
+    media_synced_at: enrichment.syncedAt,
+    enrichment_attempts: 0,
+    enrichment_last_error: null,
+    next_enrichment_at: null
+  };
+
+  if (imageUrls.length > 0) {
+    body.image_urls = imageUrls;
+    if (!place.image_url) body.image_url = imageUrls[0];
   }
 
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
