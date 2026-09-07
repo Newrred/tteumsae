@@ -6,6 +6,7 @@ import {
   classifyProviderResult,
   kstUsageDate,
   mobilityBudgetPolicy,
+  walkBudgetPolicy,
   secondsUntilNextKstMidnight,
   trackProviderCall
 } from "../lib/provider-usage.js";
@@ -18,6 +19,31 @@ test("KST 사용일과 다음 자정 대기시간은 UTC 날짜와 독립적이�
   assert.equal(secondsUntilNextKstMidnight(beforeMidnight), 30);
   assert.equal(kstUsageDate(afterMidnight), "2026-08-29");
   assert.equal(secondsUntilNextKstMidnight(afterMidnight), 86_400);
+});
+
+test("도보 경로는 공식 일일 1000건보다 낮은 700 경고·800 차단을 사용한다", () => {
+  const originalBudget = process.env.KAKAO_WALK_DAILY_BUDGET;
+  const originalWarning = process.env.KAKAO_WALK_DAILY_WARNING;
+  try {
+    delete process.env.KAKAO_WALK_DAILY_BUDGET;
+    delete process.env.KAKAO_WALK_DAILY_WARNING;
+    assert.deepEqual(walkBudgetPolicy(), {
+      budgetLimit: 800,
+      warningThreshold: 700
+    });
+
+    process.env.KAKAO_WALK_DAILY_BUDGET = "2000";
+    process.env.KAKAO_WALK_DAILY_WARNING = "1500";
+    assert.deepEqual(walkBudgetPolicy(), {
+      budgetLimit: 1_000,
+      warningThreshold: 1_000
+    });
+  } finally {
+    if (originalBudget === undefined) delete process.env.KAKAO_WALK_DAILY_BUDGET;
+    else process.env.KAKAO_WALK_DAILY_BUDGET = originalBudget;
+    if (originalWarning === undefined) delete process.env.KAKAO_WALK_DAILY_WARNING;
+    else process.env.KAKAO_WALK_DAILY_WARNING = originalWarning;
+  }
 });
 
 test("Mobility 예산은 기본 7000 경고와 8000 차단이며 공식 쿼터를 넘지 않는다", () => {

@@ -157,7 +157,7 @@ Play Store용 릴리스는 디버그 인증서와 서명이 다르다. 출시 �
 | 이름 | 비밀 여부 | 사용처 | 누락 시 영향 |
 |---|---:|---|---|
 | `TOUR_API_SERVICE_KEY` | 예 | TourAPI 기본·상세 동기화 | 두 Cron 실패 |
-| `KAKAO_REST_API_KEY` | 예 | Kakao Local 검색·지역, Kakao Mobility | 위치 검색·지역·차량 추천 실패 |
+| `KAKAO_REST_API_KEY` | 예 | Kakao Local 검색·지역·도보 경로, Kakao Mobility | 위치 검색·지역·차량 추천 실패, 활성 도보는 예상값 전환 |
 | `SUPABASE_URL` | 아니오에 가까움 | PostgREST 기준 주소 | 장소·추천·동기화 실패 |
 | `SUPABASE_SERVICE_ROLE_KEY` | 매우 중요 | 서버 전용 DB 전체 접근 | 장소·추천·동기화 실패 |
 | `CRON_SECRET` | 예 | 두 Cron Bearer 검증 | 예약/수동 동기화 인증 불가 |
@@ -170,7 +170,10 @@ Play Store용 릴리스는 디버그 인증서와 서명이 다르다. 출시 �
 | 이름 | 기본값 | 코드상 상한 | 의미 |
 |---|---:|---:|---|
 | `TOUR_SYNC_MAX_PAGES` | 10 | 25 | 기본 동기화 한 실행의 최대 페이지 |
-| `KAKAO_ROUTE_CANDIDATE_LIMIT` | 8 | 8 | 차량 경로를 실제 계산할 후보 수 |
+| `KAKAO_ROUTE_CANDIDATE_LIMIT` | 8 | 8 | 차량·활성 도보 경로를 실제 계산할 후보 수 |
+| `KAKAO_WALK_ROUTE_ENABLED` | false | `true`만 활성 | 카카오 실제 도보 경로 사용 여부 |
+| `KAKAO_WALK_DAILY_WARNING` | 700 | budget 이하 | 도보 경로 KST 일일 운영 경고선 |
+| `KAKAO_WALK_DAILY_BUDGET` | 800 | 1000 | 도보 경로 외부 호출 전 hard stop |
 | `TOUR_INTRO_SYNC_BATCH_SIZE` | 20 | 40 | intro 동기화 한 실행의 장소 수 |
 | `TOUR_SYNC_CONCURRENCY` | 4 | 4 | intro 병렬 요청 수 |
 | `KAKAO_MOBILITY_DAILY_WARNING` | 7000 | budget 이하 | KST 일일 운영 경고선 |

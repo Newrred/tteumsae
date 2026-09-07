@@ -445,7 +445,8 @@ Invoke-RestMethod @request
 - `meta.routeProvider`가 자동차는 `KAKAO_MOBILITY`
 - `meta.effectiveDeadlineMinutes = meta.baseRouteMinutes + meta.extraTimeMinutes`
 - 일부 실패가 있으면 `routeFailureCount`가 증가
-- 도보는 `ESTIMATE`와 `meta.warning` 포함
+- 도보 기능 비활성 시 `ESTIMATE`, 활성 성공 시 `KAKAO_MAP_WALK`
+- 도보 기능 활성 후 외부 실패 시 `ESTIMATE_FALLBACK`과 `meta.warning` 포함
 - 없는 장소는 404
 - 잘못된 카테고리·좌표·시간은 400
 - 잘못된 메서드는 405와 `Allow` 헤더
@@ -584,7 +585,7 @@ Invoke-WebRequest -Method Head -Uri $url
 - [ ] 강원도 안에서 추천 가능
 - [ ] 강원도 밖에서는 안내 후 돌아가기
 - [ ] 남는 시간에 따라 반경 UI 변경
-- [ ] 도보 예상 경고 표시
+- [ ] 도보 실제 경로 활성 시 경로선·시간, 공급자 실패 시 예상값 전환 경고 표시
 - [ ] 결과 없음에서 시간 +30분, 조건 해제, 재검색 행동 제공
 
 ### 9.5 장소 카드·저장소·설정

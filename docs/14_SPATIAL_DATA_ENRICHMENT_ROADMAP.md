@@ -34,11 +34,22 @@
 
 ### 2. 도보 경로 정확도
 
-상태: 계약 확인 대기.
+상태: 코드 완료, Preview 활성화·실응답 확인 대기.
 
-현재 도보는 직선거리 추정이다. 카카오맵 API의 도보 길찾기 활성화 조건, 일일 무료량,
-초과 단가와 실제 응답 path·duration 계약을 공식 문서에서 다시 확인한 뒤, 서버의 route
-provider를 교체한다. 실패 시에는 현재 추정값으로 조용히 확정하지 않고 추정 경고를 유지한다.
+- `KAKAO_WALK_ROUTE_ENABLED=true`일 때 카카오맵 도보 경로의 전체·구간별 시간, 거리와
+  경로선을 추천 계산에 사용한다. 탐색 옵션은 `ACCESSIBLE`이다.
+- 차량과 마찬가지로 직행 경로로 corridor를 만들고 후보를 최대 8곳만 실제 계산한다.
+- 기존 Android와 저수준 경로 모델의 호환을 위해 `legs[].drivingMinutes` 필드명은 유지하되
+  provider는 `KAKAO_MAP_WALK`로 구분한다.
+- 비활성 상태에서는 기존 `ESTIMATE`, 활성 상태에서 쿼터·응답·경로 문제가 생기면
+  `ESTIMATE_FALLBACK`과 사용자 경고를 반환한다.
+- 일일 무료량 1,000건 중 서버 hard stop은 800건, 운영 경고선은 700건으로 둔다.
+
+공식 계약은 WGS84 좌표, 경유지 최대 5개, `totalTime` 초·`totalDistance` 미터와
+`steps[].path.points`를 제공한다. 무료 쿼터는 개발자 계정에서 첫 번째로 활성화한
+카카오맵 앱에만 적용되며 추가 쿼터는 건당 10원이다.
+[카카오맵 도보 경로 공식 문서](https://developers.kakao.com/docs/ko/kakaomap/rest-api),
+[카카오 쿼터 공식 문서](https://developers.kakao.com/docs/ko/getting-started/quota)
 
 ### 3. 관광지 혼잡 예측
 

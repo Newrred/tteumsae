@@ -11,6 +11,10 @@ import {
 } from "../lib/http.js";
 import { fetchKakaoRoute, fetchKakaoRoutes } from "../lib/kakao-mobility.js";
 import {
+  fetchKakaoWalkRoute,
+  fetchKakaoWalkRoutes
+} from "../lib/kakao-walk.js";
+import {
   createPathBounds,
   createSearchBounds,
   distanceToPathKm,
@@ -25,6 +29,15 @@ import {
   ARRIVAL_DEADLINE_TIME_MODEL,
   parseRecommendationRequest
 } from "../lib/validation.js";
+
+const WALK_ESTIMATE_WARNING =
+  "도보 이동시간은 직선거리 기반 예상값이에요. 실제 길과 신호에 따라 더 오래 걸릴 수 있으니 여유 있게 출발해 주세요.";
+const WALK_FALLBACK_WARNING =
+  "실제 도보 경로를 확인하지 못해 예상 이동시간으로 안내해요. 실제 길과 신호에 따라 더 오래 걸릴 수 있으니 여유 있게 출발해 주세요.";
+
+function walkRouteEnabled() {
+  return process.env.KAKAO_WALK_ROUTE_ENABLED?.trim().toLowerCase() === "true";
+}
 
 export default {
   async fetch(request) {
@@ -53,6 +66,9 @@ export default {
       );
       let baseRoute;
       let corridorRadiusMeters;
+      let walkProviderAvailable =
+        criteria.transport === "WALK" && walkRouteEnabled();
+      let walkProviderWarning;
       if (criteria.transport === "CAR" && criteria.mode === "ON_THE_WAY") {
         baseRoute = await fetchKakaoRoute(
           criteria.start,
@@ -62,6 +78,18 @@ export default {
         );
         if (!baseRoute) {
           throw new Error("Kakao Mobility could not calculate the base route");
+        }
+      } else if (walkProviderAvailable && criteria.mode === "ON_THE_WAY") {
+        try {
+          baseRoute = await fetchKakaoWalkRoute(
+            criteria.start,
+            criteria.destination,
+            [],
+            { signal: deadline.signal, now: requestNow }
+          );
+        } catch {
+          walkProviderAvailable = false;
+          walkProviderWarning = WALK_FALLBACK_WARNING;
         }
       }
       const baseRouteMinutes = baseRoute?.durationMinutes ??
@@ -136,11 +164,44 @@ export default {
             routeResult.routes.get(String(place.content_id)),
           requestNow
         ).slice(0, 20);
-      } else {
-        routeProvider = "ESTIMATE";
+      } else if (walkProviderAvailable) {
+        const routeLimit = Math.min(
+          Math.max(integerEnv("KAKAO_ROUTE_CANDIDATE_LIMIT", 8), 1),
+          8
+        );
+        const routeCandidates = selectRouteCandidates(
+          effectiveCriteria,
+          candidates,
+          routeLimit,
+          requestNow
+        );
+        try {
+          const routeResult = await fetchKakaoWalkRoutes(
+            criteria.start,
+            criteria.destination,
+            routeCandidates,
+            { baseRoute, signal: deadline.signal, now: requestNow }
+          );
+          routeCandidateCount = routeCandidates.length;
+          routeFailureCount = routeResult.failedCount;
+          routeProvider = "KAKAO_MAP_WALK";
+          recommendations = recommendPlaces(
+            effectiveCriteria,
+            routeCandidates,
+            (_start, _destination, place) =>
+              routeResult.routes.get(String(place.content_id)),
+            requestNow
+          ).slice(0, 20);
+        } catch {
+          walkProviderAvailable = false;
+          walkProviderWarning = WALK_FALLBACK_WARNING;
+        }
+      }
+
+      if (criteria.transport === "WALK" && !walkProviderAvailable) {
+        routeProvider = walkRouteEnabled() ? "ESTIMATE_FALLBACK" : "ESTIMATE";
         routeCandidateCount = candidates.length;
-        warning =
-          "도보 이동시간은 직선거리 기반 예상값이에요. 실제 길과 신호에 따라 더 오래 걸릴 수 있으니 여유 있게 출발해 주세요.";
+        warning = walkProviderWarning ?? WALK_ESTIMATE_WARNING;
         recommendations = recommendPlaces(
           effectiveCriteria,
           candidates,

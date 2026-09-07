@@ -6,13 +6,32 @@ import {
   serverError,
   unauthorized
 } from "../../lib/http.js";
-import { kstUsageDate } from "../../lib/provider-usage.js";
+import {
+  kstUsageDate,
+  mobilityBudgetPolicy,
+  walkBudgetPolicy
+} from "../../lib/provider-usage.js";
 
 const defaultDependencies = {
   secret: () => requiredEnv("CRON_SECRET"),
   now: () => new Date(),
   getStatus: getGate1bOpsStatus
 };
+
+function usageWithCurrentWarnings(usage = []) {
+  const mobilityWarning = mobilityBudgetPolicy().warningThreshold;
+  const walkWarning = walkBudgetPolicy().warningThreshold;
+  return usage.map((item) => ({
+    ...item,
+    warning:
+      (item.provider === "KAKAO_MOBILITY" &&
+        item.operation === "DIRECTIONS" &&
+        item.reservedCount >= mobilityWarning) ||
+      (item.provider === "KAKAO_LOCAL" &&
+        item.operation === "WALK_DIRECTIONS" &&
+        item.reservedCount >= walkWarning)
+  }));
+}
 
 export function createOpsStatusHandler(dependencies = {}) {
   const deps = { ...defaultDependencies, ...dependencies };
@@ -34,7 +53,7 @@ export function createOpsStatusHandler(dependencies = {}) {
           status: "ok",
           generatedAt: generatedAt.toISOString(),
           usageDate,
-          usage: status?.usage ?? [],
+          usage: usageWithCurrentWarnings(status?.usage),
           syncJobs: status?.syncJobs ?? [],
           dataQuality: status?.dataQuality ?? {}
         });

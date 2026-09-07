@@ -9,6 +9,9 @@ const KST_OFFSET_MS = 9 * 60 * 60 * 1_000;
 export const KAKAO_MOBILITY_OFFICIAL_DAILY_QUOTA = 10_000;
 export const KAKAO_MOBILITY_DEFAULT_DAILY_BUDGET = 8_000;
 export const KAKAO_MOBILITY_DEFAULT_WARNING = 7_000;
+export const KAKAO_WALK_OFFICIAL_DAILY_QUOTA = 1_000;
+export const KAKAO_WALK_DEFAULT_DAILY_BUDGET = 800;
+export const KAKAO_WALK_DEFAULT_WARNING = 700;
 
 function validDate(value) {
   const date = value instanceof Date ? value : new Date(value);
@@ -50,6 +53,18 @@ export function mobilityBudgetPolicy() {
       "KAKAO_MOBILITY_DAILY_WARNING",
       KAKAO_MOBILITY_DEFAULT_WARNING
     ),
+    budgetLimit
+  );
+  return { budgetLimit, warningThreshold };
+}
+
+export function walkBudgetPolicy() {
+  const budgetLimit = Math.min(
+    integerEnv("KAKAO_WALK_DAILY_BUDGET", KAKAO_WALK_DEFAULT_DAILY_BUDGET),
+    KAKAO_WALK_OFFICIAL_DAILY_QUOTA
+  );
+  const warningThreshold = Math.min(
+    integerEnv("KAKAO_WALK_DAILY_WARNING", KAKAO_WALK_DEFAULT_WARNING),
     budgetLimit
   );
   return { budgetLimit, warningThreshold };

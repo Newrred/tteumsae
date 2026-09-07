@@ -308,3 +308,16 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
 운영 migration과 Production 승격은 명시적 승인 전까지 진행하지 않는다. migration 없이
 새 presentation 코드를 먼저 배포하면 `info_synced_at` 조회가 실패하므로 배포 순서는
 `migration 007 → Preview smoke → 동일 아티팩트 Production 승격`으로 고정한다.
+
+## 10. 2026-09-07 공간 정보 보강 2차 검증
+
+- [x] Backend 전체 179/179 성공, 프로젝트 검사 94개 관리 파일 통과.
+- [x] Android 30 suites, 143/143 성공. lint 오류 0·경고 43, `assembleDebug` 성공.
+- [x] 카카오맵 도보 공식 계약의 WGS84 좌표, 경유지 최대 5개, `ACCESSIBLE`, 전체·구간
+  시간/거리와 path를 서버 모델로 정규화했다.
+- [x] 공식 일일 무료량 1,000건보다 낮은 700건 경고·800건 hard stop과
+  `KAKAO_LOCAL/WALK_DIRECTIONS` 사용량 기록을 적용했다.
+- [x] 기능 플래그가 꺼지면 기존 `ESTIMATE`, 켠 뒤 공급자 실패 시
+  `ESTIMATE_FALLBACK`과 사용자 경고를 반환해 추천 전체 실패를 막는다.
+- [ ] Vercel Preview의 카카오 앱에서 도보 API가 활성화됐는지와 실응답, 사용량 증가를
+  확인하기 전에는 Production에서 기능 플래그를 켜지 않는다.

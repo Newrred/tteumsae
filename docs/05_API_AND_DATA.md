@@ -474,13 +474,15 @@ latestDepartureAt = arrivalDeadline - secondLegMinutes - 10분
 }
 ```
 
-`baseRoute`는 `CAR + ON_THE_WAY`일 때만 최상위와 `meta`에 모두 포함된다.
+`baseRoute`는 `CAR + ON_THE_WAY`, 또는 실제 도보 경로가 활성화된
+`WALK + ON_THE_WAY`일 때 최상위와 `meta`에 모두 포함된다.
 Android는 최상위 객체를 `RouteSummary`로 파싱하고 `meta.corridorRadiusMeters`를
 결과 지도에 사용한다. `RouteSummary`는 provider, waypointCount,
 totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한다.
 
-`WALK`이면 경로 객체에 거리·path가 없고 `provider`는 `ESTIMATE`다. 또한
-`meta.warning`에 도보 시간이 직선거리 기반 예상값이라는 안내가 포함된다.
+`WALK`는 `KAKAO_WALK_ROUTE_ENABLED=true`일 때 `KAKAO_MAP_WALK`의 거리·path를
+반환한다. 기능이 꺼져 있으면 `ESTIMATE`, 켜져 있지만 공급자 호출이 실패하면
+`ESTIMATE_FALLBACK`이며 두 예상값 상태 모두 `meta.warning`을 포함한다.
 
 #### 후보 조회와 상한
 
@@ -498,8 +500,9 @@ totalDrivingMinutes, totalDistanceMeters, tollFareWon, legs, path를 보존한�
 6. 각 후보에 출발→후보 1곳→목적 Kakao 경로를 요청하고 시간 조건을 통과한
    최대 20개를 반환한다.
 
-그 밖의 모드/이동수단은 출발·목적 사각형에 자동차 약 ±0.22도, 도보 약
-±0.055도 패딩을 더한 기존 bounds를 사용한다.
+실제 도보 경로가 활성화된 `WALK + ON_THE_WAY`도 base path와 corridor를 사용한다.
+그 밖의 모드/이동수단은 출발·목적 사각형에 자동차 약 ±0.22도, 도보 약 ±0.055도
+패딩을 더한 기존 bounds를 사용한다.
 
 따라서 `candidateCount`는 bounds에서 읽은 최대 500개의 개수,
 `corridorCandidateCount`는 path 거리 필터 후 개수다. 둘 다 DB 전체 개수가
@@ -543,13 +546,18 @@ V1과 legacy 모두 교통·외부 내비 차이 때문에 `100% 도착 보장`�
 - 후보별 계산은 한 곳만 경유한다. 여러 후보 조합은 아래 `/api/route`가 별도로
   계산한다.
 
-#### 도보 경로의 현재 한계
+#### 도보 경로의 현재 계약과 한계
 
 ```text
 속도 4.5km/h × 직선거리 × 도로계수 1.2
 ```
 
-에 기반한 예상값이다. 실제 보행로, 횡단보도, 경사, 통행 제한을 반영하지 않는다.
+기능 플래그가 꺼졌거나 카카오 응답을 사용할 수 없을 때 위 예상값으로 전환한다.
+활성 시에는 카카오맵 도보 경로 API의 `ACCESSIBLE` 경로를 후보 최대 8곳까지 사용하며,
+provider는 `KAKAO_MAP_WALK`다. 공식 무료량 1,000건 중 700건에서 경고하고 800건에서
+호출 전에 차단한다. 활성화 후 실패한 요청은 `ESTIMATE_FALLBACK`으로 구분한다.
+
+실제 경로도 현장 통행 제한·신호 변화와 카카오맵 앱의 재계산 결과가 다를 수 있으므로
 앱과 문구에서 100% 시간 보장을 표현하면 안 된다.
 
 ### 5.7 `POST /api/route`

@@ -59,3 +59,21 @@ test("인증된 운영 상태 API는 KST 날짜와 강릉 100개 목표를 조�
   assert.equal(body.usage[0].reservedCount, 7_000);
   assert.equal(body.dataQuality.curation.reviewed, 12);
 });
+
+test("운영 상태는 카카오 차량과 도보 사용량에 각각의 경고선을 적용한다", async () => {
+  const handler = createOpsStatusHandler({
+    secret: () => "cron-secret",
+    now: () => fixedNow,
+    getStatus: async () => ({
+      usage: [
+        { provider: "KAKAO_MOBILITY", operation: "DIRECTIONS", reservedCount: 7_000 },
+        { provider: "KAKAO_LOCAL", operation: "WALK_DIRECTIONS", reservedCount: 700 },
+        { provider: "KAKAO_LOCAL", operation: "KEYWORD_SEARCH", reservedCount: 900 }
+      ]
+    })
+  });
+
+  const body = await (await handler.fetch(request("GET", "cron-secret"))).json();
+
+  assert.deepEqual(body.usage.map((item) => item.warning), [true, true, false]);
+});

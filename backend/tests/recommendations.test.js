@@ -503,3 +503,149 @@ test("날짜가 유효한 축제만 Kakao 후보 경로를 요청한다", async 
     globalThis.fetch = originalFetch;
   }
 });
+
+test("활성화된 도보 추천은 카카오 실제 경로와 경로선을 사용한다", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnabled = process.env.KAKAO_WALK_ROUTE_ENABLED;
+  process.env.KAKAO_WALK_ROUTE_ENABLED = "true";
+  process.env.KAKAO_REST_API_KEY = "test-key";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+  const walkRequests = [];
+
+  globalThis.fetch = async (url) => {
+    const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
+    if (parsed.hostname === "supabase.test") {
+      return Response.json([{
+        content_id: "walk-1",
+        source: "TOUR_API",
+        name: "도보 후보",
+        category: "ATTRACTION",
+        latitude: 37.751,
+        longitude: 128.88,
+        default_stay_minutes: 20
+      }]);
+    }
+    if (parsed.pathname === "/v2/routing/walk") {
+      walkRequests.push(parsed);
+      const hasWaypoint = parsed.searchParams.has("via_x");
+      return Response.json({
+        status: "OK",
+        route: {
+          properties: {
+            totalDistance: hasWaypoint ? 1_200 : 1_000,
+            totalTime: hasWaypoint ? 720 : 600
+          },
+          legs: Array.from({ length: hasWaypoint ? 2 : 1 }, (_, index) => ({
+            properties: {
+              distance: hasWaypoint ? 600 : 1_000,
+              time: hasWaypoint ? 360 : 600
+            },
+            steps: [{
+              path: {
+                points: index === 0
+                  ? [[128.87, 37.75], [128.88, 37.751]]
+                  : [[128.88, 37.751], [128.9, 37.75]]
+              }
+            }]
+          }))
+        }
+      });
+    }
+    throw new Error(`unexpected request ${parsed}`);
+  };
+
+  try {
+    const response = await recommendationsApi.fetch(new Request(
+      "https://example.test/api/recommendations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "ON_THE_WAY",
+          start,
+          destination,
+          arrivalDeadlineEpochMillis: Date.now() + 70 * 60_000,
+          timeModel: "ARRIVAL_DEADLINE_V1",
+          transport: "WALK",
+          categories: []
+        })
+      }
+    ));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(walkRequests.length, 2);
+    assert.equal(body.meta.routeProvider, "KAKAO_MAP_WALK");
+    assert.equal(body.meta.baseRouteMinutes, 10);
+    assert.equal(body.meta.warning, undefined);
+    assert.equal(body.data[0].route.provider, "KAKAO_MAP_WALK");
+    assert.equal(body.data[0].route.firstLegMinutes, 6);
+    assert.ok(body.data[0].route.path.length >= 3);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalEnabled === undefined) delete process.env.KAKAO_WALK_ROUTE_ENABLED;
+    else process.env.KAKAO_WALK_ROUTE_ENABLED = originalEnabled;
+  }
+});
+
+test("도보 경로 공급자 장애는 추천 전체 실패 대신 명시적 예상값으로 전환한다", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnabled = process.env.KAKAO_WALK_ROUTE_ENABLED;
+  process.env.KAKAO_WALK_ROUTE_ENABLED = "true";
+  process.env.KAKAO_REST_API_KEY = "test-key";
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-key";
+
+  globalThis.fetch = async (url) => {
+    const parsed = new URL(url);
+    const usageResponse = providerUsageResponse(parsed);
+    if (usageResponse) return usageResponse;
+    if (parsed.hostname === "supabase.test") {
+      return Response.json([{
+        content_id: "walk-fallback",
+        source: "TOUR_API",
+        name: "예상 경로 후보",
+        category: "ATTRACTION",
+        latitude: 37.751,
+        longitude: 128.88,
+        default_stay_minutes: 20
+      }]);
+    }
+    if (parsed.pathname === "/v2/routing/walk") {
+      return Response.json({ status: "INTERNAL_ERROR" });
+    }
+    throw new Error(`unexpected request ${parsed}`);
+  };
+
+  try {
+    const response = await recommendationsApi.fetch(new Request(
+      "https://example.test/api/recommendations",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mode: "ON_THE_WAY",
+          start,
+          destination,
+          arrivalDeadlineEpochMillis: Date.now() + 70 * 60_000,
+          timeModel: "ARRIVAL_DEADLINE_V1",
+          transport: "WALK",
+          categories: []
+        })
+      }
+    ));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.meta.routeProvider, "ESTIMATE_FALLBACK");
+    assert.match(body.meta.warning, /실제 도보 경로를 확인하지 못해/);
+    assert.equal(body.data[0].route.provider, "ESTIMATE");
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalEnabled === undefined) delete process.env.KAKAO_WALK_ROUTE_ENABLED;
+    else process.env.KAKAO_WALK_ROUTE_ENABLED = originalEnabled;
+  }
+});
