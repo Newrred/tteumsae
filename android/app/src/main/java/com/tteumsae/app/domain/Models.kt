@@ -66,6 +66,22 @@ data class PlaceWeatherForecast(
     val basis: String,
 )
 
+data class NearbyParkingLot(
+    val id: String,
+    val name: String,
+    val parkingType: String = "",
+    val address: String = "",
+    val capacity: Int? = null,
+    val distanceMeters: Int = 0,
+    val distanceBasis: String = "",
+    val feeSummary: String = "",
+    val operationSummary: String = "",
+    val accessibleParking: Boolean? = null,
+    val phone: String = "",
+    val referenceDate: String = "",
+    val source: String = "",
+)
+
 data class PlaceCandidate(
     val id: String,
     val name: String,
@@ -103,6 +119,7 @@ data class PlaceCandidate(
     val imageAttributions: List<PlaceImageAttribution> = emptyList(),
     val congestionForecast: PlaceCongestionForecast? = null,
     val weatherForecast: PlaceWeatherForecast? = null,
+    val nearbyParkingLots: List<NearbyParkingLot> = emptyList(),
 )
 
 data class RouteLeg(

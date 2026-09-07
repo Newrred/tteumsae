@@ -10,6 +10,7 @@ import {
   savePlaceIntro,
   savePlaceAccessibility,
   saveSyncState,
+  upsertPublicParkingLots,
   upsertCongestionForecasts
 } from "../../lib/database.js";
 import { integerEnv, requiredEnv } from "../../lib/env.js";
@@ -31,6 +32,7 @@ import {
   fetchTourAccessibilityPage
 } from "../../lib/tour-accessibility.js";
 import { runAccessibilityBatch } from "../../lib/tour-accessibility-sync.js";
+import { fetchPublicParkingPage } from "../../lib/public-parking.js";
 
 const defaultDependencies = {
   listPlaces: listPlacesForIntroSync,
@@ -94,6 +96,16 @@ const accessibilityDefaultDependencies = {
   fetchDetail: fetchTourAccessibilityDetail,
   saveAccessibility: savePlaceAccessibility,
   runBatch: runAccessibilityBatch,
+  withLease: runWithSyncLease,
+  deadlineFactory: createDeadline,
+  now: () => new Date()
+};
+
+const parkingDefaultDependencies = {
+  getState: getSyncState,
+  saveState: saveSyncState,
+  fetchPage: fetchPublicParkingPage,
+  upsert: upsertPublicParkingLots,
   withLease: runWithSyncLease,
   deadlineFactory: createDeadline,
   now: () => new Date()
@@ -327,11 +339,67 @@ export function createTourAccessibilitySyncHandler(dependencies = {}) {
   };
 }
 
+export function createPublicParkingSyncHandler(dependencies = {}) {
+  const deps = { ...parkingDefaultDependencies, ...dependencies };
+  return {
+    async fetch(request) {
+      if (request.method !== "GET") return methodNotAllowed(["GET"]);
+      try {
+        if (request.headers.get("authorization") !== `Bearer ${requiredEnv("CRON_SECRET")}`) {
+          return unauthorized();
+        }
+        const result = await deps.withLease({
+          jobId: "public_parking",
+          run: async () => {
+            const deadline = deps.deadlineFactory(NETWORK_TIMEOUT_MS.CRON);
+            try {
+              const now = deps.now();
+              const state = await deps.getState("public_parking", { signal: deadline.signal });
+              const page = Math.max(Number.parseInt(state.next_page, 10) || 1, 1);
+              const source = await deps.fetchPage(page, 100, { signal: deadline.signal });
+              await deps.upsert(source.rows, { signal: deadline.signal });
+              const totalPages = Math.max(
+                Math.ceil(source.totalCount / Math.max(source.numOfRows, 1)),
+                1
+              );
+              const completed = page >= totalPages || source.rawCount === 0;
+              const nextPage = completed ? 1 : page + 1;
+              await deps.saveState({
+                ...state,
+                id: "public_parking",
+                next_page: nextPage,
+                total_count: source.totalCount,
+                last_processed_page: page,
+                last_item_count: source.rawCount,
+                last_error: null,
+                last_completed_at: completed ? now.toISOString() : state.last_completed_at
+              }, { signal: deadline.signal });
+              return {
+                status: completed ? "completed" : "partial",
+                page,
+                totalCount: source.totalCount,
+                savedLots: source.rows.length,
+                nextPage
+              };
+            } finally {
+              deadline.dispose();
+            }
+          }
+        });
+        return json(result);
+      } catch (error) {
+        return serverError(error);
+      }
+    }
+  };
+}
+
 export function createTourEnrichmentSyncHandler({
   introHandler = createTourIntroSyncHandler(),
   presentationHandler = createTourPresentationSyncHandler(),
   congestionHandler = createTourCongestionSyncHandler(),
-  accessibilityHandler = createTourAccessibilitySyncHandler()
+  accessibilityHandler = createTourAccessibilitySyncHandler(),
+  parkingHandler = createPublicParkingSyncHandler()
 } = {}) {
   return {
     fetch(request) {
@@ -339,6 +407,7 @@ export function createTourEnrichmentSyncHandler({
       if (stage === "presentation") return presentationHandler.fetch(request);
       if (stage === "congestion") return congestionHandler.fetch(request);
       if (stage === "accessibility") return accessibilityHandler.fetch(request);
+      if (stage === "parking") return parkingHandler.fetch(request);
       return introHandler.fetch(request);
     }
   };

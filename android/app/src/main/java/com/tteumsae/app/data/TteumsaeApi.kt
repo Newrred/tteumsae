@@ -475,6 +475,23 @@ private fun JSONObject.toPlaceCandidate(
             it.conditionLabel.isNotBlank() &&
             it.temperatureC.isFinite()
     },
+    nearbyParkingLots = optJSONArray("nearby_parking_lots")?.mapObjects {
+        com.tteumsae.app.domain.NearbyParkingLot(
+            id = it.optText("parking_id"),
+            name = it.optText("name"),
+            parkingType = it.optText("parking_type"),
+            address = it.optText("address"),
+            capacity = it.optNullableInt("capacity"),
+            distanceMeters = it.optInt("distance_meters").coerceAtLeast(0),
+            distanceBasis = it.optText("distance_basis"),
+            feeSummary = it.optText("fee_summary"),
+            operationSummary = it.optText("operation_summary"),
+            accessibleParking = it.optNullableBoolean("accessible_parking"),
+            phone = it.optText("phone"),
+            referenceDate = it.optText("reference_date"),
+            source = it.optText("source"),
+        )
+    }?.filter { it.id.isNotBlank() && it.name.isNotBlank() }.orEmpty(),
 )
 
 internal fun parsePlaceResponse(response: JSONObject): PlaceCandidate =
@@ -523,3 +540,9 @@ private fun JSONObject.optText(name: String): String =
 
 private fun JSONObject.optNullableDouble(name: String): Double? =
     if (!has(name) || isNull(name)) null else optDouble(name, Double.NaN).takeIf(Double::isFinite)
+
+private fun JSONObject.optNullableInt(name: String): Int? =
+    if (!has(name) || isNull(name)) null else optInt(name).takeIf { it >= 0 }
+
+private fun JSONObject.optNullableBoolean(name: String): Boolean? =
+    if (!has(name) || isNull(name)) null else getBoolean(name)

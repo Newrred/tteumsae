@@ -75,8 +75,32 @@ internal fun mergeFreshPlaceDetails(
         },
         congestionForecast = freshPlace.congestionForecast ?: routePlace.congestionForecast,
         weatherForecast = freshPlace.weatherForecast ?: routePlace.weatherForecast,
+        nearbyParkingLots = freshPlace.nearbyParkingLots.ifEmpty {
+            routePlace.nearbyParkingLots
+        },
     )
 }
+
+internal fun nearbyParkingDescription(
+    parking: com.tteumsae.app.domain.NearbyParkingLot,
+): String = buildList {
+    val headline = buildList {
+        add("직선 약 ${parking.distanceMeters}m")
+        normalizedVisitInfo(parking.parkingType)?.let(::add)
+        parking.capacity?.let { add("${it}면") }
+    }.joinToString(" · ")
+    add(headline)
+    normalizedVisitInfo(parking.feeSummary)?.let(::add)
+    normalizedVisitInfo(parking.operationSummary)?.let(::add)
+    if (parking.accessibleParking == true) add("장애인 전용 주차구역 있음")
+    normalizedVisitInfo(parking.address)?.let(::add)
+    val source = normalizedVisitInfo(parking.source)
+    val referenceDate = normalizedVisitInfo(parking.referenceDate)?.replace('-', '.')
+    listOfNotNull(source, referenceDate?.let { "$it 기준" })
+        .joinToString(" · ")
+        .takeIf(String::isNotBlank)
+        ?.let(::add)
+}.joinToString("\n")
 
 internal fun practicalVisitFacts(place: PlaceCandidate): List<PlaceVisitFact> = buildList {
     normalizedVisitInfo(place.openingHours)?.let { add(PlaceVisitFact("운영시간", it)) }

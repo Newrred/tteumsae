@@ -18,6 +18,7 @@ test("기능이 켜지면 도착 예정시각의 야외 날씨를 장소 상세�
   const handler = createPlaceHandler({
     getPlace: async () => place,
     getCongestion: async () => null,
+    getParking: async () => [],
     getWeather: async (_place, value) => {
       arrival = value;
       return { condition_label: "비 예상", temperature_c: 18 };
@@ -42,6 +43,7 @@ test("날씨 공급자 실패는 기존 장소 상세를 실패시키지 않는�
   const handler = createPlaceHandler({
     getPlace: async () => place,
     getCongestion: async () => null,
+    getParking: async () => [],
     getWeather: async () => { throw new Error("provider failed"); }
   });
   try {

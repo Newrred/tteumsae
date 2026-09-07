@@ -243,6 +243,7 @@ import com.tteumsae.app.ui.route.latestDepartureTimeLabel
 import com.tteumsae.app.ui.route.meaningfulClusterExpansionZoom
 import com.tteumsae.app.ui.route.representativeClusterCategories
 import com.tteumsae.app.ui.route.mergeFreshPlaceDetails
+import com.tteumsae.app.ui.route.nearbyParkingDescription
 import com.tteumsae.app.ui.route.normalizedHomepageUrl
 import com.tteumsae.app.ui.route.normalizedVisitInfo
 import com.tteumsae.app.ui.route.placeSourceCaption
@@ -1954,6 +1955,31 @@ private fun DetailScreen(
                                 accessibilityDetails.forEachIndexed { index, (title, description) ->
                                     VisitInfo(title, description)
                                     if (index != accessibilityDetails.lastIndex) {
+                                        HorizontalDivider(color = Color(0xFFE5E7EA))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (place.nearbyParkingLots.isNotEmpty()) {
+                        Spacer(Modifier.height(26.dp))
+                        Text(
+                            "주변 공영주차장",
+                            fontSize = 21.sp,
+                            lineHeight = 27.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(11.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFF7F8F9),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                place.nearbyParkingLots.forEachIndexed { index, parking ->
+                                    VisitInfo(parking.name, nearbyParkingDescription(parking))
+                                    if (index != place.nearbyParkingLots.lastIndex) {
                                         HorizontalDivider(color = Color(0xFFE5E7EA))
                                     }
                                 }

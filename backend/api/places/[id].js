@@ -2,12 +2,14 @@ import {
   getPlace,
   getPlaceCongestionForecast,
   getWeatherForecastCache,
+  listNearbyPublicParkingLots,
   upsertWeatherForecastCache
 } from "../../lib/database.js";
 import { badRequest, json, methodNotAllowed, notFound, serverError } from "../../lib/http.js";
 import { kstUsageDate } from "../../lib/provider-usage.js";
 import { publicCongestionForecast } from "../../lib/tour-congestion.js";
 import { resolvePlaceWeather } from "../../lib/kma-weather.js";
+import { publicNearbyParkingLot } from "../../lib/public-parking.js";
 
 function requestedForecastInstant(url) {
   const raw = url.searchParams.get("atEpochMillis");
@@ -30,7 +32,11 @@ async function defaultWeather(place, arrivalAt) {
 const defaultDependencies = {
   getPlace,
   getCongestion: getPlaceCongestionForecast,
-  getWeather: defaultWeather
+  getWeather: defaultWeather,
+  getParking: (place) => listNearbyPublicParkingLots({
+    latitude: place.latitude,
+    longitude: place.longitude
+  })
 };
 
 export function createPlaceHandler(dependencies = {}) {
@@ -47,6 +53,7 @@ export function createPlaceHandler(dependencies = {}) {
       const place = await deps.getPlace(id);
       if (!place) return notFound("장소를 찾을 수 없습니다.");
       const forecast = await deps.getCongestion(id, kstUsageDate(forecastInstant));
+      const parkingLots = await deps.getParking(place);
       let weather = null;
       if (process.env.KMA_WEATHER_ENABLED?.trim().toLowerCase() === "true") {
         try {
@@ -61,7 +68,10 @@ export function createPlaceHandler(dependencies = {}) {
           ...(forecast
             ? { congestion_forecast: publicCongestionForecast(forecast) }
             : {}),
-          ...(weather ? { weather_forecast: weather } : {})
+          ...(weather ? { weather_forecast: weather } : {}),
+          ...(parkingLots.length > 0
+            ? { nearby_parking_lots: parkingLots.map(publicNearbyParkingLot) }
+            : {})
         }
       });
     } catch (error) {

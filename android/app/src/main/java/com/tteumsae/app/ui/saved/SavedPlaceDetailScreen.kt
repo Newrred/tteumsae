@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.ui.route.normalizedVisitInfo
+import com.tteumsae.app.ui.route.nearbyParkingDescription
 import com.tteumsae.app.ui.route.plainTourText
 import com.tteumsae.app.ui.route.practicalVisitFacts
 import com.tteumsae.app.ui.route.placeSourceCaption
@@ -260,6 +261,19 @@ internal fun SavedPlaceDetailScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             accessibilityDetails.forEach { (title, description) ->
                                 SavedDetailInfoRow(label = title, value = description)
+                            }
+                        }
+                    }
+                    if (place.nearbyParkingLots.isNotEmpty()) {
+                        Spacer(Modifier.height(24.dp))
+                        SavedDetailSectionTitle("주변 공영주차장")
+                        Spacer(Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            place.nearbyParkingLots.forEach { parking ->
+                                SavedDetailInfoRow(
+                                    label = parking.name,
+                                    value = nearbyParkingDescription(parking),
+                                )
                             }
                         }
                     }

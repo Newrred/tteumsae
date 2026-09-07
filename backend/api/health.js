@@ -12,6 +12,7 @@ export default {
       integrations: {
         tourApiConfigured: Boolean(process.env.TOUR_API_SERVICE_KEY),
         tourCongestionConfigured: Boolean(process.env.TOUR_CONGESTION_API_SERVICE_KEY),
+        publicParkingConfigured: Boolean(process.env.PUBLIC_PARKING_API_SERVICE_KEY),
         weatherConfigured: Boolean(process.env.KMA_SHORT_FORECAST_SERVICE_KEY),
         weatherEnabled: process.env.KMA_WEATHER_ENABLED?.trim().toLowerCase() === "true",
         databaseConfigured: Boolean(

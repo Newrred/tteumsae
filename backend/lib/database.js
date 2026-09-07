@@ -1,6 +1,7 @@
 import { requiredEnv } from "./env.js";
 import { fetchWithTimeout, NETWORK_TIMEOUT_MS } from "./fetch-policy.js";
 import { supabaseApiHeaders } from "./supabase-auth.js";
+import { haversineKm } from "./routing.js";
 
 const basePublicColumns = [
   "content_id",
@@ -565,6 +566,60 @@ export async function savePlaceAccessibility(contentId, enrichment, { signal } =
     },
     signal
   }));
+}
+
+export async function upsertPublicParkingLots(rows, { signal } = {}) {
+  const chunkSize = 200;
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    await databaseRequest("public_parking_lots?on_conflict=source_id", {
+      method: "POST",
+      body: rows.slice(index, index + chunkSize),
+      prefer: "resolution=merge-duplicates,return=minimal",
+      signal
+    });
+  }
+}
+
+export async function listNearbyPublicParkingLots(
+  { latitude, longitude, radiusMeters = 1_000, limit = 3 },
+  { signal } = {}
+) {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+  const latitudeDelta = radiusMeters / 111_320;
+  const longitudeDelta = radiusMeters / (
+    111_320 * Math.max(Math.cos(latitude * Math.PI / 180), 0.1)
+  );
+  const query = new URLSearchParams({
+    select: [
+      "source_id", "name", "parking_type", "address", "capacity",
+      "operation_days", "weekday_open", "weekday_close", "fee_info",
+      "basic_minutes", "basic_fee_won", "accessible_parking", "phone",
+      "reference_date", "latitude", "longitude"
+    ].join(","),
+    latitude: `gte.${latitude - latitudeDelta}`,
+    longitude: `gte.${longitude - longitudeDelta}`,
+    limit: "50"
+  });
+  query.append("latitude", `lte.${latitude + latitudeDelta}`);
+  query.append("longitude", `lte.${longitude + longitudeDelta}`);
+  try {
+    const rows = await databaseRequest(`public_parking_lots?${query}`, { signal });
+    return rows
+      .map((row) => ({
+        ...row,
+        distance_meters: haversineKm(
+          { latitude, longitude },
+          { latitude: Number(row.latitude), longitude: Number(row.longitude) }
+        ) * 1_000
+      }))
+      .filter((row) => row.distance_meters <= radiusMeters)
+      .sort((left, right) => left.distance_meters - right.distance_meters)
+      .slice(0, Math.min(Math.max(limit, 1), 5));
+  } catch (error) {
+    if (["42P01", "PGRST205"].includes(error.code) ||
+      /public_parking_lots/i.test(error.databaseMessage ?? "")) return [];
+    throw error;
+  }
 }
 
 export async function recordPlaceEnrichmentFailure(

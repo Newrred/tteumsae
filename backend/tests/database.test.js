@@ -5,6 +5,7 @@ import {
   finishSyncJob,
   getGate1bOpsStatus,
   getPlace,
+  listNearbyPublicParkingLots,
   listGangneungCurationCandidates,
   listPlaces,
   recordProviderUsageResult,
@@ -12,6 +13,40 @@ import {
   savePlaceAccessibility,
   upsertPlaceCurations
 } from "../lib/database.js";
+
+test("장소 반경 1km 안의 공영주차장을 직선거리순 최대 3곳으로 제한한다", async () => {
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const originalFetch = globalThis.fetch;
+  let requestUrl;
+  globalThis.fetch = async (url) => {
+    requestUrl = new URL(String(url));
+    return Response.json([
+      { source_id: "far", name: "경계 밖", latitude: 37.82, longitude: 128.9 },
+      { source_id: "second", name: "두 번째", latitude: 37.802, longitude: 128.9 },
+      { source_id: "first", name: "첫 번째", latitude: 37.801, longitude: 128.9 }
+    ]);
+  };
+
+  try {
+    const rows = await listNearbyPublicParkingLots({ latitude: 37.8, longitude: 128.9 });
+    assert.match(requestUrl.pathname, /\/public_parking_lots$/);
+    assert.deepEqual(rows.map((row) => row.source_id), ["first", "second"]);
+    assert.ok(rows.every((row) => row.distance_meters <= 1_000));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("장소 좌표가 없으면 주차장 DB를 조회하지 않는다", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => assert.fail("좌표가 없으면 DB 조회를 하지 않습니다.");
+  try {
+    assert.deepEqual(await listNearbyPublicParkingLots({ latitude: null, longitude: null }), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("장소 단건 조회만 반복 상세와 사진 권리 메타데이터를 공개하고 원문은 숨긴다", async () => {
   process.env.SUPABASE_URL = "https://supabase.test";

@@ -35,6 +35,9 @@ test("장소 상세는 요청 시각 날짜의 매칭된 혼잡 예측만 공개
         fetched_at: "2026-09-07T00:00:00.000Z"
       }]);
     }
+    if (parsed.pathname.endsWith("/public_parking_lots")) {
+      return Response.json([]);
+    }
     throw new Error(`unexpected request ${parsed}`);
   };
 
@@ -46,7 +49,7 @@ test("장소 상세는 요청 시각 날짜의 매칭된 혼잡 예측만 공개
     const body = await response.json();
 
     assert.equal(response.status, 200);
-    assert.equal(requests.length, 2);
+    assert.equal(requests.length, 3);
     assert.equal(
       requests[1].searchParams.get("forecast_date"),
       "eq.2026-09-08"
@@ -83,9 +86,10 @@ test("혼잡 테이블 migration 전에도 기존 장소 상세는 정상 동작
         enrichment_raw: {}
       }]);
     }
+    const table = calls === 2 ? "tour_congestion_forecasts" : "public_parking_lots";
     return Response.json({
       code: "PGRST205",
-      message: "Could not find tour_congestion_forecasts"
+      message: `Could not find ${table}`
     }, { status: 404 });
   };
 

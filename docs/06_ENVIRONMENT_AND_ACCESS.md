@@ -158,6 +158,7 @@ Play Store용 릴리스는 디버그 인증서와 서명이 다르다. 출시 �
 |---|---:|---|---|
 | `TOUR_API_SERVICE_KEY` | 예 | TourAPI 기본·상세 동기화 | 두 Cron 실패 |
 | `TOUR_CONGESTION_API_SERVICE_KEY` | 예 | 관광지 집중률 별도 활용신청 키 | 수동 혼잡 stage만 실패, 기존 기능 정상 |
+| `PUBLIC_PARKING_API_SERVICE_KEY` | 예 | 전국주차장정보표준데이터 별도 활용신청 키 | 수동 주차장 stage만 실패, 기존 기능 정상 |
 | `KMA_SHORT_FORECAST_SERVICE_KEY` | 예 | 기상청 단기예보 별도 활용신청 키 | 활성 날씨만 생략, 기존 상세 정상 |
 | `KAKAO_REST_API_KEY` | 예 | Kakao Local 검색·지역·도보 경로, Kakao Mobility | 위치 검색·지역·차량 추천 실패, 활성 도보는 예상값 전환 |
 | `SUPABASE_URL` | 아니오에 가까움 | PostgREST 기준 주소 | 장소·추천·동기화 실패 |

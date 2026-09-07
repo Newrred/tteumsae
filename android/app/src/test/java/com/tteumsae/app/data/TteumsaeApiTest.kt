@@ -94,6 +94,21 @@ class TteumsaeApiTest {
                   "image_urls":["https://example.com/one.jpg","https://example.com/two.jpg"],
                   "detail_items":[{"title":"이용 안내","description":"예약 없이 입장 가능"}],
                   "accessibility_items":[{"title":"휠체어","description":"대여 가능"}],
+                  "nearby_parking_lots":[{
+                    "parking_id":"4200000:P-1",
+                    "name":"경포 공영주차장",
+                    "parking_type":"노외",
+                    "address":"강원특별자치도 강릉시 창해로 1",
+                    "capacity":120,
+                    "distance_meters":245,
+                    "distance_basis":"STRAIGHT_LINE",
+                    "fee_summary":"유료 · 기본 30분 1,000원",
+                    "operation_summary":"평일 · 평일 09:00~18:00",
+                    "accessible_parking":true,
+                    "phone":"033-123-4567",
+                    "reference_date":"2026-07-22",
+                    "source":"전국주차장정보표준데이터"
+                  }],
                   "image_attributions":[{
                     "image_url":"https://example.com/hero.jpg",
                     "thumbnail_url":"https://example.com/thumb.jpg",
@@ -143,6 +158,9 @@ class TteumsaeApiTest {
         assertEquals("예약 없이 입장 가능", place.detailItems.single().description)
         assertEquals("휠체어", place.accessibilityItems.single().title)
         assertEquals("대여 가능", place.accessibilityItems.single().description)
+        assertEquals("경포 공영주차장", place.nearbyParkingLots.single().name)
+        assertEquals(245, place.nearbyParkingLots.single().distanceMeters)
+        assertEquals(true, place.nearbyParkingLots.single().accessibleParking)
         assertEquals("공공누리 제3유형", place.imageAttributions.single().copyrightLabel)
         assertEquals("17:30", place.lastAdmission)
         assertEquals("무료 주차", place.parkingInfo)

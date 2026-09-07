@@ -47,6 +47,29 @@ object SavedPlaceSnapshotCodec {
             },
         )
         .put(
+            "nearbyParkingLots",
+            JSONArray().apply {
+                place.nearbyParkingLots.forEach { parking ->
+                    put(
+                        JSONObject()
+                            .put("id", parking.id)
+                            .put("name", parking.name)
+                            .put("parkingType", parking.parkingType)
+                            .put("address", parking.address)
+                            .put("capacity", parking.capacity ?: JSONObject.NULL)
+                            .put("distanceMeters", parking.distanceMeters)
+                            .put("distanceBasis", parking.distanceBasis)
+                            .put("feeSummary", parking.feeSummary)
+                            .put("operationSummary", parking.operationSummary)
+                            .put("accessibleParking", parking.accessibleParking ?: JSONObject.NULL)
+                            .put("phone", parking.phone)
+                            .put("referenceDate", parking.referenceDate)
+                            .put("source", parking.source),
+                    )
+                }
+            },
+        )
+        .put(
             "imageAttributions",
             JSONArray().apply {
                 place.imageAttributions.forEach { attribution ->
@@ -78,6 +101,7 @@ object SavedPlaceSnapshotCodec {
         val imageUrls = json.optJSONArray("imageUrls")
         val detailItems = json.optJSONArray("detailItems")
         val accessibilityItems = json.optJSONArray("accessibilityItems")
+        val nearbyParkingLots = json.optJSONArray("nearbyParkingLots")
         val imageAttributions = json.optJSONArray("imageAttributions")
         PlaceCandidate(
             id = json.getString("id"),
@@ -147,6 +171,33 @@ object SavedPlaceSnapshotCodec {
                     }
                 }
             },
+            nearbyParkingLots = buildList {
+                if (nearbyParkingLots != null) {
+                    for (index in 0 until nearbyParkingLots.length()) {
+                        val item = nearbyParkingLots.optJSONObject(index) ?: continue
+                        val id = item.optString("id").trim()
+                        val name = item.optString("name").trim()
+                        if (id.isBlank() || name.isBlank()) continue
+                        add(
+                            com.tteumsae.app.domain.NearbyParkingLot(
+                                id = id,
+                                name = name,
+                                parkingType = item.optString("parkingType").trim(),
+                                address = item.optString("address").trim(),
+                                capacity = item.optNullableInt("capacity"),
+                                distanceMeters = item.optInt("distanceMeters").coerceAtLeast(0),
+                                distanceBasis = item.optString("distanceBasis").trim(),
+                                feeSummary = item.optString("feeSummary").trim(),
+                                operationSummary = item.optString("operationSummary").trim(),
+                                accessibleParking = item.optNullableBoolean("accessibleParking"),
+                                phone = item.optString("phone").trim(),
+                                referenceDate = item.optString("referenceDate").trim(),
+                                source = item.optString("source").trim(),
+                            ),
+                        )
+                    }
+                }
+            },
             imageAttributions = buildList {
                 if (imageAttributions != null) {
                     for (index in 0 until imageAttributions.length()) {
@@ -173,3 +224,9 @@ object SavedPlaceSnapshotCodec {
 
 private fun JSONObject.optNullableDouble(key: String): Double? =
     if (!has(key) || isNull(key)) null else getDouble(key)
+
+private fun JSONObject.optNullableInt(key: String): Int? =
+    if (!has(key) || isNull(key)) null else getInt(key)
+
+private fun JSONObject.optNullableBoolean(key: String): Boolean? =
+    if (!has(key) || isNull(key)) null else getBoolean(key)

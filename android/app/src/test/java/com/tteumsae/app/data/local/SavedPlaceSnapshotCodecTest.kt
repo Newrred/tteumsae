@@ -4,6 +4,7 @@ import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.domain.PlaceDetailItem
 import com.tteumsae.app.domain.PlaceImageAttribution
+import com.tteumsae.app.domain.NearbyParkingLot
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,6 +39,23 @@ class SavedPlaceSnapshotCodecTest {
             imageUrls = listOf("https://example.com/1.jpg", "https://example.com/2.jpg"),
             detailItems = listOf(PlaceDetailItem("이용 안내", "예약 불필요")),
             accessibilityItems = listOf(PlaceDetailItem("접근로", "턱 없는 접근로")),
+            nearbyParkingLots = listOf(
+                NearbyParkingLot(
+                    id = "parking-1",
+                    name = "경포 공영주차장",
+                    parkingType = "노외",
+                    address = "강원특별자치도 강릉시",
+                    capacity = 120,
+                    distanceMeters = 245,
+                    distanceBasis = "STRAIGHT_LINE",
+                    feeSummary = "무료",
+                    operationSummary = "매일 24시간",
+                    accessibleParking = true,
+                    phone = "033-123-4567",
+                    referenceDate = "2026-07-22",
+                    source = "전국주차장정보표준데이터",
+                ),
+            ),
             imageAttributions = listOf(
                 PlaceImageAttribution(
                     imageUrl = "https://example.com/place.jpg",
@@ -76,6 +94,7 @@ class SavedPlaceSnapshotCodecTest {
         assertEquals(original.imageUrls, decoded.imageUrls)
         assertEquals(original.detailItems, decoded.detailItems)
         assertEquals(original.accessibilityItems, decoded.accessibilityItems)
+        assertEquals(original.nearbyParkingLots, decoded.nearbyParkingLots)
         assertEquals(original.imageAttributions, decoded.imageAttributions)
         assertEquals(original.lastAdmission, decoded.lastAdmission)
         assertEquals(original.parkingInfo, decoded.parkingInfo)

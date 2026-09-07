@@ -313,6 +313,28 @@ KT 이동통신 기반으로 해당 관광지의 과거 최고 집중 시기를 
 최신 발표 캐시가 있으면 공급자를 다시 호출하지 않는다. 예보가 없거나 공급자 호출이 실패하면
 `weather_forecast`만 생략하고 기존 장소 상세는 200으로 유지한다.
 
+`public_parking_lots`가 준비돼 있고 반경 1km 안에 좌표가 확인된 공영주차장이 있으면
+직선거리순 최대 3곳을 `nearby_parking_lots`로 추가한다. 이 값은 TourAPI의 장소 자체
+`parking_info`와 별개이며, 테이블이 아직 없거나 값이 없으면 배열 자체를 생략한다.
+
+```json
+{
+  "nearby_parking_lots": [{
+    "parking_id": "4200000:117-2-000013",
+    "name": "경포 공영주차장",
+    "parking_type": "노외",
+    "capacity": 120,
+    "distance_meters": 245,
+    "distance_basis": "STRAIGHT_LINE",
+    "fee_summary": "유료 · 기본 30분 1,000원",
+    "operation_summary": "평일+토요일+공휴일 · 평일 09:00~18:00",
+    "accessible_parking": true,
+    "reference_date": "2026-07-22",
+    "source": "전국주차장정보표준데이터"
+  }]
+}
+```
+
 ```json
 {
   "weather_forecast": {
@@ -779,6 +801,20 @@ common, media, info 값을 잃지 않도록 JSONB를 원자 병합한다. 상세
 현재 이 stage는 Vercel Cron에 예약하지 않았다. 공식 활용신청, migration 010 적용,
 Preview 실응답과 강원도 content ID 매칭률을 확인한 뒤에만 운영 주기를 정한다.
 
+### 6.5 주변 공영주차장 동기화
+
+경로: `GET /api/cron/tour-intro-sync?stage=parking`
+
+국토교통부·지방자치단체의 전국주차장정보표준데이터에서 `공영`이면서 주소가 강원특별자치도
+또는 구 강원도 표기이고 좌표가 유효한 행만 정규화한다. `sync_state(id='public_parking')`의
+독립 페이지 cursor를 사용해 한 번에 100건을 읽고 `source_id` 충돌 시 최신 값으로 갱신한다.
+원문과 운영·요금 세부값은 RLS와 권한이 적용된 서버 전용 테이블에 저장하고 공개 API에는
+표시용 요약만 반환한다. 원천은 개별 기관 데이터가 합쳐져 시차가 있을 수 있으므로 앱에도
+`reference_date`와 직선거리 기준을 함께 표시한다.
+
+현재 stage는 Vercel Cron에 예약하지 않았다. `PUBLIC_PARKING_API_SERVICE_KEY` 활용신청,
+migration 011, Preview 전체 순회와 폐업·삭제 행 갱신 정책 검증 뒤 운영 주기를 정한다.
+
 ## 7. Supabase 스키마
 
 마이그레이션 적용 순서:
@@ -793,6 +829,7 @@ Preview 실응답과 강원도 content ID 매칭률을 확인한 뒤에만 운�
 8. [`008_tour_congestion_forecasts.sql`](../backend/migrations/008_tour_congestion_forecasts.sql)
 9. [`009_weather_forecast_cache.sql`](../backend/migrations/009_weather_forecast_cache.sql)
 10. [`010_tour_accessibility.sql`](../backend/migrations/010_tour_accessibility.sql)
+11. [`011_public_parking_lots.sql`](../backend/migrations/011_public_parking_lots.sql)
 
 ### 7.1 `public.places`
 
@@ -822,7 +859,7 @@ Preview 실응답과 강원도 content ID 매칭률을 확인한 뒤에만 운�
 
 | 컬럼 | 의미 |
 |---|---|
-| `id` | `tour_api`, `tour_details`, `tour_accessibility` 등의 작업 ID, PK |
+| `id` | `tour_api`, `tour_details`, `tour_accessibility`, `public_parking` 등의 작업 ID, PK |
 | `next_page` | 다음 실행에서 읽을 페이지 |
 | `total_count` | 마지막 기본 동기화의 TourAPI 총 개수 |
 | `last_processed_page` | 마지막 처리 페이지 |
@@ -882,6 +919,14 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 기온, 강수확률·형태, 하늘상태와 풍속을 저장하며 RLS와 권한 회수로 service role만 접근한다.
 장소별 복제 대신 5km 격자별로 공유해 같은 시간대의 인접 장소 상세 호출을 한 번으로 줄인다.
 
+### 7.8 `public.public_parking_lots`
+
+전국주차장정보표준데이터 중 공영·강원 주소·유효 좌표 조건을 통과한 행을 `source_id`로
+upsert한다. 운영요일·시간, 요금, 주차면수, 장애인 전용 주차구역 여부, 데이터 기준일과
+원문을 저장한다. `(latitude, longitude)` 인덱스로 장소 주변 경계 상자를 좁히고 서버에서
+직선거리를 재계산한다. RLS를 활성화하고 service role에만 CRUD를 허용하며 Android와
+공개 클라이언트가 원문 테이블을 직접 읽지 못하게 한다.
+
 `GET /api/ops/status`는 공개 health와 분리되어 `CRON_SECRET` Bearer 인증 뒤에만
 집계값을 반환한다. 좌표, 검색어, 사용자 식별자와 외부 응답 전문은 집계하지 않는다.
 
@@ -923,6 +968,7 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 - 영업시간 파서는 단순 요일·시간 범위만 안전하게 해석한다.
 - TourAPI 원문 변경이나 복잡한 휴무 표현은 `UNKNOWN`으로 남는다.
 - 무장애 정보는 상세 조건부 표시까지만 준비됐고, 실데이터 범위가 확인되기 전에는 필터나 추천에 쓰지 않는다.
+- 주차장 전체 순회는 upsert까지 구현됐고, 다음 순회에서 사라진 폐업·삭제 행을 제거하는 정책은 Preview 검수 뒤 확정해야 한다.
 - 미디어·반려동물 정보의 신규 전용 동기화 경로는 아직 구현하지 않았다.
 - `vercel.json`의 `/downloads/tteumsae-latest-debug.apk` rewrite는 과거
   `v0.4.0` 파일을 가리키는 레거시 설정이다. 현재 APK 다운로드는 별도

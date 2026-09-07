@@ -6,6 +6,7 @@ import com.tteumsae.app.domain.PlaceDetailItem
 import com.tteumsae.app.domain.PlaceImageAttribution
 import com.tteumsae.app.domain.PlaceCongestionForecast
 import com.tteumsae.app.domain.PlaceWeatherForecast
+import com.tteumsae.app.domain.NearbyParkingLot
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -61,6 +62,13 @@ class DetailPresentationTest {
             parkingInfo = "건물 뒤 주차장",
             detailItems = listOf(PlaceDetailItem("이용 안내", "예약 불필요")),
             accessibilityItems = listOf(PlaceDetailItem("휠체어", "대여 가능")),
+            nearbyParkingLots = listOf(
+                NearbyParkingLot(
+                    id = "parking-1",
+                    name = "경포 공영주차장",
+                    distanceMeters = 245,
+                ),
+            ),
             imageAttributions = listOf(
                 PlaceImageAttribution(
                     imageUrl = "https://example.com/hero.jpg",
@@ -99,6 +107,7 @@ class DetailPresentationTest {
         assertEquals("건물 뒤 주차장", merged.parkingInfo)
         assertEquals("이용 안내", merged.detailItems.single().title)
         assertEquals("휠체어", merged.accessibilityItems.single().title)
+        assertEquals("경포 공영주차장", merged.nearbyParkingLots.single().name)
         assertEquals("공공누리 제3유형", merged.imageAttributions.single().copyrightLabel)
         assertEquals("혼잡 예상", merged.congestionForecast?.label)
         assertEquals("비 예상", merged.weatherForecast?.conditionLabel)

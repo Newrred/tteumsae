@@ -161,6 +161,9 @@ flowchart TD
     C3 --> IF["detailInfo2\n기존 presentation 완료 장소부터"]
     C4["수동 stage=congestion\n활용신청·검수 후 Cron 후보"] --> CG["관광지 집중률\n강릉 51/51150"]
     C5["수동 stage=accessibility\n활용신청 후 실행"] --> AW["KorWithService2\n강원 무장애 목록"]
+    C6["수동 stage=parking\n활용신청 후 실행"] --> PW["전국주차장 표준 API\n강원 공영주차장"]
+    PW --> PN["좌표 검증·서버 전용 적재"]
+    PN --> PP["장소 반경 1km\n직선거리순 최대 3곳"]
     AW --> AD["detailWithTour2\n접근성 안내"]
     AD --> P
     CG --> CM["유일한 exact 장소명만 연결"]
@@ -182,6 +185,9 @@ Vercel Cron 설정은 UTC `18:20`, `22:20`, `22:40`이며 한국시간으로 다
 접근성 stage도 예약 Cron에 포함하지 않으며, 강원도 무장애 목록의 페이지 cursor를 따라
 대상 장소만 상세 조회한 뒤 기존 `enrichment_raw`에 원자 병합합니다. 공개 API와 Android는
 정규화된 안내만 사용하고 공급자 원문은 노출하지 않습니다.
+주차장 stage도 예약 Cron에 포함하지 않습니다. 별도 `public_parking_lots`에 원문을 서버
+전용으로 적재하고, 장소 단건 요청에서 1km 경계 상자를 먼저 조회한 뒤 Haversine 직선거리로
+재검증해 가까운 3곳의 요약만 공개합니다. 장소 자체 주차 정보와 추천 점수에는 섞지 않습니다.
 기상청 단기예보는 장소 상세 요청에서 확인된 야외 장소에만 실행하며, 위경도를 5km 격자로
 변환한 뒤 `weather_forecast_cache`의 같은 격자·예보시각·최신 발표를 우선 읽습니다. 캐시 미스만
 외부 호출하고 공급자 실패는 상세 응답에서 날씨만 생략합니다. 기능 플래그는 기본적으로 꺼져 있습니다.
