@@ -299,15 +299,15 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
 - [x] Android 30 suites, 143/143: 상세 응답 파싱, 새·구 저장 스냅샷, fresh detail 병합,
   대표 사진 URL 일치 출처 문구 통과.
 - [x] Android `lintDebug`: 오류 0, 경고 43. `assembleDebug` 성공.
-- [ ] `007_tour_detail_info.sql`은 운영 Supabase에 아직 적용하지 않았다.
+- [x] `007_tour_detail_info.sql`을 운영 Supabase에 적용하고 `places.info_synced_at` 존재를 조회했다.
 - [ ] Vercel Preview에서 presentation Cron을 실행해 실제 `detailInfo2` 샘플, 빈 응답,
   `cpyrhtDivCd` 분포와 장소 단건 응답을 확인해야 한다.
 - [ ] 실제 데이터가 있는 상세 화면의 `추가 안내` 길이, 큰 글자, 공공누리 문구를 실기기에서
   확인해야 한다.
 
-운영 migration과 Production 승격은 명시적 승인 전까지 진행하지 않는다. migration 없이
-새 presentation 코드를 먼저 배포하면 `info_synced_at` 조회가 실패하므로 배포 순서는
-`migration 007 → Preview smoke → 동일 아티팩트 Production 승격`으로 고정한다.
+운영 승인 뒤 migration 007과 코드를 순서대로 반영했다. 배포 직후 조회한 장소는 아직
+`추가 안내`와 사진 권리 값이 비어 있으므로 presentation 예약 배치의 실제 보강 결과와
+실기기 표시 확인은 남아 있다.
 
 ## 10. 2026-09-07 공간 정보 보강 2차 검증
 
@@ -333,7 +333,7 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
 - [x] Android는 서버 계산시각과 첫 구간 이동시간으로 도착 예정일을 요청하고, 값이 있을 때만
   장소 상세에 `평소 최고치 대비 N%`인 예측 보조 정보로 표시한다. 추천 순위에는 반영하지 않는다.
 - [ ] 별도 `TOUR_CONGESTION_API_SERVICE_KEY` 활용신청과 운영 변수 등록이 필요하다.
-- [ ] `008_tour_congestion_forecasts.sql`은 운영 Supabase에 아직 적용하지 않았다.
+- [x] `008_tour_congestion_forecasts.sql`을 운영 Supabase에 적용하고 테이블 존재를 조회했다.
 - [ ] Vercel Preview에서 실제 원천 행 수, exact match 비율, 중복·미일치 목록을 검수하고
   한산·보통·혼잡 샘플과 KST 자정 전후 도착일을 확인해야 한다.
 - [ ] 위 검증 전에는 Production Cron 스케줄을 추가하지 않는다.
@@ -351,10 +351,29 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
 - [x] 자연 관광지 `A01` 또는 명시적 야외 태그만 호출하며 실내 태그를 우선 제외한다.
 - [x] 같은 격자·예보시각·최신 발표 캐시를 우선하고, 공급자 실패 시 기존 장소 상세 200을 유지한다.
 - [ ] `KMA_SHORT_FORECAST_SERVICE_KEY` 활용신청과 운영 변수 등록이 필요하다.
-- [ ] `009_weather_forecast_cache.sql`은 운영 Supabase에 아직 적용하지 않았다.
+- [x] `009_weather_forecast_cache.sql`을 운영 Supabase에 적용하고 테이블 존재를 조회했다.
 - [ ] Vercel Preview에서 강릉 좌표의 실제 예보 필드·발표 직후 빈 구간·KST 자정 넘김과
   캐시 hit를 확인하고, 자연 관광지 상세의 기본·큰 글자 표시를 실기기에서 검증해야 한다.
 - [ ] 위 검증 전에는 Production의 `KMA_WEATHER_ENABLED`를 켜지 않는다.
 
 기상청 공식 설명에 따라 이 값은 전국 5km 격자의 단기예보이며, 개발계정 기본 트래픽은
 일 10,000건이다. 현장 실황이나 방문 가능 보장으로 표현하지 않는다.
+
+## 13. 2026-09-07 공간 정보 보강 운영 배포
+
+- [x] 운영 Supabase에서 migration 007~009 객체를 읽어 모두 `true`인 것을 확인했다.
+- [x] 브랜치 커밋 `ecde5aa`를 Vercel Production 배포
+  `dpl_5ciPSYBC9UjTuBrv37eWRPm4P5Lo`로 반영하고 고정 별칭 연결과 `Ready`를 확인했다.
+- [x] 운영 health 200: TourAPI·DB·카카오 차량 경로 설정, 관광 혼잡도·기상청 키 미설정,
+  날씨 기능 플래그 비활성 상태를 확인했다.
+- [x] 운영 장소 목록과 단건 상세 200, `ARRIVAL_DEADLINE_V1` 추천 8건, 카카오 차량 경로,
+  최소 체류 15분·내부 여유 10분·최대 체류·최종 출발시각을 확인했다.
+- [x] Backend 200/200과 프로젝트 검사 107개, Android 30 suites 145/145, lint 오류 0·경고 44,
+  `assembleDebug`를 배포 시점에 다시 통과했다.
+- [ ] `TOUR_CONGESTION_API_SERVICE_KEY`, `KMA_SHORT_FORECAST_SERVICE_KEY`가 없으므로 혼잡도와
+  날씨는 운영 화면에 아직 표시되지 않는다. 도보 실제 경로도 플래그를 켜기 전에는 예상값을 유지한다.
+- [ ] 현재 연결된 Android 기기가 없어 새 debug APK의 설치·화면 확인은 수행하지 않았다.
+
+debug APK는 64,671,011바이트이고 SHA-256은
+`7C96D65EF1955C99FE8327D502362368A712655B9850707A7D616D85DEB01891`이다. 앱의
+`API_BASE_URL`은 운영 고정 주소 `https://tteumsae-backend-one.vercel.app`을 사용한다.

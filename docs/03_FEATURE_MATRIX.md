@@ -48,11 +48,11 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 운영시간 | `코드 검증` | 명확한 영업 종료로 최대 체류를 제한; 해석 불가 UNKNOWN은 유지 | `backend/lib/time-safe.js` |
 | legacy 추천 | `호환 전용` | `extraTimeMinutes` 또는 `deadlineMinutes` 요청과 응답 유지 | backend validation/time-safe 테스트 |
 | 복수 route | `호환 전용` | 저수준 `/api/route`와 Android wrapper는 경유지 0~5개 유지 | `backend/api/route.js`, `data/TteumsaeApi.kt` |
-| 반복 상세 | `코드 검증` | `detailInfo2` 제목·설명을 단건 상세의 `추가 안내`로만 제공 | migration 007·Preview·운영 배치 확인 필요 |
+| 반복 상세 | `운영 코드·DB 반영` | `detailInfo2` 제목·설명을 단건 상세의 `추가 안내`로만 제공 | 다음 운영 배치 데이터·실기기 표시 확인 필요 |
 | 사진 권리 정보 | `코드 검증` | `cpyrhtDivCd`를 보존하고 실제 대표 사진과 URL이 일치할 때 공공누리 유형 표시 | 변경 금지 이미지 변형 정책의 시각 QA 필요 |
 | 도보 실제 경로 | `코드 검증` | 기능 플래그를 켠 경우 카카오맵 `ACCESSIBLE` 경로로 corridor·이동시간 계산, 실패 시 기존 예상값으로 복귀 | Preview 실응답·무료 쿼터 대상 확인 전 운영 비활성 |
-| 관광지 혼잡 예측 | `코드 검증` | 도착 예정일의 상대 집중률을 exact unique name 매칭된 관광지 상세에서만 표시 | 별도 키·migration 008·실데이터 오매칭 QA 필요; 추천 순위 미반영 |
-| 도착 무렵 날씨 | `코드 검증` | 확인된 야외 장소의 도착 뒤 첫 정시 기온·강수확률·하늘·바람을 5km 격자 캐시로 상세에만 표시 | 별도 키·migration 009·Preview 실응답 전 기능 플래그 비활성; 추천 순위 미반영 |
+| 관광지 혼잡 예측 | `운영 코드·DB 반영` | 도착 예정일의 상대 집중률을 exact unique name 매칭된 관광지 상세에서만 표시 | 별도 키·실데이터 오매칭 QA 필요; Cron 미등록·추천 순위 미반영 |
+| 도착 무렵 날씨 | `운영 코드·DB 반영` | 확인된 야외 장소의 도착 뒤 첫 정시 기온·강수확률·하늘·바람을 5km 격자 캐시로 상세에만 표시 | 별도 키·Preview 실응답 전 기능 플래그 비활성; 추천 순위 미반영 |
 
 ## 4. 선택형 출발 알림
 

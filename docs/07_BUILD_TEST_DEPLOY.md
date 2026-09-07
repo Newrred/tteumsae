@@ -723,3 +723,16 @@ Vercel에서 두 Production Cron이 활성화되고 `20 18 * * *`, `20 22 * * *`
 유지하는지 확인했다. Supabase `sync_state`에는 수동 시각 `2026-08-28T04:08Z`와 별개인
 후속 실행 시각, `completed` 상태와 `last_run_summary`가 저장돼 Gate 1 예약 실행
 운영 점검을 완료했다.
+
+### 13.2 2026-09-07 공간 정보 보강 운영 반영
+
+사용자 승인 뒤 운영 Supabase에 migration 007~009를 적용하고 세 객체를 실제 조회했다.
+브랜치 `codex/spatial-data-enrichment`의 `ecde5aa`를 Production 배포
+`dpl_5ciPSYBC9UjTuBrv37eWRPm4P5Lo`로 올렸으며 `tteumsae-backend-one.vercel.app` 별칭과
+health·장소 목록·장소 상세·V1 추천 8건을 확인했다.
+
+혼잡도와 날씨의 별도 키는 등록되지 않았고 날씨 기능 플래그도 꺼져 있으므로, 이번 배포는
+기존 기능을 유지하면서 코드와 DB 수용 구조만 먼저 반영한다. 새 debug APK는 운영 고정 주소를
+사용하며 64,671,011바이트, SHA-256
+`7C96D65EF1955C99FE8327D502362368A712655B9850707A7D616D85DEB01891`이다. 연결 기기가 없어
+설치 QA는 수행하지 않았다.

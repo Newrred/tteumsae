@@ -19,7 +19,7 @@
 
 ### 1. TourAPI 반복 상세·사진 권리 정보
 
-상태: 코드 완료, 운영 적용 대기.
+상태: 운영 코드·migration 적용, presentation 배치 데이터 확인 대기.
 
 - 기존 `KorService2` 키로 `detailInfo2`를 동기화한다.
 - `infoname/infotext`, `subname/subdetailoverview`처럼 제목·설명이 모두 있는 항목만
@@ -28,7 +28,8 @@
 - 상세 대표 사진 URL과 메타데이터 URL이 일치할 때만 공공누리 유형을 표시한다.
 - 목록·추천에는 두 배열을 넣지 않고 `/api/places/{id}`에서만 제공한다.
 
-운영 적용 전 migration 007과 Preview smoke가 필요하다. 한국관광공사는 KorService2가
+운영 migration 007과 서버 배포는 완료됐다. 다음 presentation 배치에서 실제 데이터와
+빈 응답·권리 코드 분포를 확인해야 한다. 한국관광공사는 KorService2가
 공통·소개·반복·이미지 등 15종 정보를 제공하고 사진에는 공공누리 제1·3유형이 포함된다고
 명시한다: [공공데이터포털 공식 명세](https://www.data.go.kr/tcs/dss/selectApiDataDetailView.do?publicDataPk=15101578).
 
@@ -53,7 +54,7 @@
 
 ### 3. 관광지 혼잡 예측
 
-상태: 코드 완료, 별도 활용신청·migration·실데이터 매칭 검수 대기.
+상태: 운영 코드·migration 적용, 별도 활용신청·실데이터 매칭 검수 대기.
 
 한국관광공사 관광지 집중률 예측을 `stage=congestion` 서버 배치로 수집한다. 앱 요청마다
 원천 API를 호출하지 않고 Supabase에 장소·예측일·수집시각·상대 집중률을 저장한다.
@@ -68,7 +69,7 @@
 
 ### 4. 도착 무렵 날씨
 
-상태: 코드 완료, 별도 활용신청·migration·Preview 실응답 확인 대기.
+상태: 운영 코드·migration 적용, 별도 활용신청·Preview 실응답 확인 대기.
 
 기상청 단기예보의 5km 격자값을 장소 좌표와 도착 예상시각에 맞춘다. 야외 활동으로 확인된
 장소에만 강수·기온·바람을 간단히 표시하고, 추천 제외 기준은 Gate 3 관찰 뒤 결정한다.
