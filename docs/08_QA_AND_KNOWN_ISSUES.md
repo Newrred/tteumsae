@@ -113,6 +113,9 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - 조직 소유 업로드 키와 서명 빌드는 준비됐지만 키의 독립 보안 백업과 Play 첫 AAB 업로드가 남았다.
 - API 36 실제 기기 전체 회귀가 없다.
 - Google·Kakao OAuth release 서명 회귀가 없다.
+- 2026-09-07 Supabase advisor에 기존 `public.rls_auto_enable()` SECURITY DEFINER 함수의
+  anon·authenticated 실행 권한과 leaked-password protection 비활성 경고가 남아 있다.
+  공개 출시 전 함수 권한·용도를 감사하고 비밀번호 보호 활성화 여부를 확정한다.
 ### P1 — 핵심 UX 검증
 
 - 교통 데이터는 요청 시점 스냅샷이며 자동 실시간 추적이 아니다.
@@ -128,6 +131,8 @@ Node.js 24.x를 사용한다. 실제 외부 키나 외부 응답 전문을 테�
 - Navigation Compose는 사용하지 않고 enum 화면 전환을 유지한다.
 - 저장 장소는 기기 로컬이며 계정 간·기기 간 동기화하지 않는다.
 - legacy 상대시간과 복수 route 코드는 호환을 위해 남아 있어 별도 제거 버전이 필요하다.
+- 기존 프로필·저장 RLS의 `auth.uid()` init-plan 경고와 `user_saved_places.place_id` 인덱스
+  권고는 실데이터 증가 전 별도 성능 migration으로 검토한다.
 
 ## 6. 2026-08-28 실기기 회귀 기록
 
@@ -395,8 +400,10 @@ debug APK는 64,671,011바이트이고 SHA-256은
   저장 스냅샷과 최신 상세 병합에서도 값을 보존한다.
 - [x] Node.js 24.19.0 기준 Backend 207/207, 프로젝트 검사 112개 관리 파일을 통과했다.
 - [x] Android 30 suites 145/145, lint 오류 0·경고 44, `assembleDebug`를 통과했다.
-- [ ] 공공데이터포털 활용신청, 운영 migration 010 적용, Preview 실제 응답·content ID 매칭률,
-  기본·큰 글자 실기기 화면 검증이 필요하다.
+- [x] 운영 migration 010 적용과 Production 장소 상세 200 폴백을 확인했다.
+- [ ] 공공데이터포털 활용 승인, 실제 응답·content ID 매칭률, 기본·큰 글자 실기기 화면
+  검증이 필요하다. 수동 stage는 민감 Cron 비밀값을 로컬에서 읽을 수 없어 401에서 중단됐고
+  DB는 변경되지 않았다.
 - [ ] 위 검증 전에는 Cron 예약이나 검색 필터·추천 점수 반영을 하지 않는다.
 
 ## 15. 2026-09-07 주변 공영주차장 코드 검증
@@ -413,9 +420,22 @@ debug APK는 64,671,011바이트이고 SHA-256은
   장소 자체 주차 정보와 합치거나 새 입력 단계를 만들지 않는다.
 - [x] Node.js 24.19.0 기준 Backend 214/214, 프로젝트 검사 116개 관리 파일을 통과했다.
 - [x] Android 30 suites 145/145, lint 오류 0·경고 44, `assembleDebug`를 통과했다.
-- [ ] 공공데이터포털 활용신청, 운영 migration 011, Preview 전체 순회와 0·1·3곳 이상
-  응답, 기본·큰 글자 실기기 화면 검증이 필요하다.
+- [x] 운영 migration 011 적용과 빈 테이블 상태의 Production 장소 상세 200 폴백을 확인했다.
+- [ ] 공공데이터포털 활용신청·전용 키 등록, 전체 순회와 0·1·3곳 이상 응답,
+  기본·큰 글자 실기기 화면 검증이 필요하다.
 - [ ] 다음 전체 순회에서 사라진 폐업·삭제 행 처리 정책을 검수하기 전에는 Cron을 예약하지 않는다.
 
 debug APK는 64,672,246바이트이고 SHA-256은
 `53147F75BFFC656DDE9E30DBDCA50BF76AE56EB7F64C9EB17C168716C61F07F5`다.
+
+## 16. 2026-09-07 공간 정보 보강 통합 배포·APK 검증
+
+- [x] `main` 커밋 `6af0cd8`과 운영 Supabase migration 010·011 적용.
+- [x] Backend Production `dpl_AEtZmmbBTH3NXwqwBgcW1fhzSmQk` Ready 및 고정 별칭 반영.
+- [x] health·장소 목록·장소 상세 200, V1 카카오 차량 추천 8건과 핵심 시간 메타 확인.
+- [x] Node.js 24.19.0 Backend 214/214, 프로젝트 검사 116개 파일.
+- [x] Android `0.12.5` 30 suites 145/145, lint 오류 0·경고 44, `assembleDebug`.
+- [x] APK Production `dpl_CfgLFMNMsdfRQnimAWm4H1i7cHEx`; 64,500,234바이트와 원격
+  Content-Length·전체 SHA-256 일치,
+  `53D1C01BA43064FD66104A4EB43B39B544489138CAD6BFC3C6C31EB33F01CE05`.
+- [ ] 실기기 설치와 접근성·주변 공영주차장 실데이터 섹션 확인.

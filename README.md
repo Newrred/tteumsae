@@ -11,7 +11,7 @@
 - 다음 제품 목표: Gate 2 실기기 검증 후 Gate 3 사용자·실경로 검증
 - 출시 단계: 테스터용 디버그 APK 가능, Play Store 제출 준비 전
 - 운영 백엔드: <https://tteumsae-backend-one.vercel.app>
-- APK 페이지: <https://tteumsae-apk.vercel.app>
+- APK 페이지: <https://tteumsae-apk-six.vercel.app>
 
 활성 흐름은 `HOME → LOCATION → LOADING → RESULTS → DETAIL`입니다. 출발지·목적지와
 절대 도착 마감을 입력하면 고정 여유 10분 뒤 최소 15분 이상 머물 수 있는 후보를

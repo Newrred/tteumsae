@@ -10,15 +10,15 @@
 
 | 구성 | 소스 버전/상태 | 운영 위치 |
 |---|---|---|
-| Android | `0.12.4`, `versionCode 25` | `android/` |
+| Android | `0.12.5`, `versionCode 26` | `android/` |
 | Backend | npm package `0.2.0`, health `0.2.0` | `backend/` |
-| APK 다운로드 HTML | `tteumsae-v0.12.4-results-ui-20260821-debug.apk`를 가리킴 | `download/` |
+| APK 다운로드 HTML | `tteumsae-v0.12.5-spatial-data-20260907-debug.apk`를 가리킴 | `download/` |
 
 ### 반드시 알고 시작할 배포 원칙
 
 - APK·AAB는 Git에서 제외하므로 이 저장소의 `download/`에는 HTML만 있고 APK
   바이너리는 없다.
-- 현재 운영 다운로드 주소는 `v0.12.4` 결과 화면 확인용 디버그 APK를 제공한다.
+- 현재 운영 다운로드 주소는 `v0.12.5` 공간 정보 보강 확인용 디버그 APK를 제공한다.
 - 소스 변경 후 다시 배포할 때는 기존 APK를 덮어쓰지 말고 새 파일명과 더 높은
   `versionCode`를 사용한다.
 - `backend/vercel.json`의 `v0.4.0` APK rewrite는 레거시이며 현재 APK 다운로드
@@ -503,8 +503,8 @@ versionCode = 이전 값보다 큰 정수
 versionName = "새 버전"
 ```
 
-현재 확인용 APK가 `versionCode 25`, `versionName 0.12.4`이므로 다음 배포
-빌드는 최소 `versionCode 26`, `versionName 0.12.5`를 사용한다.
+현재 확인용 APK가 `versionCode 26`, `versionName 0.12.5`이므로 다음 배포
+빌드는 최소 `versionCode 27`, `versionName 0.12.6`을 사용한다.
 
 ### 8.2 APK 생성과 복사
 
@@ -512,7 +512,7 @@ versionName = "새 버전"
 Set-Location C:\dev\tteumsae\android
 .\gradlew.bat clean assembleDebug
 
-$version = '0.12.4'
+$version = '0.12.5'
 $sourceApk = 'app\build\outputs\apk\debug\app-debug.apk'
 $targetApk = "..\download\tteumsae-v$version-debug.apk"
 Copy-Item -LiteralPath $sourceApk -Destination $targetApk
@@ -541,14 +541,13 @@ pnpm dlx vercel --prod
 운영 페이지:
 
 ```text
-https://tteumsae-apk.vercel.app
+https://tteumsae-apk-six.vercel.app
 ```
 
 운영 파일 확인:
 
 ```powershell
-$version = '0.12.4'
-$url = "https://tteumsae-apk.vercel.app/tteumsae-v$version-debug.apk"
+$url = "https://tteumsae-apk-six.vercel.app/tteumsae-v0.12.5-spatial-data-20260907-debug.apk"
 Invoke-WebRequest -Method Head -Uri $url
 ```
 
@@ -741,3 +740,29 @@ health·장소 목록·장소 상세·V1 추천 8건을 확인했다.
 사용하며 64,671,011바이트, SHA-256
 `7C96D65EF1955C99FE8327D502362368A712655B9850707A7D616D85DEB01891`이다. 연결 기기가 없어
 설치 QA는 수행하지 않았다.
+
+### 13.3 2026-09-07 접근성·공영주차장 DB와 확인용 APK 반영
+
+`main`을 `6af0cd8`까지 fast-forward하고 운영 Supabase에 migration 010
+`tour_accessibility`와 011 `public_parking_lots`를 순서대로 적용했다. 새 테이블은 RLS를
+활성화하고 public·anon·authenticated 권한을 회수했으며 service role만 접근 가능함을
+운영 메타데이터로 확인했다.
+
+Backend Production 배포 `dpl_AEtZmmbBTH3NXwqwBgcW1fhzSmQk`가 2026-09-07 17:47 KST에
+Ready가 됐고 `tteumsae-backend-one.vercel.app` 별칭을 사용한다. health·장소 목록·장소
+상세가 200이고, V1 추천은 `KAKAO_MOBILITY`, 최소 체류 15분, 고정 안전여유 10분으로
+8건을 반환했다. Node.js 24.19.0에서 Backend 214/214와 프로젝트 검사 116개 파일을
+다시 통과했다.
+
+Android는 `0.12.5`(`versionCode 26`)로 올려 30 suites 145/145, lint 오류 0·경고 44,
+`assembleDebug`를 통과했다. APK는 64,500,234바이트, SHA-256
+`53D1C01BA43064FD66104A4EB43B39B544489138CAD6BFC3C6C31EB33F01CE05`다. APK Production
+배포 `dpl_CfgLFMNMsdfRQnimAWm4H1i7cHEx`의 운영 별칭은
+`https://tteumsae-apk-six.vercel.app`이며 새 파일의 HEAD 200, Content-Length와 원격 파일
+전체 SHA-256 일치를 확인했다. 과거 `tteumsae-apk.vercel.app`은 현재 팀 소유가 아니어서 새 배포로 재지정하지
+못했으므로 사용하지 않는다.
+
+접근성 수동 stage는 운영 `CRON_SECRET`이 민감 변수로 로컬에 내려오지 않아 인증 전에
+401로 종료됐고 DB를 변경하지 않았다. 공영주차장은 `PUBLIC_PARKING_API_SERVICE_KEY`가
+없어 실행하지 않았다. 따라서 두 섹션은 실데이터가 들어오기 전까지 설계대로 숨겨지며,
+Cron은 예약하지 않는다.
