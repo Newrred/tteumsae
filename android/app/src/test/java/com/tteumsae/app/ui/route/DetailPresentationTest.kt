@@ -2,6 +2,8 @@ package com.tteumsae.app.ui.route
 
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
+import com.tteumsae.app.domain.PlaceDetailItem
+import com.tteumsae.app.domain.PlaceImageAttribution
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -55,6 +57,13 @@ class DetailPresentationTest {
             overview = "최신 소개",
             telephone = "033-123-4567",
             parkingInfo = "건물 뒤 주차장",
+            detailItems = listOf(PlaceDetailItem("이용 안내", "예약 불필요")),
+            imageAttributions = listOf(
+                PlaceImageAttribution(
+                    imageUrl = "https://example.com/hero.jpg",
+                    copyrightLabel = "공공누리 제3유형",
+                ),
+            ),
         )
 
         val merged = mergeFreshPlaceDetails(routePlace, fresh)
@@ -65,6 +74,8 @@ class DetailPresentationTest {
         assertEquals("최신 소개", merged.overview)
         assertEquals("033-123-4567", merged.telephone)
         assertEquals("건물 뒤 주차장", merged.parkingInfo)
+        assertEquals("이용 안내", merged.detailItems.single().title)
+        assertEquals("공공누리 제3유형", merged.imageAttributions.single().copyrightLabel)
     }
 
     @Test
@@ -94,6 +105,26 @@ class DetailPresentationTest {
             normalizedHomepageUrl("<a href='https://example.com/place'>홈페이지</a>"),
         )
         assertTrue(placeSourceCaption(place().copy(dataProvenance = "TOUR_API")).contains("TourAPI"))
+    }
+
+    @Test
+    fun `대표 사진과 일치하는 권리 유형만 사진 출처 문구로 표시한다`() {
+        val place = place().copy(
+            imageAttributions = listOf(
+                PlaceImageAttribution(
+                    imageUrl = "https://example.com/hero.jpg",
+                    name = "장소 전경",
+                    copyrightType = "Type3",
+                    copyrightLabel = "공공누리 제3유형",
+                ),
+            ),
+        )
+
+        assertEquals(
+            "사진 · 한국관광공사 TourAPI · 공공누리 제3유형",
+            placePhotoSourceCaption(place, "https://example.com/hero.jpg"),
+        )
+        assertNull(placePhotoSourceCaption(place, "https://example.com/other.jpg"))
     }
 
     private fun place() = PlaceCandidate(

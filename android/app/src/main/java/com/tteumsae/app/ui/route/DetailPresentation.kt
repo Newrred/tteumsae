@@ -64,6 +64,10 @@ internal fun mergeFreshPlaceDetails(
             routePlace.parkingInfoStatus,
         ),
         reviewedAt = preferFresh(freshPlace.reviewedAt, routePlace.reviewedAt),
+        detailItems = freshPlace.detailItems.ifEmpty { routePlace.detailItems },
+        imageAttributions = freshPlace.imageAttributions.ifEmpty {
+            routePlace.imageAttributions
+        },
     )
 }
 
@@ -138,4 +142,14 @@ internal fun placeSourceCaption(place: PlaceCandidate): String {
         ?.take(10)
         ?.replace('-', '.')
     return if (reviewed == null) source else "$source · $reviewed 확인"
+}
+
+internal fun placePhotoSourceCaption(place: PlaceCandidate, imageUrl: String?): String? {
+    val normalizedUrl = normalizedVisitInfo(imageUrl) ?: return null
+    val attribution = place.imageAttributions.firstOrNull {
+        normalizedVisitInfo(it.imageUrl) == normalizedUrl ||
+            normalizedVisitInfo(it.thumbnailUrl) == normalizedUrl
+    } ?: return null
+    val copyright = normalizedVisitInfo(attribution.copyrightLabel) ?: return null
+    return "사진 · 한국관광공사 TourAPI · $copyright"
 }

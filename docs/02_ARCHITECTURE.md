@@ -136,7 +136,7 @@ sequenceDiagram
     B->>D: "경로 주변 후보 최대 500개 조회"
     D-->>B: "정규화된 TourAPI 장소"
     B->>B: "거리 기반 1차 필터"
-    B->>K: "차량 후보 최대 20개 경로 계산"
+    B->>K: "차량 후보 최대 8개 경로 계산"
     K-->>B: "두 구간 시간·거리·경로"
     B->>B: "수신시각 기준 최대 체류·출발 마감 계산"
     B-->>A: "추천·최대 체류·출발 마감·경로"
@@ -152,17 +152,22 @@ flowchart TD
     C1["Vercel Cron 03:20 KST"] --> L["areaBasedList2\n강원도 areaCode 32"]
     L --> N["카테고리·주소·좌표·기본 이미지 정규화"]
     N --> P["Supabase places upsert"]
-    C2["Vercel Cron 03:40 KST"] --> I["detailIntro2"]
-    C2 --> IM["detailImage2"]
-    C2 --> PET["detailPetTour2"]
+    C2["Vercel Cron 07:20 KST"] --> I["detailIntro2"]
+    C3["Vercel Cron 07:40 KST"] --> CO["detailCommon2"]
+    C3 --> IM["detailImage2"]
+    C3 --> PET["detailPetTour2"]
+    C3 --> IF["detailInfo2\n기존 presentation 완료 장소부터"]
     I --> E["영업시간·휴무·편의 태그 정제"]
+    CO --> E
     IM --> E
     PET --> E
+    IF --> E
     E --> P
     P --> ST["sync_state 커서 갱신"]
 ```
 
-Vercel Cron 설정은 UTC `18:20`, `18:40`이며 한국시간으로 다음 날 오전 `03:20`, `03:40`입니다.
+Vercel Cron 설정은 UTC `18:20`, `22:20`, `22:40`이며 한국시간으로 다음 날 오전
+`03:20`, `07:20`, `07:40`입니다.
 
 현재 상세 동기화 기본 배치는 하루 10개 장소이므로 전체 갱신에 오래 걸릴 수 있습니다.
 

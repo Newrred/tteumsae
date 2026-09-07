@@ -4,12 +4,59 @@ import {
   claimSyncJob,
   finishSyncJob,
   getGate1bOpsStatus,
+  getPlace,
   listGangneungCurationCandidates,
   listPlaces,
   recordProviderUsageResult,
   reserveProviderUsage,
   upsertPlaceCurations
 } from "../lib/database.js";
+
+test("장소 단건 조회만 반복 상세와 사진 권리 메타데이터를 공개하고 원문은 숨긴다", async () => {
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const originalFetch = globalThis.fetch;
+  let requestUrl;
+  globalThis.fetch = async (url) => {
+    requestUrl = new URL(String(url));
+    return Response.json([{
+      content_id: "detail-1",
+      source: "TOUR_API",
+      name: "상세 장소",
+      category: "CULTURE",
+      content_type_id: 14,
+      area_code: 32,
+      latitude: 37.75,
+      longitude: 128.87,
+      default_stay_minutes: 60,
+      image_urls: ["https://example.com/place.jpg"],
+      tags: [],
+      enrichment_raw: {
+        info: [{ infoname: "원문" }],
+        infoItems: [{ title: "이용 안내", description: "예약 불필요" }],
+        imageAttributions: [{
+          image_url: "https://example.com/place.jpg",
+          thumbnail_url: null,
+          name: "장소 전경",
+          copyright_type: "Type1",
+          copyright_label: "공공누리 제1유형"
+        }]
+      }
+    }]);
+  };
+
+  try {
+    const place = await getPlace("detail-1");
+    assert.match(requestUrl.searchParams.get("select"), /enrichment_raw/);
+    assert.deepEqual(place.detail_items, [
+      { title: "이용 안내", description: "예약 불필요" }
+    ]);
+    assert.equal(place.image_attributions[0].copyright_label, "공공누리 제1유형");
+    assert.equal("enrichment_raw" in place, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test("새 Supabase secret 키는 PostgREST Bearer 토큰으로 보내지 않는다", async () => {
   process.env.SUPABASE_URL = "https://supabase.test";

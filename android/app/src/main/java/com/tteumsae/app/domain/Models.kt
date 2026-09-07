@@ -31,6 +31,19 @@ enum class OperationStatus {
     UNKNOWN,
 }
 
+data class PlaceDetailItem(
+    val title: String,
+    val description: String,
+)
+
+data class PlaceImageAttribution(
+    val imageUrl: String = "",
+    val thumbnailUrl: String = "",
+    val name: String = "",
+    val copyrightType: String = "",
+    val copyrightLabel: String = "",
+)
+
 data class PlaceCandidate(
     val id: String,
     val name: String,
@@ -63,6 +76,8 @@ data class PlaceCandidate(
     val admissionInfoStatus: String = "",
     val parkingInfoStatus: String = "",
     val reviewedAt: String = "",
+    val detailItems: List<PlaceDetailItem> = emptyList(),
+    val imageAttributions: List<PlaceImageAttribution> = emptyList(),
 )
 
 data class RouteLeg(

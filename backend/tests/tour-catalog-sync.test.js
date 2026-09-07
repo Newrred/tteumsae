@@ -126,6 +126,7 @@ test("카탈로그 변경은 상세 단계만 초기화하고 비표출은 기�
       intro_synced_at: null,
       common_synced_at: null,
       media_synced_at: null,
+      info_synced_at: null,
       enrichment_attempts: 0,
       enrichment_last_error: null,
       next_enrichment_at: null

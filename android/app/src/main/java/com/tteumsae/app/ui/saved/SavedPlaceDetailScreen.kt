@@ -46,6 +46,7 @@ import com.tteumsae.app.ui.route.normalizedVisitInfo
 import com.tteumsae.app.ui.route.plainTourText
 import com.tteumsae.app.ui.route.practicalVisitFacts
 import com.tteumsae.app.ui.route.placeSourceCaption
+import com.tteumsae.app.ui.route.placePhotoSourceCaption
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
@@ -70,6 +71,12 @@ internal fun SavedPlaceDetailScreen(
         ?: place.imageUrls.firstNotNullOfOrNull(::normalizedVisitInfo)
         ?: ""
     val heroHeight = if (heroImageUrl.isBlank()) 164.dp else 232.dp
+    val photoSourceCaption = placePhotoSourceCaption(place, heroImageUrl)
+    val additionalDetails = place.detailItems.mapNotNull { item ->
+        val title = normalizedVisitInfo(item.title)
+        val description = plainTourText(item.description)
+        if (title == null || description == null) null else title to description
+    }.distinct()
 
     Scaffold(
         containerColor = Color.White,
@@ -156,6 +163,16 @@ internal fun SavedPlaceDetailScreen(
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp, vertical = 22.dp),
                 ) {
+                    photoSourceCaption?.let { caption ->
+                        Text(
+                            caption,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = TteumMuted,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                    }
                     Surface(
                         color = TteumRedSoft,
                         shape = RoundedCornerShape(50),
@@ -217,6 +234,17 @@ internal fun SavedPlaceDetailScreen(
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             visitFacts.forEach { fact ->
                                 SavedDetailInfoRow(label = fact.label, value = fact.value)
+                            }
+                        }
+                    }
+
+                    if (additionalDetails.isNotEmpty()) {
+                        Spacer(Modifier.height(24.dp))
+                        SavedDetailSectionTitle("추가 안내")
+                        Spacer(Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            additionalDetails.forEach { (title, description) ->
+                                SavedDetailInfoRow(label = title, value = description)
                             }
                         }
                     }

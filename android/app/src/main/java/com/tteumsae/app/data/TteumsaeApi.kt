@@ -416,6 +416,21 @@ private fun JSONObject.toPlaceCandidate(
     admissionInfoStatus = optText("admission_info_status"),
     parkingInfoStatus = optText("parking_info_status"),
     reviewedAt = optText("reviewed_at"),
+    detailItems = optJSONArray("detail_items")?.mapObjects {
+        com.tteumsae.app.domain.PlaceDetailItem(
+            title = it.optText("title"),
+            description = it.optText("description"),
+        )
+    }?.filter { it.title.isNotBlank() && it.description.isNotBlank() }.orEmpty(),
+    imageAttributions = optJSONArray("image_attributions")?.mapObjects {
+        com.tteumsae.app.domain.PlaceImageAttribution(
+            imageUrl = it.optText("image_url"),
+            thumbnailUrl = it.optText("thumbnail_url"),
+            name = it.optText("name"),
+            copyrightType = it.optText("copyright_type"),
+            copyrightLabel = it.optText("copyright_label"),
+        )
+    }?.filter { it.imageUrl.isNotBlank() || it.thumbnailUrl.isNotBlank() }.orEmpty(),
 )
 
 internal fun parsePlaceResponse(response: JSONObject): PlaceCandidate =

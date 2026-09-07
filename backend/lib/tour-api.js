@@ -181,6 +181,19 @@ export async function fetchTourCommon(
   return items[0] ?? null;
 }
 
+export async function fetchTourInfo(
+  contentId,
+  contentTypeId,
+  { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
+) {
+  return fetchTourDetail("detailInfo2", {
+    contentId: String(contentId),
+    contentTypeId: String(contentTypeId),
+    numOfRows: "20",
+    pageNo: "1"
+  }, { signal, fetchImpl, usageTracker, now });
+}
+
 export async function fetchTourImages(
   contentId,
   { signal, fetchImpl = fetch, usageTracker = trackProviderCall, now } = {}
@@ -386,6 +399,51 @@ export function normalizeTourCommon({ common, syncedAt }) {
   };
 }
 
+export function normalizeTourInfo({ items = [], syncedAt }) {
+  const rawItems = Array.isArray(items) ? items : [];
+  const seen = new Set();
+  const infoItems = [];
+
+  for (const item of rawItems) {
+    const title = firstText(item, ["infoname", "subname", "roomtitle"]);
+    const description = firstText(item, ["infotext", "subdetailoverview", "roomintro"]);
+    if (!title || !description) continue;
+    const key = `${title}\u0000${description}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    infoItems.push({ title, description });
+  }
+
+  return { infoItems, rawItems, syncedAt };
+}
+
+const copyrightLabels = {
+  Type1: "공공누리 제1유형",
+  Type3: "공공누리 제3유형"
+};
+
+function normalizeImageAttributions(images) {
+  const seen = new Set();
+  const attributions = [];
+  for (const image of images) {
+    const imageUrl = normalizeHomepage(image?.originimgurl);
+    const thumbnailUrl = normalizeHomepage(image?.smallimageurl);
+    if (!imageUrl && !thumbnailUrl) continue;
+    const key = `${imageUrl ?? ""}\u0000${thumbnailUrl ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const copyrightType = cleanText(image?.cpyrhtDivCd) || null;
+    attributions.push({
+      image_url: imageUrl,
+      thumbnail_url: thumbnailUrl,
+      name: cleanText(image?.imgname) || null,
+      copyright_type: copyrightType,
+      copyright_label: copyrightLabels[copyrightType] ?? null
+    });
+  }
+  return attributions;
+}
+
 export function normalizeTourMedia({
   contentTypeId,
   intro,
@@ -406,6 +464,7 @@ export function normalizeTourMedia({
   return {
     tags,
     imageUrls,
+    imageAttributions: normalizeImageAttributions(imageItems),
     images: imageItems,
     pet: pet ?? null,
     syncedAt
@@ -425,6 +484,7 @@ export function normalizeTourEnrichment({
   return {
     tags: normalizedMedia.tags,
     imageUrls: normalizedMedia.imageUrls,
+    imageAttributions: normalizedMedia.imageAttributions,
     openingHours: normalizedIntro.openingHours,
     closedDays: normalizedIntro.closedDays,
     intro: normalizedIntro.intro,

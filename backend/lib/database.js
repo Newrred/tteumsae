@@ -54,7 +54,7 @@ const legacyPublicColumns = [...basePublicColumns, "raw"].join(",");
 
 function toPublicPlace(row) {
   const legacy = row.raw?._tteumsae ?? {};
-  const { raw: _raw, ...place } = row;
+  const { raw: _raw, enrichment_raw: enrichmentRaw, ...place } = row;
   const hasEffectiveHours = Object.hasOwn(place, "effective_opening_hours");
   const hasEffectiveClosedDays = Object.hasOwn(place, "effective_closed_days");
   const imageUrls = Array.isArray(place.image_urls)
@@ -84,10 +84,68 @@ function toPublicPlace(row) {
     last_admission: place.effective_last_admission ?? null,
     parking_info: place.effective_parking_info ?? null
   };
+  if (enrichmentRaw && typeof enrichmentRaw === "object") {
+    result.detail_items = publicDetailItems(enrichmentRaw.infoItems);
+    result.image_attributions = publicImageAttributions(enrichmentRaw);
+  }
   for (const column of effectivePublicColumns.filter((name) => name.startsWith("effective_"))) {
     delete result[column];
   }
   return result;
+}
+
+function boundedText(value, maxLength) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text ? text.slice(0, maxLength) : null;
+}
+
+function publicDetailItems(items) {
+  if (!Array.isArray(items)) return [];
+  return items.slice(0, 20).flatMap((item) => {
+    const title = boundedText(item?.title, 200);
+    const description = boundedText(item?.description, 4_000);
+    return title && description ? [{ title, description }] : [];
+  });
+}
+
+function publicHttpUrl(value) {
+  const candidate = boundedText(value, 2_000);
+  if (!candidate) return null;
+  try {
+    const url = new URL(candidate);
+    return ["http:", "https:"].includes(url.protocol) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+function publicImageAttributions(enrichmentRaw) {
+  const stored = Array.isArray(enrichmentRaw.imageAttributions)
+    ? enrichmentRaw.imageAttributions
+    : Array.isArray(enrichmentRaw.images)
+      ? enrichmentRaw.images.map((image) => ({
+          image_url: image?.originimgurl,
+          thumbnail_url: image?.smallimageurl,
+          name: image?.imgname,
+          copyright_type: image?.cpyrhtDivCd,
+          copyright_label: {
+            Type1: "공공누리 제1유형",
+            Type3: "공공누리 제3유형"
+          }[image?.cpyrhtDivCd] ?? null
+        }))
+      : [];
+  return stored.slice(0, 30).flatMap((item) => {
+    const imageUrl = publicHttpUrl(item?.image_url);
+    const thumbnailUrl = publicHttpUrl(item?.thumbnail_url);
+    if (!imageUrl && !thumbnailUrl) return [];
+    return [{
+      image_url: imageUrl,
+      thumbnail_url: thumbnailUrl,
+      name: boundedText(item?.name, 300),
+      copyright_type: boundedText(item?.copyright_type, 80),
+      copyright_label: boundedText(item?.copyright_label, 120)
+    }];
+  });
 }
 
 async function databaseRequest(path, { method = "GET", body, prefer, signal } = {}) {
@@ -135,8 +193,9 @@ function isMissingEffectiveView(error) {
     /effective_places/i.test(error.databaseMessage ?? "");
 }
 
-async function requestPublicPlaceRows(query, signal) {
-  query.set("select", effectiveColumns);
+async function requestPublicPlaceRows(query, signal, { includeSupplemental = false } = {}) {
+  const supplemental = includeSupplemental ? ",enrichment_raw" : "";
+  query.set("select", `${effectiveColumns}${supplemental}`);
   try {
     return await databaseRequest(`effective_places?${query}`, { signal });
   } catch (error) {
@@ -148,14 +207,16 @@ async function requestPublicPlaceRows(query, signal) {
       return databaseRequest(`places?${query}`, { signal });
     }
     if (!isMissingEffectiveView(error)) throw error;
-    query.set("select", publicColumns);
+    query.set("select", `${publicColumns}${supplemental}`);
     try {
       return await databaseRequest(`places?${query}`, { signal });
     } catch (fallbackError) {
       const missingFallbackColumn =
         fallbackError.code === "42703" &&
-        enrichmentPublicColumns.some((column) =>
-          fallbackError.databaseMessage?.includes(`places.${column}`)
+        (
+          enrichmentPublicColumns.some((column) =>
+            fallbackError.databaseMessage?.includes(`places.${column}`)
+          ) || fallbackError.databaseMessage?.includes("places.enrichment_raw")
         );
       if (!missingFallbackColumn) throw fallbackError;
     }
@@ -198,7 +259,7 @@ export async function getPlace(contentId, { signal } = {}) {
     is_active: "eq.true",
     limit: "1"
   });
-  const rows = await requestPublicPlaceRows(query, signal);
+  const rows = await requestPublicPlaceRows(query, signal, { includeSupplemental: true });
   return rows?.[0] ? toPublicPlace(rows[0]) : null;
 }
 
@@ -313,12 +374,13 @@ export async function listPlacesForPresentationSync({
       "enrichment_raw",
       "common_synced_at",
       "media_synced_at",
+      "info_synced_at",
       "enrichment_attempts"
     ].join(","),
     is_active: "eq.true",
     intro_synced_at: "not.is.null",
     and: [
-      "(or(common_synced_at.is.null,media_synced_at.is.null)",
+      "(or(common_synced_at.is.null,media_synced_at.is.null,info_synced_at.is.null)",
       `or(next_enrichment_at.is.null,next_enrichment_at.lte.${dueAt.toISOString()}))`
     ].join(","),
     order: "next_enrichment_at.asc.nullsfirst,content_id.asc",
@@ -359,6 +421,9 @@ export async function savePlaceMedia(place, enrichment, { signal } = {}) {
     enrichment_raw: {
       ...(place.enrichment_raw ?? {}),
       images: Array.isArray(enrichment.images) ? enrichment.images : [],
+      imageAttributions: Array.isArray(enrichment.imageAttributions)
+        ? enrichment.imageAttributions
+        : [],
       pet: enrichment.pet ?? null
     },
     media_synced_at: enrichment.syncedAt,
@@ -375,6 +440,25 @@ export async function savePlaceMedia(place, enrichment, { signal } = {}) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
     method: "PATCH",
     body,
+    prefer: "return=minimal",
+    signal
+  });
+}
+
+export async function savePlaceInfo(place, enrichment, { signal } = {}) {
+  await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
+    method: "PATCH",
+    body: {
+      enrichment_raw: {
+        ...(place.enrichment_raw ?? {}),
+        info: Array.isArray(enrichment.rawItems) ? enrichment.rawItems : [],
+        infoItems: Array.isArray(enrichment.infoItems) ? enrichment.infoItems : []
+      },
+      info_synced_at: enrichment.syncedAt,
+      enrichment_attempts: 0,
+      enrichment_last_error: null,
+      next_enrichment_at: null
+    },
     prefer: "return=minimal",
     signal
   });
@@ -413,6 +497,7 @@ export async function resetPlaceEnrichment(contentId, { signal } = {}) {
       intro_synced_at: null,
       common_synced_at: null,
       media_synced_at: null,
+      info_synced_at: null,
       enrichment_attempts: 0,
       enrichment_last_error: null,
       next_enrichment_at: null

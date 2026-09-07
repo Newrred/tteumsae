@@ -154,7 +154,9 @@ test("미디어 상세는 이미지와 표현 태그만 정규화한다", () => 
     images: [
       {
         originimgurl: "https://example.com/original.jpg",
-        smallimageurl: "https://example.com/original.jpg"
+        smallimageurl: "https://example.com/original.jpg",
+        imgname: "전시관 전경",
+        cpyrhtDivCd: "Type3"
       }
     ],
     pet: { acmpyTypeCd: "동반 가능" },
@@ -163,7 +165,34 @@ test("미디어 상세는 이미지와 표현 태그만 정규화한다", () => 
 
   assert.deepEqual(result.tags, ["주차 가능", "반려동물 동반", "실내 활동"]);
   assert.deepEqual(result.imageUrls, ["https://example.com/original.jpg"]);
+  assert.deepEqual(result.imageAttributions, [{
+    image_url: "https://example.com/original.jpg",
+    thumbnail_url: "https://example.com/original.jpg",
+    name: "전시관 전경",
+    copyright_type: "Type3",
+    copyright_label: "공공누리 제3유형"
+  }]);
   assert.equal(result.syncedAt, "2026-08-27T00:00:00.000Z");
+});
+
+test("반복 상세는 공통 제목·설명만 정리하고 HTML과 중복을 제거한다", () => {
+  const result = tourApi.normalizeTourInfo({
+    items: [
+      { infoname: "이용 안내", infotext: "<b>예약</b> 없이 입장 가능" },
+      { infoname: "이용 안내", infotext: "예약 없이 입장 가능" },
+      { subname: "전망대", subdetailoverview: "바다를 볼 수 있어요.<br>계단 주의" },
+      { infoname: "", infotext: "설명만 있는 값" },
+      { infoname: "빈 값", infotext: "<br>" }
+    ],
+    syncedAt: "2026-09-07T00:00:00.000Z"
+  });
+
+  assert.deepEqual(result.infoItems, [
+    { title: "이용 안내", description: "예약 없이 입장 가능" },
+    { title: "전망대", description: "바다를 볼 수 있어요. 계단 주의" }
+  ]);
+  assert.equal(result.rawItems.length, 5);
+  assert.equal(result.syncedAt, "2026-09-07T00:00:00.000Z");
 });
 
 test("반려동물 상세가 동반 불가이면 동반 태그를 만들지 않는다", () => {
@@ -217,6 +246,37 @@ test("공통 상세 조회는 현재 KorService2 계약과 단일 객체 응답�
     assert.equal(requestUrl.searchParams.has("overviewYN"), false);
   } finally {
     globalThis.fetch = originalFetch;
+    if (originalServiceKey === undefined) delete process.env.TOUR_API_SERVICE_KEY;
+    else process.env.TOUR_API_SERVICE_KEY = originalServiceKey;
+  }
+});
+
+test("반복 상세 조회는 content type을 포함한 detailInfo2 계약을 사용한다", async () => {
+  const originalServiceKey = process.env.TOUR_API_SERVICE_KEY;
+  process.env.TOUR_API_SERVICE_KEY = "service-key";
+  let requestUrl;
+  try {
+    const result = await tourApi.fetchTourInfo("123", 15, {
+      usageTracker: untrackedUsage,
+      fetchImpl: async (url) => {
+        requestUrl = new URL(String(url));
+        return Response.json({
+          response: {
+            header: { resultCode: "0000", resultMsg: "OK" },
+            body: {
+              items: { item: { infoname: "행사 안내", infotext: "우천 시 취소" } }
+            }
+          }
+        });
+      }
+    });
+
+    assert.equal(requestUrl.pathname.endsWith("/detailInfo2"), true);
+    assert.equal(requestUrl.searchParams.get("contentId"), "123");
+    assert.equal(requestUrl.searchParams.get("contentTypeId"), "15");
+    assert.equal(requestUrl.searchParams.get("numOfRows"), "20");
+    assert.deepEqual(result, [{ infoname: "행사 안내", infotext: "우천 시 취소" }]);
+  } finally {
     if (originalServiceKey === undefined) delete process.env.TOUR_API_SERVICE_KEY;
     else process.env.TOUR_API_SERVICE_KEY = originalServiceKey;
   }

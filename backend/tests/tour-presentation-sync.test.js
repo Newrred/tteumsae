@@ -79,7 +79,10 @@ test("presentation 배치는 common과 media의 부분 성공을 서로 지우�
     commonFailed: 1,
     mediaUpdated: 1,
     mediaEmpty: 0,
-    mediaFailed: 1
+    mediaFailed: 1,
+    infoUpdated: 0,
+    infoEmpty: 0,
+    infoFailed: 0
   });
   assert.deepEqual(savedCommon.map(({ place }) => place.content_id), ["media-fails"]);
   assert.deepEqual(savedMedia.map(({ place }) => place.content_id), ["common-fails"]);
@@ -125,7 +128,10 @@ test("presentation 배치는 빈 정상응답도 저장해 두 stage를 완료 �
     commonFailed: 0,
     mediaUpdated: 0,
     mediaEmpty: 1,
-    mediaFailed: 0
+    mediaFailed: 0,
+    infoUpdated: 0,
+    infoEmpty: 0,
+    infoFailed: 0
   });
   assert.equal(saved.length, 2);
   assert.equal(saved[0].enrichment.common, null);
@@ -203,6 +209,44 @@ test("presentation 배치는 deadline 뒤 새 장소를 시작하지 않는다",
   assert.equal(result.completed, 1);
 });
 
+test("presentation 배치는 기존 stage가 끝난 장소에서 반복 상세를 별도 단계로 동기화한다", async () => {
+  const { runPresentationBatch } = await import("../lib/tour-sync.js");
+  const saved = [];
+
+  const result = await runPresentationBatch({
+    places: [{
+      content_id: "info-only",
+      content_type_id: 15,
+      common_synced_at: "2026-09-06T00:00:00.000Z",
+      media_synced_at: "2026-09-06T00:00:00.000Z",
+      info_synced_at: null,
+      enrichment_raw: { common: {}, images: [] }
+    }],
+    concurrency: 1,
+    syncedAt: "2026-09-07T00:00:00.000Z",
+    fetchCommon: async () => assert.fail("완료 common은 호출하지 않습니다."),
+    fetchImages: async () => assert.fail("완료 media는 호출하지 않습니다."),
+    fetchPet: async () => assert.fail("완료 media는 호출하지 않습니다."),
+    fetchInfo: async (contentId, contentTypeId) => {
+      assert.equal(contentId, "info-only");
+      assert.equal(contentTypeId, 15);
+      return [{ infoname: "행사 안내", infotext: "우천 시 취소" }];
+    },
+    saveCommon: async () => {},
+    saveMedia: async () => {},
+    saveInfo: async (place, enrichment) => saved.push({ place, enrichment }),
+    recordFailure: async () => assert.fail("정상 반복 상세는 실패가 아닙니다.")
+  });
+
+  assert.equal(result.completed, 1);
+  assert.equal(result.infoUpdated, 1);
+  assert.equal(result.infoEmpty, 0);
+  assert.equal(result.infoFailed, 0);
+  assert.deepEqual(saved[0].enrichment.infoItems, [
+    { title: "행사 안내", description: "우천 시 취소" }
+  ]);
+});
+
 test("presentation 대상은 intro 완료·미완료 stage·재시도 도래 조건과 최대 10개를 사용한다", async () => {
   const { listPlacesForPresentationSync } = await import("../lib/database.js");
   process.env.SUPABASE_URL = "https://supabase.test";
@@ -220,14 +264,49 @@ test("presentation 대상은 intro 완료·미완료 stage·재시도 도래 조
     const query = requestUrl.searchParams;
     assert.match(query.get("select"), /common_synced_at/);
     assert.match(query.get("select"), /media_synced_at/);
+    assert.match(query.get("select"), /info_synced_at/);
     assert.equal(query.get("is_active"), "eq.true");
     assert.equal(query.get("intro_synced_at"), "not.is.null");
     assert.equal(
       query.get("and"),
-      "(or(common_synced_at.is.null,media_synced_at.is.null),or(next_enrichment_at.is.null,next_enrichment_at.lte.2026-09-05T03:04:05.000Z))"
+      "(or(common_synced_at.is.null,media_synced_at.is.null,info_synced_at.is.null),or(next_enrichment_at.is.null,next_enrichment_at.lte.2026-09-05T03:04:05.000Z))"
     );
     assert.equal(query.get("order"), "next_enrichment_at.asc.nullsfirst,content_id.asc");
     assert.equal(query.get("limit"), "10");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("반복 상세 저장은 정규화 표시값과 원문을 함께 보존한다", async () => {
+  const { savePlaceInfo } = await import("../lib/database.js");
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const originalFetch = globalThis.fetch;
+  let body;
+  globalThis.fetch = async (_url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(null, { status: 204 });
+  };
+
+  try {
+    await savePlaceInfo({
+      content_id: "123",
+      enrichment_raw: { common: { overview: "소개" }, images: [{ keep: true }] }
+    }, {
+      infoItems: [{ title: "이용 안내", description: "예약 불필요" }],
+      rawItems: [{ infoname: "이용 안내", infotext: "예약 불필요" }],
+      syncedAt: "2026-09-07T00:00:00.000Z"
+    });
+
+    assert.deepEqual(body.enrichment_raw, {
+      common: { overview: "소개" },
+      images: [{ keep: true }],
+      info: [{ infoname: "이용 안내", infotext: "예약 불필요" }],
+      infoItems: [{ title: "이용 안내", description: "예약 불필요" }]
+    });
+    assert.equal(body.info_synced_at, "2026-09-07T00:00:00.000Z");
+    assert.equal(body.enrichment_attempts, 0);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -325,6 +404,7 @@ test("media 저장은 자기 태그를 교체하고 빈 이미지로 기존 이�
       intro: { parking: "가능" },
       common: { overview: "소개" },
       images: [],
+      imageAttributions: [],
       pet: null
     });
     assert.equal(bodies[0].media_synced_at, "2026-09-05T00:00:00.000Z");

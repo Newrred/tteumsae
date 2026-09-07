@@ -290,3 +290,21 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
 - [x] TourAPI common·intro·media를 독립 단계로 보강하고 부분 성공 데이터를 보존하는 일일 배치 배포.
 - [ ] 배포 직후 수동 5건 보강은 로컬 Cron 자격 증명 불일치로 실행하지 않았다. 운영 비밀값을
   별도로 꺼내지 않고 일일 자동 배치에 맡기며, 다음 운영 점검에서 보강 건수와 오류율을 확인한다.
+
+## 9. 2026-09-07 공간 정보 보강 1차 검증
+
+- [x] Backend 172/172: `detailInfo2` 요청 계약, HTML·중복 정규화, info stage 부분 성공,
+  단건 상세 공개 범위, 사진 권리 메타데이터와 migration 007 정적 계약 통과.
+- [x] Backend 프로젝트 검사: 92개 관리 파일 검사 통과.
+- [x] Android 30 suites, 143/143: 상세 응답 파싱, 새·구 저장 스냅샷, fresh detail 병합,
+  대표 사진 URL 일치 출처 문구 통과.
+- [x] Android `lintDebug`: 오류 0, 경고 43. `assembleDebug` 성공.
+- [ ] `007_tour_detail_info.sql`은 운영 Supabase에 아직 적용하지 않았다.
+- [ ] Vercel Preview에서 presentation Cron을 실행해 실제 `detailInfo2` 샘플, 빈 응답,
+  `cpyrhtDivCd` 분포와 장소 단건 응답을 확인해야 한다.
+- [ ] 실제 데이터가 있는 상세 화면의 `추가 안내` 길이, 큰 글자, 공공누리 문구를 실기기에서
+  확인해야 한다.
+
+운영 migration과 Production 승격은 명시적 승인 전까지 진행하지 않는다. migration 없이
+새 presentation 코드를 먼저 배포하면 `info_synced_at` 조회가 실패하므로 배포 순서는
+`migration 007 → Preview smoke → 동일 아티팩트 Production 승격`으로 고정한다.

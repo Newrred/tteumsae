@@ -92,6 +92,14 @@ class TteumsaeApiTest {
                   "overview":"실제 장소 소개",
                   "image_url":"https://example.com/hero.jpg",
                   "image_urls":["https://example.com/one.jpg","https://example.com/two.jpg"],
+                  "detail_items":[{"title":"이용 안내","description":"예약 없이 입장 가능"}],
+                  "image_attributions":[{
+                    "image_url":"https://example.com/hero.jpg",
+                    "thumbnail_url":"https://example.com/thumb.jpg",
+                    "name":"미술관 전경",
+                    "copyright_type":"Type3",
+                    "copyright_label":"공공누리 제3유형"
+                  }],
                   "opening_hours":"09:00~18:00",
                   "closed_days":"월요일",
                   "last_admission":"17:30",
@@ -110,6 +118,9 @@ class TteumsaeApiTest {
         assertEquals("https://example.com", place.homepageUrl)
         assertEquals("실제 장소 소개", place.overview)
         assertEquals(2, place.imageUrls.size)
+        assertEquals("이용 안내", place.detailItems.single().title)
+        assertEquals("예약 없이 입장 가능", place.detailItems.single().description)
+        assertEquals("공공누리 제3유형", place.imageAttributions.single().copyrightLabel)
         assertEquals("17:30", place.lastAdmission)
         assertEquals("무료 주차", place.parkingInfo)
         assertEquals("2026-09-05", place.eventStartDate)

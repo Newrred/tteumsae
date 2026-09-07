@@ -1,6 +1,6 @@
 # 새 담당자 시작 안내
 
-기준일: `2026-09-05`
+기준일: `2026-09-07`
 Android 버전: `0.12.4` (`versionCode 25`)
 Android 패키지: `com.tteumsae.app`
 
@@ -27,6 +27,11 @@ Android 패키지: `com.tteumsae.app`
 현재 배율에서 가까운 후보를 대표 카테고리와 개수로 보여줍니다. 추가 이동시간,
 최대 체류시간과 늦어도 출발할 시각은 비교하기 쉬운 결과 목록에서 제공합니다.
 선택하지 않고 목적지로 바로 안내할 수도 있습니다.
+
+장소 단건 상세는 TourAPI 공통·소개·사진·반려동물 정보에 더해 `detailInfo2` 반복 안내와
+사진별 공공누리 유형을 처리한다. 반복 안내는 `추가 안내`에 값이 있을 때만 표시하고,
+사진 권리 문구는 실제 대표 사진 URL과 메타데이터가 일치할 때만 표시한다. 이 코드는
+준비됐지만 운영 반영에는 migration 007과 Preview smoke가 먼저 필요하다.
 
 이 흐름의 API 시간 모델은 `ARRIVAL_DEADLINE_V1`입니다. 서버가 요청 수신시각을
 기준으로 고정 안전여유 10분과 최소 체류 15분을 적용합니다. 기존
@@ -123,8 +128,8 @@ APK 위치:
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-2026-09-05 결과 지도·목록·상세 V2 반영 뒤 `testDebugUnitTest` 142/142,
-`lintDebug` 오류 0과 debug·release APK 빌드를 확인했습니다. 자동 테스트는 실제 지도,
+2026-09-07 공간 정보 보강 1차 반영 뒤 `testDebugUnitTest` 143/143,
+`lintDebug` 오류 0과 debug APK 빌드를 확인했습니다. 자동 테스트는 실제 지도,
 OAuth, 카카오맵 복귀와 알림 실기기 QA를 대신하지 않습니다.
 
 결과 화면의 최신 동작과 데이터 원칙은 [지도 후보·결과 목록·장소 상세 V2](13_RESULTS_MAP_DETAIL_V2.md),

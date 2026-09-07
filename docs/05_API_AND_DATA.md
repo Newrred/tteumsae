@@ -124,6 +124,7 @@ Vercel 경계 정책으로 교체해야 한다.
 | GET | `/api/cron/tour-sync` | Bearer | TourAPI 기본 장소 페이지 동기화 |
 | GET | `/api/cron/tour-catalog-sync` | Bearer | TourAPI 증분 카탈로그 동기화 |
 | GET | `/api/cron/tour-intro-sync` | Bearer | 운영시간·휴무일 intro 보강 |
+| GET | `/api/cron/tour-intro-sync?stage=presentation` | Bearer | 소개·사진·반려동물·반복 상세 보강 |
 | GET | `/api/ops/status` | Bearer | Gate 1 호출량·동기화·데이터 품질 집계 |
 
 ## 4. 장소 데이터 계약
@@ -152,9 +153,12 @@ Vercel 경계 정책으로 교체해야 한다.
 | `tags` | string[] | 아니오 | 정제한 편의 태그, 없으면 빈 배열 |
 | `opening_hours` | string | 예 | TourAPI 원문을 HTML 제거·공백 정리한 값 |
 | `closed_days` | string | 예 | TourAPI 원문을 HTML 제거·공백 정리한 값 |
+| `detail_items` | object[] | 아니오 | 단건 조회 전용. `title`, `description` 반복 상세 목록 |
+| `image_attributions` | object[] | 아니오 | 단건 조회 전용. 이미지 URL·명칭·공공누리 유형 |
 
-DB의 `raw`, `is_active`, `source_modified_at`, `synced_at` 필드는 공개 응답에서
-제외된다.
+`detail_items`와 `image_attributions`는 장소 목록·추천 payload를 키우지 않기 위해
+`GET /api/places/{id}`에서만 내려준다. DB의 `raw`, `enrichment_raw`, `is_active`,
+`source_modified_at`, `synced_at` 필드는 공개 응답에서 제외된다.
 
 현재 내부 카테고리는 다음 일곱 개다.
 
@@ -666,8 +670,14 @@ numOfRows=100
 
 경로: `GET /api/cron/tour-intro-sync`
 
-활성 장소의 `detailIntro2`를 제한된 배치와 동시성으로 보강한다. 실패는 기존 정상값을
-지우지 않고 재시도 시각과 오류 요약만 기록한다. 과거
+기본 stage는 활성 장소의 `detailIntro2`를 보강한다. `stage=presentation`은
+`detailCommon2`, `detailImage2`, `detailPetTour2`를 먼저 처리하고, 그 stage가 이미 끝난
+장소부터 `detailInfo2` 반복 상세를 별도 단계로 처리한다. `detailInfo2`는 HTML과 중복을
+제거해 제목·설명이 모두 있는 항목만 앱에 공개한다. 사진 응답의 `cpyrhtDivCd`는 URL과
+함께 보존하며 상세 화면은 실제 대표 사진 URL과 일치할 때만 권리 유형을 표시한다.
+
+모든 stage는 제한된 배치와 동시성으로 실행한다. 실패는 기존 정상값을 지우지 않고 재시도
+시각과 오류 요약만 기록한다. 과거
 `/api/cron/tour-detail-sync`는 예약되지 않은 레거시 경로였고 Vercel Hobby 함수
 12개 한도를 지키기 위해 2026-08-28 제거했다.
 
@@ -678,9 +688,10 @@ numOfRows=100
 | UTC | 한국시간(KST) | 작업 |
 |---|---|---|
 | 매일 18:20 | 다음 날 03:20 | 증분 카탈로그 동기화 (`tour-catalog-sync`) |
-| 매일 18:40 | 다음 날 03:40 | 소개·운영정보 보강 (`tour-intro-sync`) |
+| 매일 22:20 | 다음 날 07:20 | 운영정보 보강 (`tour-intro-sync`) |
+| 매일 22:40 | 다음 날 07:40 | 소개·사진·반복 상세 보강 (`stage=presentation`) |
 
-두 작업 모두 최대 실행시간 60초다. 데이터가 많으면 한 번에 전체를 끝내지 않고
+세 작업 모두 최대 실행시간 60초다. 데이터가 많으면 한 번에 전체를 끝내지 않고
 `sync_state` 커서를 다음 날 이어서 처리한다. Vercel Hobby는 같은 시간대 안의 분 단위
 실행 순서를 보장하지 않으므로 현재 20분·40분 차이를 작업 선후관계로 간주하면 안 된다.
 
@@ -694,6 +705,7 @@ numOfRows=100
 4. [`004_tour_enrichment.sql`](../backend/migrations/004_tour_enrichment.sql)
 5. [`005_sync_runtime_safety.sql`](../backend/migrations/005_sync_runtime_safety.sql)
 6. [`006_gate_1b_data_trust.sql`](../backend/migrations/006_gate_1b_data_trust.sql)
+7. [`007_tour_detail_info.sql`](../backend/migrations/007_tour_detail_info.sql)
 
 ### 7.1 `public.places`
 
@@ -712,7 +724,9 @@ numOfRows=100
 | `is_active` | boolean | 기본값 true |
 | `source_modified_at` | text | TourAPI 수정시각 원문 |
 | `synced_at` | timestamptz | 기본값 now() |
-| `raw` | jsonb | TourAPI 원문과 `_tteumsae` 보강 |
+| `raw` | jsonb | TourAPI 카탈로그 원문 |
+| `enrichment_raw` | jsonb | intro/common/media/detailInfo2 원문과 공개용 정규화 결과 |
+| `info_synced_at` | timestamptz | detailInfo2 정상 응답 확인 시각, 빈 응답도 완료로 기록 |
 
 인덱스는 `category`, `(latitude, longitude)`, 활성 행의 `is_active`에 있다.
 

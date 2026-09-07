@@ -3,6 +3,7 @@ import {
   listPlacesForIntroSync,
   recordPlaceEnrichmentFailure,
   savePlaceCommon,
+  savePlaceInfo,
   savePlaceMedia,
   savePlaceIntro
 } from "../../lib/database.js";
@@ -14,6 +15,7 @@ import {
   fetchPetTourDetail,
   fetchTourCommon,
   fetchTourImages,
+  fetchTourInfo,
   fetchTourIntro
 } from "../../lib/tour-api.js";
 import { runIntroBatch, runPresentationBatch } from "../../lib/tour-sync.js";
@@ -34,8 +36,10 @@ const presentationDefaultDependencies = {
   fetchCommon: fetchTourCommon,
   fetchImages: fetchTourImages,
   fetchPet: fetchPetTourDetail,
+  fetchInfo: fetchTourInfo,
   saveCommon: savePlaceCommon,
   saveMedia: savePlaceMedia,
+  saveInfo: savePlaceInfo,
   recordFailure: recordPlaceEnrichmentFailure,
   runBatch: runPresentationBatch,
   withLease: runWithSyncLease,
@@ -55,7 +59,10 @@ const emptyPresentationResult = {
   commonFailed: 0,
   mediaUpdated: 0,
   mediaEmpty: 0,
-  mediaFailed: 0
+  mediaFailed: 0,
+  infoUpdated: 0,
+  infoEmpty: 0,
+  infoFailed: 0
 };
 
 export function createTourIntroSyncHandler(dependencies = {}) {
@@ -145,8 +152,10 @@ export function createTourPresentationSyncHandler(dependencies = {}) {
                 fetchCommon: deps.fetchCommon,
                 fetchImages: deps.fetchImages,
                 fetchPet: deps.fetchPet,
+                fetchInfo: deps.fetchInfo,
                 saveCommon: deps.saveCommon,
                 saveMedia: deps.saveMedia,
+                saveInfo: deps.saveInfo,
                 recordFailure: deps.recordFailure,
                 concurrency,
                 syncedAt: now.toISOString(),

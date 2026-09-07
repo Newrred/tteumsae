@@ -2,6 +2,8 @@ package com.tteumsae.app.data.local
 
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
+import com.tteumsae.app.domain.PlaceDetailItem
+import com.tteumsae.app.domain.PlaceImageAttribution
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -34,6 +36,16 @@ class SavedPlaceSnapshotCodecTest {
             homepageUrl = "https://example.com",
             overview = "바다 옆 관광지",
             imageUrls = listOf("https://example.com/1.jpg", "https://example.com/2.jpg"),
+            detailItems = listOf(PlaceDetailItem("이용 안내", "예약 불필요")),
+            imageAttributions = listOf(
+                PlaceImageAttribution(
+                    imageUrl = "https://example.com/place.jpg",
+                    thumbnailUrl = "https://example.com/thumb.jpg",
+                    name = "장소 전경",
+                    copyrightType = "Type1",
+                    copyrightLabel = "공공누리 제1유형",
+                ),
+            ),
             lastAdmission = "17:30",
             parkingInfo = "무료 주차",
             eventStartDate = "2026-09-05",
@@ -61,6 +73,8 @@ class SavedPlaceSnapshotCodecTest {
         assertEquals(original.homepageUrl, decoded.homepageUrl)
         assertEquals(original.overview, decoded.overview)
         assertEquals(original.imageUrls, decoded.imageUrls)
+        assertEquals(original.detailItems, decoded.detailItems)
+        assertEquals(original.imageAttributions, decoded.imageAttributions)
         assertEquals(original.lastAdmission, decoded.lastAdmission)
         assertEquals(original.parkingInfo, decoded.parkingInfo)
         assertEquals(original.eventStartDate, decoded.eventStartDate)
@@ -113,6 +127,8 @@ class SavedPlaceSnapshotCodecTest {
         assertEquals("old", decoded.id)
         assertEquals("", decoded.overview)
         assertEquals(emptyList<String>(), decoded.imageUrls)
+        assertEquals(emptyList<PlaceDetailItem>(), decoded.detailItems)
+        assertEquals(emptyList<PlaceImageAttribution>(), decoded.imageAttributions)
         assertEquals("", decoded.parkingInfo)
     }
 

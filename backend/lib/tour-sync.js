@@ -1,5 +1,6 @@
 import {
   normalizeTourCommon,
+  normalizeTourInfo,
   normalizeTourIntro,
   normalizeTourMedia
 } from "./tour-api.js";
@@ -66,7 +67,10 @@ function emptyPresentationCounts() {
     commonFailed: 0,
     mediaUpdated: 0,
     mediaEmpty: 0,
-    mediaFailed: 0
+    mediaFailed: 0,
+    infoUpdated: 0,
+    infoEmpty: 0,
+    infoFailed: 0
   };
 }
 
@@ -83,8 +87,10 @@ export async function runPresentationBatch({
   fetchCommon,
   fetchImages,
   fetchPet,
+  fetchInfo,
   saveCommon,
   saveMedia,
+  saveInfo,
   recordFailure,
   concurrency = 2,
   syncedAt,
@@ -111,7 +117,8 @@ export async function runPresentationBatch({
 
       const needsCommon = place.common_synced_at == null;
       const needsMedia = place.media_synced_at == null;
-      const [commonResult, mediaResult] = await Promise.all([
+      const needsInfo = place.info_synced_at === null && !needsCommon && !needsMedia;
+      const [commonResult, mediaResult, infoResult] = await Promise.all([
         needsCommon
           ? settled(() => fetchCommon(place.content_id, { signal }))
           : null,
@@ -123,6 +130,13 @@ export async function runPresentationBatch({
               ]);
               return { images, pet };
             })
+          : null,
+        needsInfo
+          ? settled(() => fetchInfo(
+              place.content_id,
+              place.content_type_id,
+              { signal }
+            ))
           : null
       ]);
 
@@ -183,6 +197,25 @@ export async function runPresentationBatch({
       } else if (mediaResult) {
         counts.mediaFailed += 1;
         stageFailures.push({ stage: "media", error: mediaResult.error });
+      }
+
+      if (infoResult?.fulfilled) {
+        try {
+          const enrichment = normalizeTourInfo({
+            items: infoResult.value,
+            syncedAt
+          });
+          await saveInfo(place, enrichment, { signal });
+          completedStages += 1;
+          if (enrichment.infoItems.length > 0) counts.infoUpdated += 1;
+          else counts.infoEmpty += 1;
+        } catch (error) {
+          counts.infoFailed += 1;
+          stageFailures.push({ stage: "info", error });
+        }
+      } else if (infoResult) {
+        counts.infoFailed += 1;
+        stageFailures.push({ stage: "info", error: infoResult.error });
       }
 
       if (stageFailures.length === 0) {

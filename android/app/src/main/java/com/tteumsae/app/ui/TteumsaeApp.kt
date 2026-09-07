@@ -246,6 +246,7 @@ import com.tteumsae.app.ui.route.mergeFreshPlaceDetails
 import com.tteumsae.app.ui.route.normalizedHomepageUrl
 import com.tteumsae.app.ui.route.normalizedVisitInfo
 import com.tteumsae.app.ui.route.placeSourceCaption
+import com.tteumsae.app.ui.route.placePhotoSourceCaption
 import com.tteumsae.app.ui.route.plainTourText
 import com.tteumsae.app.ui.route.practicalVisitFacts
 import com.tteumsae.app.ui.route.compactMaximumStayLabel
@@ -1599,6 +1600,12 @@ private fun DetailScreen(
     }
     val heroImageUrl = normalizedVisitInfo(place.imageUrl)
         ?: place.imageUrls.firstOrNull()?.let(::normalizedVisitInfo)
+    val photoSourceCaption = placePhotoSourceCaption(place, heroImageUrl)
+    val additionalDetails = place.detailItems.mapNotNull { item ->
+        val title = normalizedVisitInfo(item.title)
+        val description = plainTourText(item.description)
+        if (title == null || description == null) null else title to description
+    }.distinct()
     Scaffold(
         containerColor = Color.White,
         topBar = {
@@ -1716,6 +1723,18 @@ private fun DetailScreen(
                             .clip(RoundedCornerShape(18.dp))
                             .aspectRatio(16f / 9f),
                     )
+                    photoSourceCaption?.let { caption ->
+                        Text(
+                            caption,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 6.dp),
+                            color = TteumMuted,
+                            textAlign = TextAlign.End,
+                            fontSize = 11.sp,
+                            lineHeight = 16.sp,
+                        )
+                    }
                 } else {
                     Surface(
                         modifier = Modifier
@@ -1880,6 +1899,26 @@ private fun DetailScreen(
                                 visitInfo.forEachIndexed { index, fact ->
                                     VisitInfo(fact.label, fact.value)
                                     if (index != visitInfo.lastIndex) {
+                                        HorizontalDivider(color = Color(0xFFE5E7EA))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (additionalDetails.isNotEmpty()) {
+                        Spacer(Modifier.height(26.dp))
+                        Text("추가 안내", fontSize = 21.sp, lineHeight = 27.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(11.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFF7F8F9),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                additionalDetails.forEachIndexed { index, (title, description) ->
+                                    VisitInfo(title, description)
+                                    if (index != additionalDetails.lastIndex) {
                                         HorizontalDivider(color = Color(0xFFE5E7EA))
                                     }
                                 }
