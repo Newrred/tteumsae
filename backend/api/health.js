@@ -11,6 +11,7 @@ export default {
       timestamp: new Date().toISOString(),
       integrations: {
         tourApiConfigured: Boolean(process.env.TOUR_API_SERVICE_KEY),
+        tourCongestionConfigured: Boolean(process.env.TOUR_CONGESTION_API_SERVICE_KEY),
         databaseConfigured: Boolean(
           process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
         ),

@@ -457,6 +457,10 @@ Invoke-RestMethod @request
 Cron은 DB를 변경하고 외부 API 쿼터를 사용한다. 운영 담당자의 승인 후 실행한다.
 비밀값을 명령 기록에 직접 적지 말고 별도 환경변수로 주입한다.
 
+혼잡 보강은 별도 활용신청과 migration 008 뒤 Preview에서만 먼저
+`/api/cron/tour-intro-sync?stage=congestion`을 수동 실행한다. 응답의 `matchedRows`,
+`ambiguousRows`, `unmatchedRows`를 기록하고 이름 불일치가 많은 상태에서는 Cron을 예약하지 않는다.
+
 ```powershell
 $base = 'https://tteumsae-backend-one.vercel.app'
 $headers = @{ Authorization = "Bearer $env:TTEUMSAE_CRON_CALL_SECRET" }

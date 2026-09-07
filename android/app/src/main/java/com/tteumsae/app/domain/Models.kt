@@ -44,6 +44,16 @@ data class PlaceImageAttribution(
     val copyrightLabel: String = "",
 )
 
+data class PlaceCongestionForecast(
+    val forecastDate: String,
+    val concentrationRate: Double,
+    val level: String,
+    val label: String,
+    val fetchedAt: String,
+    val source: String,
+    val basis: String,
+)
+
 data class PlaceCandidate(
     val id: String,
     val name: String,
@@ -78,6 +88,7 @@ data class PlaceCandidate(
     val reviewedAt: String = "",
     val detailItems: List<PlaceDetailItem> = emptyList(),
     val imageAttributions: List<PlaceImageAttribution> = emptyList(),
+    val congestionForecast: PlaceCongestionForecast? = null,
 )
 
 data class RouteLeg(

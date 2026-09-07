@@ -159,6 +159,9 @@ flowchart TD
     C3 --> IM["detailImage2"]
     C3 --> PET["detailPetTour2"]
     C3 --> IF["detailInfo2\n기존 presentation 완료 장소부터"]
+    C4["수동 stage=congestion\n활용신청·검수 후 Cron 후보"] --> CG["관광지 집중률\n강릉 51/51150"]
+    CG --> CM["유일한 exact 장소명만 연결"]
+    CM --> P
     I --> E["영업시간·휴무·편의 태그 정제"]
     CO --> E
     IM --> E
@@ -172,6 +175,9 @@ Vercel Cron 설정은 UTC `18:20`, `22:20`, `22:40`이며 한국시간으로 다
 `03:20`, `07:20`, `07:40`입니다.
 
 현재 상세 동기화 기본 배치는 하루 10개 장소이므로 전체 갱신에 오래 걸릴 수 있습니다.
+혼잡 예측 stage는 별도 API 키와 migration 008이 필요해 아직 예약 Cron에는 포함하지 않습니다.
+장소 ID가 없는 원천이므로 `MATCHED/AMBIGUOUS/UNMATCHED`를 분리하고 `MATCHED`만 상세에
+노출합니다.
 
 ## 6. 시간 안전 계산
 

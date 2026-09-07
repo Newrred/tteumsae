@@ -125,6 +125,7 @@ Vercel 경계 정책으로 교체해야 한다.
 | GET | `/api/cron/tour-catalog-sync` | Bearer | TourAPI 증분 카탈로그 동기화 |
 | GET | `/api/cron/tour-intro-sync` | Bearer | 운영시간·휴무일 intro 보강 |
 | GET | `/api/cron/tour-intro-sync?stage=presentation` | Bearer | 소개·사진·반려동물·반복 상세 보강 |
+| GET | `/api/cron/tour-intro-sync?stage=congestion` | Bearer | 강릉 관광지 향후 30일 집중률 선동기화(현재 수동 전용) |
 | GET | `/api/ops/status` | Bearer | Gate 1 호출량·동기화·데이터 품질 집계 |
 
 ## 4. 장소 데이터 계약
@@ -155,6 +156,7 @@ Vercel 경계 정책으로 교체해야 한다.
 | `closed_days` | string | 예 | TourAPI 원문을 HTML 제거·공백 정리한 값 |
 | `detail_items` | object[] | 아니오 | 단건 조회 전용. `title`, `description` 반복 상세 목록 |
 | `image_attributions` | object[] | 아니오 | 단건 조회 전용. 이미지 URL·명칭·공공누리 유형 |
+| `congestion_forecast` | object | 예 | 단건 조회 전용. 요청 예상일의 상대 집중률 예측 |
 
 `detail_items`와 `image_attributions`는 장소 목록·추천 payload를 키우지 않기 위해
 `GET /api/places/{id}`에서만 내려준다. DB의 `raw`, `enrichment_raw`, `is_active`,
@@ -278,6 +280,28 @@ Android 장소 탐색 화면은 최초 `강릉`을 선택해 `sigunguCode=1`을 
 
 활성 장소 한 건을 `{ "data": 장소 }`로 반환한다. ID가 없거나 비활성·미존재면
 404 `NOT_FOUND`다.
+
+선택 쿼리 `atEpochMillis`가 있으면 그 시각의 KST 날짜와 exact match된 혼잡 예측을 찾는다.
+생략하면 오늘 날짜를 사용한다. 예측이 없거나 migration 008 전이면 기존 상세 객체만
+정상 반환한다.
+
+```json
+{
+  "congestion_forecast": {
+    "forecast_date": "2026-09-08",
+    "concentration_rate": 72.35,
+    "level": "HIGH",
+    "label": "혼잡 예상",
+    "fetched_at": "2026-09-07T00:00:00.000Z",
+    "source": "한국관광공사 관광지 집중률 예측",
+    "basis": "해당 관광지의 과거 최고 혼잡 시기 대비 상대 예측값"
+  }
+}
+```
+
+`LOW < 40`, `MODERATE < 70`, `HIGH >= 70`은 앱 표시용 초기 구간이다. 이 값은
+KT 이동통신 기반으로 해당 관광지의 과거 최고 집중 시기를 100으로 둔 향후 30일 예측이며,
+실시간 혼잡이나 장소 간 절대 인원 비교에 사용하지 않는다. 추천 순위에도 반영하지 않는다.
 
 ### 5.4 `GET /api/geocode`
 
@@ -703,6 +727,9 @@ numOfRows=100
 `sync_state` 커서를 다음 날 이어서 처리한다. Vercel Hobby는 같은 시간대 안의 분 단위
 실행 순서를 보장하지 않으므로 현재 20분·40분 차이를 작업 선후관계로 간주하면 안 된다.
 
+`stage=congestion`은 같은 서버 함수 안에 구현됐지만 아직 Cron 목록에는 없다. 별도 활용신청,
+`TOUR_CONGESTION_API_SERVICE_KEY`, migration 008과 Preview 매칭률 검수가 끝난 후에만 예약한다.
+
 ## 7. Supabase 스키마
 
 마이그레이션 적용 순서:
@@ -714,6 +741,7 @@ numOfRows=100
 5. [`005_sync_runtime_safety.sql`](../backend/migrations/005_sync_runtime_safety.sql)
 6. [`006_gate_1b_data_trust.sql`](../backend/migrations/006_gate_1b_data_trust.sql)
 7. [`007_tour_detail_info.sql`](../backend/migrations/007_tour_detail_info.sql)
+8. [`008_tour_congestion_forecasts.sql`](../backend/migrations/008_tour_congestion_forecasts.sql)
 
 ### 7.1 `public.places`
 
@@ -788,6 +816,13 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 공급자 429/쿼터 오류는 503과 `Retry-After`로 공개되며 초기화 기준은 KST 자정이다.
 운영시간 파서는 평일·주말·입장 마감·자정 넘김을 보수적으로 판정하고 계절·공휴일·
 상충 문구를 완전히 해석하지 못하면 `OPEN` 대신 `UNKNOWN`을 반환한다.
+
+### 7.6 `public.tour_congestion_forecasts`
+
+강릉 법정동 코드 `51/51150`의 관광지별 향후 30일 상대 집중률을 날짜별로 저장한다.
+원천에는 TourAPI content ID가 없으므로 공백·유니코드를 정규화한 이름이 활성 비음식 장소
+하나와 정확히 일치할 때만 `content_id`를 연결한다. 나머지는 `AMBIGUOUS` 또는 `UNMATCHED`로
+보존하며 공개 상세에는 `MATCHED`만 조회된다. RLS를 활성화하고 service role에만 권한을 준다.
 
 `GET /api/ops/status`는 공개 health와 분리되어 `CRON_SECRET` Bearer 인증 뒤에만
 집계값을 반환한다. 좌표, 검색어, 사용자 식별자와 외부 응답 전문은 집계하지 않는다.

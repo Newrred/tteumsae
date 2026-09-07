@@ -1,11 +1,13 @@
 import {
   listPlacesForPresentationSync,
   listPlacesForIntroSync,
+  listPlacesForCongestionMatch,
   recordPlaceEnrichmentFailure,
   savePlaceCommon,
   savePlaceInfo,
   savePlaceMedia,
-  savePlaceIntro
+  savePlaceIntro,
+  upsertCongestionForecasts
 } from "../../lib/database.js";
 import { integerEnv, requiredEnv } from "../../lib/env.js";
 import { createDeadline, NETWORK_TIMEOUT_MS } from "../../lib/fetch-policy.js";
@@ -19,6 +21,8 @@ import {
   fetchTourIntro
 } from "../../lib/tour-api.js";
 import { runIntroBatch, runPresentationBatch } from "../../lib/tour-sync.js";
+import { fetchTourCongestionPage } from "../../lib/tour-congestion.js";
+import { runTourCongestionSync } from "../../lib/tour-congestion-sync.js";
 
 const defaultDependencies = {
   listPlaces: listPlacesForIntroSync,
@@ -63,6 +67,16 @@ const emptyPresentationResult = {
   infoUpdated: 0,
   infoEmpty: 0,
   infoFailed: 0
+};
+
+const congestionDefaultDependencies = {
+  fetchPage: fetchTourCongestionPage,
+  listPlaces: listPlacesForCongestionMatch,
+  saveRows: upsertCongestionForecasts,
+  runSync: runTourCongestionSync,
+  withLease: runWithSyncLease,
+  deadlineFactory: createDeadline,
+  now: () => new Date()
 };
 
 export function createTourIntroSyncHandler(dependencies = {}) {
@@ -177,16 +191,54 @@ export function createTourPresentationSyncHandler(dependencies = {}) {
   };
 }
 
+export function createTourCongestionSyncHandler(dependencies = {}) {
+  const deps = { ...congestionDefaultDependencies, ...dependencies };
+  return {
+    async fetch(request) {
+      if (request.method !== "GET") return methodNotAllowed(["GET"]);
+      try {
+        if (request.headers.get("authorization") !== `Bearer ${requiredEnv("CRON_SECRET")}`) {
+          return unauthorized();
+        }
+        const result = await deps.withLease({
+          jobId: "tour_congestion",
+          run: async () => {
+            const deadline = deps.deadlineFactory(NETWORK_TIMEOUT_MS.CRON);
+            try {
+              const now = deps.now();
+              return deps.runSync({
+                fetchPage: deps.fetchPage,
+                listPlaces: deps.listPlaces,
+                saveRows: deps.saveRows,
+                pageLimit: Math.min(integerEnv("TOUR_CONGESTION_PAGE_LIMIT", 20), 20),
+                fetchedAt: now.toISOString(),
+                signal: deadline.signal,
+                canStart: () => deadline.canStart(10_000)
+              });
+            } finally {
+              deadline.dispose();
+            }
+          }
+        });
+        return json(result);
+      } catch (error) {
+        return serverError(error);
+      }
+    }
+  };
+}
+
 export function createTourEnrichmentSyncHandler({
   introHandler = createTourIntroSyncHandler(),
-  presentationHandler = createTourPresentationSyncHandler()
+  presentationHandler = createTourPresentationSyncHandler(),
+  congestionHandler = createTourCongestionSyncHandler()
 } = {}) {
   return {
     fetch(request) {
       const stage = new URL(request.url).searchParams.get("stage");
-      return stage === "presentation"
-        ? presentationHandler.fetch(request)
-        : introHandler.fetch(request);
+      if (stage === "presentation") return presentationHandler.fetch(request);
+      if (stage === "congestion") return congestionHandler.fetch(request);
+      return introHandler.fetch(request);
     }
   };
 }

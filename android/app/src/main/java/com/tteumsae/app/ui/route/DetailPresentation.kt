@@ -68,6 +68,7 @@ internal fun mergeFreshPlaceDetails(
         imageAttributions = freshPlace.imageAttributions.ifEmpty {
             routePlace.imageAttributions
         },
+        congestionForecast = freshPlace.congestionForecast ?: routePlace.congestionForecast,
     )
 }
 
@@ -81,6 +82,24 @@ internal fun practicalVisitFacts(place: PlaceCandidate): List<PlaceVisitFact> = 
         add(PlaceVisitFact("행사 기간", it))
     }
     normalizedVisitInfo(place.parkingInfo)?.let { add(PlaceVisitFact("주차", it)) }
+    place.congestionForecast?.let { forecast ->
+        congestionForecastDateLabel(forecast.forecastDate)?.let { dateLabel ->
+            add(
+                PlaceVisitFact(
+                    "$dateLabel 혼잡",
+                    "${forecast.label} · 평소 최고치 대비 ${forecast.concentrationRate.toInt()}%",
+                ),
+            )
+        }
+    }
+}
+
+private fun congestionForecastDateLabel(value: String): String? {
+    val parts = value.split('-')
+    if (parts.size != 3) return null
+    val month = parts[1].toIntOrNull() ?: return null
+    val day = parts[2].toIntOrNull() ?: return null
+    return "${month}월 ${day}일"
 }
 
 internal fun structuredClosedDays(value: String): String = value

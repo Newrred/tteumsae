@@ -109,6 +109,15 @@ class TteumsaeApiTest {
                   "data_provenance":"CURATION",
                   "operating_info_status":"VERIFIED",
                   "reviewed_at":"2026-08-28T00:00:00Z"
+                  ,"congestion_forecast":{
+                    "forecast_date":"2026-09-08",
+                    "concentration_rate":72.35,
+                    "level":"HIGH",
+                    "label":"혼잡 예상",
+                    "fetched_at":"2026-09-07T00:00:00Z",
+                    "source":"한국관광공사 관광지 집중률 예측",
+                    "basis":"해당 관광지의 과거 최고 혼잡 시기 대비 상대 예측값"
+                  }
                 }}
                 """.trimIndent(),
             ),
@@ -126,6 +135,9 @@ class TteumsaeApiTest {
         assertEquals("2026-09-05", place.eventStartDate)
         assertEquals("CURATION", place.dataProvenance)
         assertEquals("VERIFIED", place.operatingInfoStatus)
+        assertEquals("혼잡 예상", place.congestionForecast?.label)
+        assertEquals(72.35, place.congestionForecast?.concentrationRate ?: 0.0, 0.001)
+        assertEquals("2026-09-08", place.congestionForecast?.forecastDate)
         assertEquals("", place.reason)
     }
 

@@ -4,6 +4,7 @@ import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.domain.PlaceDetailItem
 import com.tteumsae.app.domain.PlaceImageAttribution
+import com.tteumsae.app.domain.PlaceCongestionForecast
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -64,6 +65,15 @@ class DetailPresentationTest {
                     copyrightLabel = "공공누리 제3유형",
                 ),
             ),
+            congestionForecast = PlaceCongestionForecast(
+                forecastDate = "2026-09-08",
+                concentrationRate = 72.35,
+                level = "HIGH",
+                label = "혼잡 예상",
+                fetchedAt = "2026-09-07T00:00:00Z",
+                source = "한국관광공사 관광지 집중률 예측",
+                basis = "상대 예측값",
+            ),
         )
 
         val merged = mergeFreshPlaceDetails(routePlace, fresh)
@@ -76,6 +86,7 @@ class DetailPresentationTest {
         assertEquals("건물 뒤 주차장", merged.parkingInfo)
         assertEquals("이용 안내", merged.detailItems.single().title)
         assertEquals("공공누리 제3유형", merged.imageAttributions.single().copyrightLabel)
+        assertEquals("혼잡 예상", merged.congestionForecast?.label)
     }
 
     @Test
@@ -105,6 +116,26 @@ class DetailPresentationTest {
             normalizedHomepageUrl("<a href='https://example.com/place'>홈페이지</a>"),
         )
         assertTrue(placeSourceCaption(place().copy(dataProvenance = "TOUR_API")).contains("TourAPI"))
+    }
+
+    @Test
+    fun `혼잡 예측은 날짜와 상대값임을 함께 표시한다`() {
+        val facts = practicalVisitFacts(
+            place().copy(
+                congestionForecast = PlaceCongestionForecast(
+                    forecastDate = "2026-09-08",
+                    concentrationRate = 72.35,
+                    level = "HIGH",
+                    label = "혼잡 예상",
+                    fetchedAt = "2026-09-07T00:00:00Z",
+                    source = "한국관광공사 관광지 집중률 예측",
+                    basis = "해당 관광지의 과거 최고 혼잡 시기 대비 상대 예측값",
+                ),
+            ),
+        )
+
+        assertEquals("9월 8일 혼잡", facts.single().label)
+        assertEquals("혼잡 예상 · 평소 최고치 대비 72%", facts.single().value)
     }
 
     @Test

@@ -445,6 +445,58 @@ export async function savePlaceMedia(place, enrichment, { signal } = {}) {
   });
 }
 
+function isMissingCongestionTable(error) {
+  return ["42P01", "PGRST205"].includes(error.code) ||
+    /tour_congestion_forecasts/i.test(error.databaseMessage ?? "");
+}
+
+export async function getPlaceCongestionForecast(
+  contentId,
+  forecastDate,
+  { signal } = {}
+) {
+  const query = new URLSearchParams({
+    select: "forecast_date,concentration_rate,level,fetched_at",
+    content_id: `eq.${contentId}`,
+    forecast_date: `eq.${forecastDate}`,
+    limit: "1"
+  });
+  try {
+    const rows = await databaseRequest(`tour_congestion_forecasts?${query}`, { signal });
+    return rows?.[0] ?? null;
+  } catch (error) {
+    if (isMissingCongestionTable(error)) return null;
+    throw error;
+  }
+}
+
+export async function listPlacesForCongestionMatch({ sigunguCode = 1, signal } = {}) {
+  const query = new URLSearchParams({
+    select: "content_id,name,category",
+    is_active: "eq.true",
+    sigungu_code: `eq.${sigunguCode}`,
+    category: "not.in.(RESTAURANT,CAFE)",
+    order: "name.asc",
+    limit: "500"
+  });
+  return databaseRequest(`places?${query}`, { signal });
+}
+
+export async function upsertCongestionForecasts(rows, { signal } = {}) {
+  const chunkSize = 500;
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    await databaseRequest(
+      "tour_congestion_forecasts?on_conflict=area_code,sigungu_code,source_name,forecast_date",
+      {
+        method: "POST",
+        body: rows.slice(index, index + chunkSize),
+        prefer: "resolution=merge-duplicates,return=minimal",
+        signal
+      }
+    );
+  }
+}
+
 export async function savePlaceInfo(place, enrichment, { signal } = {}) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
     method: "PATCH",

@@ -50,6 +50,8 @@ Android 버전: `0.12.4` (`versionCode 25`)
 | 복수 route | `호환 전용` | 저수준 `/api/route`와 Android wrapper는 경유지 0~5개 유지 | `backend/api/route.js`, `data/TteumsaeApi.kt` |
 | 반복 상세 | `코드 검증` | `detailInfo2` 제목·설명을 단건 상세의 `추가 안내`로만 제공 | migration 007·Preview·운영 배치 확인 필요 |
 | 사진 권리 정보 | `코드 검증` | `cpyrhtDivCd`를 보존하고 실제 대표 사진과 URL이 일치할 때 공공누리 유형 표시 | 변경 금지 이미지 변형 정책의 시각 QA 필요 |
+| 도보 실제 경로 | `코드 검증` | 기능 플래그를 켠 경우 카카오맵 `ACCESSIBLE` 경로로 corridor·이동시간 계산, 실패 시 기존 예상값으로 복귀 | Preview 실응답·무료 쿼터 대상 확인 전 운영 비활성 |
+| 관광지 혼잡 예측 | `코드 검증` | 도착 예정일의 상대 집중률을 exact unique name 매칭된 관광지 상세에서만 표시 | 별도 키·migration 008·실데이터 오매칭 QA 필요; 추천 순위 미반영 |
 
 ## 4. 선택형 출발 알림
 

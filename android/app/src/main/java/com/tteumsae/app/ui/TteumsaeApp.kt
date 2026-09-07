@@ -966,7 +966,12 @@ fun TteumsaeApp() {
                 detailMetadataLoading = true
                 detailMetadataFailed = false
                 try {
-                    val loaded = api.place(recommendation.place.id)
+                    val expectedArrivalEpochMillis = routeState.calculatedAtEpochMillis
+                        ?.plus(recommendation.place.firstLegMinutes * 60_000L)
+                    val loaded = api.place(
+                        recommendation.place.id,
+                        atEpochMillis = expectedArrivalEpochMillis,
+                    )
                     if (selectedDetailPlaceId == recommendation.place.id) {
                         freshDetailPlace = loaded
                     }

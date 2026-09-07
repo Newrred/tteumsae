@@ -132,9 +132,15 @@ class TteumsaeApi(
             )
         }
 
-    suspend fun place(contentId: String): PlaceCandidate = withContext(Dispatchers.IO) {
+    suspend fun place(
+        contentId: String,
+        atEpochMillis: Long? = null,
+    ): PlaceCandidate = withContext(Dispatchers.IO) {
         val encoded = URLEncoder.encode(contentId, StandardCharsets.UTF_8.name())
-        parsePlaceResponse(request("GET", "/api/places/$encoded"))
+        val timeQuery = atEpochMillis?.takeIf { it > 0 }
+            ?.let { "?atEpochMillis=$it" }
+            .orEmpty()
+        parsePlaceResponse(request("GET", "/api/places/$encoded$timeQuery"))
     }
 
     private fun request(
@@ -431,6 +437,21 @@ private fun JSONObject.toPlaceCandidate(
             copyrightLabel = it.optText("copyright_label"),
         )
     }?.filter { it.imageUrl.isNotBlank() || it.thumbnailUrl.isNotBlank() }.orEmpty(),
+    congestionForecast = optJSONObject("congestion_forecast")?.let {
+        com.tteumsae.app.domain.PlaceCongestionForecast(
+            forecastDate = it.optText("forecast_date"),
+            concentrationRate = it.optDouble("concentration_rate"),
+            level = it.optText("level"),
+            label = it.optText("label"),
+            fetchedAt = it.optText("fetched_at"),
+            source = it.optText("source"),
+            basis = it.optText("basis"),
+        )
+    }?.takeIf {
+        it.forecastDate.isNotBlank() &&
+            it.label.isNotBlank() &&
+            it.concentrationRate in 0.0..100.0
+    },
 )
 
 internal fun parsePlaceResponse(response: JSONObject): PlaceCandidate =
