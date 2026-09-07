@@ -428,6 +428,12 @@ private fun JSONObject.toPlaceCandidate(
             description = it.optText("description"),
         )
     }?.filter { it.title.isNotBlank() && it.description.isNotBlank() }.orEmpty(),
+    accessibilityItems = optJSONArray("accessibility_items")?.mapObjects {
+        com.tteumsae.app.domain.PlaceDetailItem(
+            title = it.optText("title"),
+            description = it.optText("description"),
+        )
+    }?.filter { it.title.isNotBlank() && it.description.isNotBlank() }.orEmpty(),
     imageAttributions = optJSONArray("image_attributions")?.mapObjects {
         com.tteumsae.app.domain.PlaceImageAttribution(
             imageUrl = it.optText("image_url"),

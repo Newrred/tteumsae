@@ -22,6 +22,7 @@ const requiredFiles = [
   "migrations/004_tour_enrichment.sql",
   "migrations/005_sync_runtime_safety.sql",
   "migrations/006_gate_1b_data_trust.sql",
+  "migrations/010_tour_accessibility.sql",
   "scripts/verify-user-rls.js",
   "scripts/export-place-curations.mjs",
   "scripts/apply-tour-curation-research.mjs",
@@ -34,6 +35,8 @@ const requiredFiles = [
   "lib/fetch-policy.js",
   "lib/sync-lease.js",
   "lib/tour-sync.js",
+  "lib/tour-accessibility.js",
+  "lib/tour-accessibility-sync.js",
   "privacy.html",
   "account-deletion.html",
   ".env.example",
@@ -46,6 +49,7 @@ for (const file of requiredFiles) {
 
 const envExample = await readFile(new URL(".env.example", root), "utf8");
 assert.match(envExample, /^TOUR_PRESENTATION_SYNC_BATCH_SIZE=\d+$/m);
+assert.match(envExample, /^TOUR_ACCESSIBILITY_SYNC_BATCH_SIZE=\d+$/m);
 const vercelConfig = JSON.parse(await readFile(new URL("vercel.json", root), "utf8"));
 assert.ok(
   vercelConfig.crons?.some(

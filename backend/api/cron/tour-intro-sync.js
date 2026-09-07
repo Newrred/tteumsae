@@ -2,11 +2,14 @@ import {
   listPlacesForPresentationSync,
   listPlacesForIntroSync,
   listPlacesForCongestionMatch,
+  getSyncState,
   recordPlaceEnrichmentFailure,
   savePlaceCommon,
   savePlaceInfo,
   savePlaceMedia,
   savePlaceIntro,
+  savePlaceAccessibility,
+  saveSyncState,
   upsertCongestionForecasts
 } from "../../lib/database.js";
 import { integerEnv, requiredEnv } from "../../lib/env.js";
@@ -23,6 +26,11 @@ import {
 import { runIntroBatch, runPresentationBatch } from "../../lib/tour-sync.js";
 import { fetchTourCongestionPage } from "../../lib/tour-congestion.js";
 import { runTourCongestionSync } from "../../lib/tour-congestion-sync.js";
+import {
+  fetchTourAccessibilityDetail,
+  fetchTourAccessibilityPage
+} from "../../lib/tour-accessibility.js";
+import { runAccessibilityBatch } from "../../lib/tour-accessibility-sync.js";
 
 const defaultDependencies = {
   listPlaces: listPlacesForIntroSync,
@@ -74,6 +82,18 @@ const congestionDefaultDependencies = {
   listPlaces: listPlacesForCongestionMatch,
   saveRows: upsertCongestionForecasts,
   runSync: runTourCongestionSync,
+  withLease: runWithSyncLease,
+  deadlineFactory: createDeadline,
+  now: () => new Date()
+};
+
+const accessibilityDefaultDependencies = {
+  getState: getSyncState,
+  saveState: saveSyncState,
+  fetchPage: fetchTourAccessibilityPage,
+  fetchDetail: fetchTourAccessibilityDetail,
+  saveAccessibility: savePlaceAccessibility,
+  runBatch: runAccessibilityBatch,
   withLease: runWithSyncLease,
   deadlineFactory: createDeadline,
   now: () => new Date()
@@ -228,16 +248,97 @@ export function createTourCongestionSyncHandler(dependencies = {}) {
   };
 }
 
+export function createTourAccessibilitySyncHandler(dependencies = {}) {
+  const deps = { ...accessibilityDefaultDependencies, ...dependencies };
+  return {
+    async fetch(request) {
+      if (request.method !== "GET") return methodNotAllowed(["GET"]);
+      try {
+        if (request.headers.get("authorization") !== `Bearer ${requiredEnv("CRON_SECRET")}`) {
+          return unauthorized();
+        }
+        const result = await deps.withLease({
+          jobId: "tour_accessibility",
+          run: async () => {
+            const deadline = deps.deadlineFactory(NETWORK_TIMEOUT_MS.CRON);
+            try {
+              const now = deps.now();
+              const state = await deps.getState("tour_accessibility", {
+                signal: deadline.signal
+              });
+              const page = Math.max(Number.parseInt(state.next_page, 10) || 1, 1);
+              const pageSize = Math.min(
+                Math.max(integerEnv("TOUR_ACCESSIBILITY_SYNC_BATCH_SIZE", 20), 1),
+                40
+              );
+              const source = await deps.fetchPage(page, pageSize, {
+                signal: deadline.signal
+              });
+              const counts = await deps.runBatch({
+                items: source.items,
+                fetchDetail: deps.fetchDetail,
+                saveAccessibility: deps.saveAccessibility,
+                concurrency: Math.min(integerEnv("TOUR_SYNC_CONCURRENCY", 4), 4),
+                syncedAt: now.toISOString(),
+                signal: deadline.signal,
+                canStart: () => deadline.canStart(10_000)
+              });
+              const totalPages = Math.max(
+                Math.ceil(source.totalCount / Math.max(source.numOfRows, 1)),
+                1
+              );
+              const pageCompleted = counts.deferred === 0;
+              const cycleCompleted = pageCompleted && (
+                page >= totalPages || source.rawCount === 0
+              );
+              const nextPage = pageCompleted
+                ? cycleCompleted ? 1 : page + 1
+                : page;
+              await deps.saveState({
+                ...state,
+                id: "tour_accessibility",
+                next_page: nextPage,
+                total_count: source.totalCount,
+                last_processed_page: page,
+                last_item_count: source.rawCount,
+                last_error: null,
+                last_completed_at: cycleCompleted && counts.failed === 0
+                  ? now.toISOString()
+                  : state.last_completed_at
+              }, { signal: deadline.signal });
+              const incomplete = counts.deferred > 0 || counts.failed > 0;
+              return {
+                status: incomplete ? "partial" : cycleCompleted ? "completed" : "partial",
+                page,
+                totalCount: source.totalCount,
+                nextPage,
+                ...counts
+              };
+            } finally {
+              deadline.dispose();
+            }
+          }
+        });
+        return json(result);
+      } catch (error) {
+        return serverError(error);
+      }
+    }
+  };
+}
+
 export function createTourEnrichmentSyncHandler({
   introHandler = createTourIntroSyncHandler(),
   presentationHandler = createTourPresentationSyncHandler(),
-  congestionHandler = createTourCongestionSyncHandler()
+  congestionHandler = createTourCongestionSyncHandler(),
+  accessibilityHandler = createTourAccessibilitySyncHandler()
 } = {}) {
   return {
     fetch(request) {
       const stage = new URL(request.url).searchParams.get("stage");
       if (stage === "presentation") return presentationHandler.fetch(request);
       if (stage === "congestion") return congestionHandler.fetch(request);
+      if (stage === "accessibility") return accessibilityHandler.fetch(request);
       return introHandler.fetch(request);
     }
   };

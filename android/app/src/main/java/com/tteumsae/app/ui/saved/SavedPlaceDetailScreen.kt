@@ -77,6 +77,11 @@ internal fun SavedPlaceDetailScreen(
         val description = plainTourText(item.description)
         if (title == null || description == null) null else title to description
     }.distinct()
+    val accessibilityDetails = place.accessibilityItems.mapNotNull { item ->
+        val title = normalizedVisitInfo(item.title)
+        val description = plainTourText(item.description)
+        if (title == null || description == null) null else title to description
+    }.distinct()
 
     Scaffold(
         containerColor = Color.White,
@@ -244,6 +249,16 @@ internal fun SavedPlaceDetailScreen(
                         Spacer(Modifier.height(10.dp))
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             additionalDetails.forEach { (title, description) ->
+                                SavedDetailInfoRow(label = title, value = description)
+                            }
+                        }
+                    }
+                    if (accessibilityDetails.isNotEmpty()) {
+                        Spacer(Modifier.height(24.dp))
+                        SavedDetailSectionTitle("접근성 안내")
+                        Spacer(Modifier.height(10.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            accessibilityDetails.forEach { (title, description) ->
                                 SavedDetailInfoRow(label = title, value = description)
                             }
                         }

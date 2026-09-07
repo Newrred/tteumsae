@@ -35,6 +35,18 @@ object SavedPlaceSnapshotCodec {
             },
         )
         .put(
+            "accessibilityItems",
+            JSONArray().apply {
+                place.accessibilityItems.forEach { item ->
+                    put(
+                        JSONObject()
+                            .put("title", item.title)
+                            .put("description", item.description),
+                    )
+                }
+            },
+        )
+        .put(
             "imageAttributions",
             JSONArray().apply {
                 place.imageAttributions.forEach { attribution ->
@@ -65,6 +77,7 @@ object SavedPlaceSnapshotCodec {
         val tags = json.optJSONArray("tags")
         val imageUrls = json.optJSONArray("imageUrls")
         val detailItems = json.optJSONArray("detailItems")
+        val accessibilityItems = json.optJSONArray("accessibilityItems")
         val imageAttributions = json.optJSONArray("imageAttributions")
         PlaceCandidate(
             id = json.getString("id"),
@@ -114,6 +127,18 @@ object SavedPlaceSnapshotCodec {
                 if (detailItems != null) {
                     for (index in 0 until detailItems.length()) {
                         val item = detailItems.optJSONObject(index) ?: continue
+                        val title = item.optString("title").trim()
+                        val description = item.optString("description").trim()
+                        if (title.isNotBlank() && description.isNotBlank()) {
+                            add(com.tteumsae.app.domain.PlaceDetailItem(title, description))
+                        }
+                    }
+                }
+            },
+            accessibilityItems = buildList {
+                if (accessibilityItems != null) {
+                    for (index in 0 until accessibilityItems.length()) {
+                        val item = accessibilityItems.optJSONObject(index) ?: continue
                         val title = item.optString("title").trim()
                         val description = item.optString("description").trim()
                         if (title.isNotBlank() && description.isNotBlank()) {

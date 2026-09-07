@@ -67,6 +67,9 @@ internal fun mergeFreshPlaceDetails(
         ),
         reviewedAt = preferFresh(freshPlace.reviewedAt, routePlace.reviewedAt),
         detailItems = freshPlace.detailItems.ifEmpty { routePlace.detailItems },
+        accessibilityItems = freshPlace.accessibilityItems.ifEmpty {
+            routePlace.accessibilityItems
+        },
         imageAttributions = freshPlace.imageAttributions.ifEmpty {
             routePlace.imageAttributions
         },

@@ -60,6 +60,7 @@ class DetailPresentationTest {
             telephone = "033-123-4567",
             parkingInfo = "건물 뒤 주차장",
             detailItems = listOf(PlaceDetailItem("이용 안내", "예약 불필요")),
+            accessibilityItems = listOf(PlaceDetailItem("휠체어", "대여 가능")),
             imageAttributions = listOf(
                 PlaceImageAttribution(
                     imageUrl = "https://example.com/hero.jpg",
@@ -97,6 +98,7 @@ class DetailPresentationTest {
         assertEquals("033-123-4567", merged.telephone)
         assertEquals("건물 뒤 주차장", merged.parkingInfo)
         assertEquals("이용 안내", merged.detailItems.single().title)
+        assertEquals("휠체어", merged.accessibilityItems.single().title)
         assertEquals("공공누리 제3유형", merged.imageAttributions.single().copyrightLabel)
         assertEquals("혼잡 예상", merged.congestionForecast?.label)
         assertEquals("비 예상", merged.weatherForecast?.conditionLabel)

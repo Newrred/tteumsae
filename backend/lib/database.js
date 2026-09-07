@@ -86,6 +86,7 @@ function toPublicPlace(row) {
   };
   if (enrichmentRaw && typeof enrichmentRaw === "object") {
     result.detail_items = publicDetailItems(enrichmentRaw.infoItems);
+    result.accessibility_items = publicDetailItems(enrichmentRaw.accessibilityItems);
     result.image_attributions = publicImageAttributions(enrichmentRaw);
   }
   for (const column of effectivePublicColumns.filter((name) => name.startsWith("effective_"))) {
@@ -551,6 +552,19 @@ export async function savePlaceInfo(place, enrichment, { signal } = {}) {
     prefer: "return=minimal",
     signal
   });
+}
+
+export async function savePlaceAccessibility(contentId, enrichment, { signal } = {}) {
+  return Boolean(await databaseRequest("rpc/save_place_accessibility", {
+    method: "POST",
+    body: {
+      p_content_id: String(contentId),
+      p_accessibility_raw: enrichment.raw ?? null,
+      p_accessibility_items: Array.isArray(enrichment.items) ? enrichment.items : [],
+      p_synced_at: enrichment.syncedAt
+    },
+    signal
+  }));
 }
 
 export async function recordPlaceEnrichmentFailure(

@@ -9,6 +9,7 @@ import {
   listPlaces,
   recordProviderUsageResult,
   reserveProviderUsage,
+  savePlaceAccessibility,
   upsertPlaceCurations
 } from "../lib/database.js";
 
@@ -34,6 +35,8 @@ test("장소 단건 조회만 반복 상세와 사진 권리 메타데이터를 
       enrichment_raw: {
         info: [{ infoname: "원문" }],
         infoItems: [{ title: "이용 안내", description: "예약 불필요" }],
+        accessibility: { wheelchair: "원문" },
+        accessibilityItems: [{ title: "휠체어", description: "대여 가능" }],
         imageAttributions: [{
           image_url: "https://example.com/place.jpg",
           thumbnail_url: null,
@@ -51,8 +54,40 @@ test("장소 단건 조회만 반복 상세와 사진 권리 메타데이터를 
     assert.deepEqual(place.detail_items, [
       { title: "이용 안내", description: "예약 불필요" }
     ]);
+    assert.deepEqual(place.accessibility_items, [
+      { title: "휠체어", description: "대여 가능" }
+    ]);
     assert.equal(place.image_attributions[0].copyright_label, "공공누리 제1유형");
     assert.equal("enrichment_raw" in place, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("무장애 상세 저장은 원자 병합 RPC에 정규화 값만 보낸다", async () => {
+  process.env.SUPABASE_URL = "https://supabase.test";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role";
+  const originalFetch = globalThis.fetch;
+  let request;
+  globalThis.fetch = async (url, init) => {
+    request = { url: String(url), init };
+    return Response.json(true);
+  };
+
+  try {
+    const matched = await savePlaceAccessibility("123", {
+      raw: { wheelchair: "가능" },
+      items: [{ title: "휠체어", description: "가능" }],
+      syncedAt: "2026-09-07T00:00:00.000Z"
+    });
+    assert.equal(matched, true);
+    assert.match(request.url, /\/rest\/v1\/rpc\/save_place_accessibility$/);
+    assert.deepEqual(JSON.parse(request.init.body), {
+      p_content_id: "123",
+      p_accessibility_raw: { wheelchair: "가능" },
+      p_accessibility_items: [{ title: "휠체어", description: "가능" }],
+      p_synced_at: "2026-09-07T00:00:00.000Z"
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

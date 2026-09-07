@@ -1611,6 +1611,11 @@ private fun DetailScreen(
         val description = plainTourText(item.description)
         if (title == null || description == null) null else title to description
     }.distinct()
+    val accessibilityDetails = place.accessibilityItems.mapNotNull { item ->
+        val title = normalizedVisitInfo(item.title)
+        val description = plainTourText(item.description)
+        if (title == null || description == null) null else title to description
+    }.distinct()
     Scaffold(
         containerColor = Color.White,
         topBar = {
@@ -1924,6 +1929,31 @@ private fun DetailScreen(
                                 additionalDetails.forEachIndexed { index, (title, description) ->
                                     VisitInfo(title, description)
                                     if (index != additionalDetails.lastIndex) {
+                                        HorizontalDivider(color = Color(0xFFE5E7EA))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (accessibilityDetails.isNotEmpty()) {
+                        Spacer(Modifier.height(26.dp))
+                        Text(
+                            "접근성 안내",
+                            fontSize = 21.sp,
+                            lineHeight = 27.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        Spacer(Modifier.height(11.dp))
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Color(0xFFF7F8F9),
+                            shape = RoundedCornerShape(16.dp),
+                        ) {
+                            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                accessibilityDetails.forEachIndexed { index, (title, description) ->
+                                    VisitInfo(title, description)
+                                    if (index != accessibilityDetails.lastIndex) {
                                         HorizontalDivider(color = Color(0xFFE5E7EA))
                                     }
                                 }

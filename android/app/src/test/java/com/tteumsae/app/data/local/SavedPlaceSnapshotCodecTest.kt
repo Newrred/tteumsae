@@ -37,6 +37,7 @@ class SavedPlaceSnapshotCodecTest {
             overview = "바다 옆 관광지",
             imageUrls = listOf("https://example.com/1.jpg", "https://example.com/2.jpg"),
             detailItems = listOf(PlaceDetailItem("이용 안내", "예약 불필요")),
+            accessibilityItems = listOf(PlaceDetailItem("접근로", "턱 없는 접근로")),
             imageAttributions = listOf(
                 PlaceImageAttribution(
                     imageUrl = "https://example.com/place.jpg",
@@ -74,6 +75,7 @@ class SavedPlaceSnapshotCodecTest {
         assertEquals(original.overview, decoded.overview)
         assertEquals(original.imageUrls, decoded.imageUrls)
         assertEquals(original.detailItems, decoded.detailItems)
+        assertEquals(original.accessibilityItems, decoded.accessibilityItems)
         assertEquals(original.imageAttributions, decoded.imageAttributions)
         assertEquals(original.lastAdmission, decoded.lastAdmission)
         assertEquals(original.parkingInfo, decoded.parkingInfo)

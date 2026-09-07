@@ -160,6 +160,9 @@ flowchart TD
     C3 --> PET["detailPetTour2"]
     C3 --> IF["detailInfo2\n기존 presentation 완료 장소부터"]
     C4["수동 stage=congestion\n활용신청·검수 후 Cron 후보"] --> CG["관광지 집중률\n강릉 51/51150"]
+    C5["수동 stage=accessibility\n활용신청 후 실행"] --> AW["KorWithService2\n강원 무장애 목록"]
+    AW --> AD["detailWithTour2\n접근성 안내"]
+    AD --> P
     CG --> CM["유일한 exact 장소명만 연결"]
     CM --> P
     I --> E["영업시간·휴무·편의 태그 정제"]
@@ -176,6 +179,9 @@ Vercel Cron 설정은 UTC `18:20`, `22:20`, `22:40`이며 한국시간으로 다
 
 현재 상세 동기화 기본 배치는 하루 10개 장소이므로 전체 갱신에 오래 걸릴 수 있습니다.
 혼잡 예측 stage는 별도 API 키와 migration 008이 필요해 아직 예약 Cron에는 포함하지 않습니다.
+접근성 stage도 예약 Cron에 포함하지 않으며, 강원도 무장애 목록의 페이지 cursor를 따라
+대상 장소만 상세 조회한 뒤 기존 `enrichment_raw`에 원자 병합합니다. 공개 API와 Android는
+정규화된 안내만 사용하고 공급자 원문은 노출하지 않습니다.
 기상청 단기예보는 장소 상세 요청에서 확인된 야외 장소에만 실행하며, 위경도를 5km 격자로
 변환한 뒤 `weather_forecast_cache`의 같은 격자·예보시각·최신 발표를 우선 읽습니다. 캐시 미스만
 외부 호출하고 공급자 실패는 상세 응답에서 날씨만 생략합니다. 기능 플래그는 기본적으로 꺼져 있습니다.

@@ -99,6 +99,7 @@ data class PlaceCandidate(
     val parkingInfoStatus: String = "",
     val reviewedAt: String = "",
     val detailItems: List<PlaceDetailItem> = emptyList(),
+    val accessibilityItems: List<PlaceDetailItem> = emptyList(),
     val imageAttributions: List<PlaceImageAttribution> = emptyList(),
     val congestionForecast: PlaceCongestionForecast? = null,
     val weatherForecast: PlaceWeatherForecast? = null,

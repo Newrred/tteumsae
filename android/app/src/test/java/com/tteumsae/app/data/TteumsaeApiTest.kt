@@ -93,6 +93,7 @@ class TteumsaeApiTest {
                   "image_url":"https://example.com/hero.jpg",
                   "image_urls":["https://example.com/one.jpg","https://example.com/two.jpg"],
                   "detail_items":[{"title":"이용 안내","description":"예약 없이 입장 가능"}],
+                  "accessibility_items":[{"title":"휠체어","description":"대여 가능"}],
                   "image_attributions":[{
                     "image_url":"https://example.com/hero.jpg",
                     "thumbnail_url":"https://example.com/thumb.jpg",
@@ -140,6 +141,8 @@ class TteumsaeApiTest {
         assertEquals(2, place.imageUrls.size)
         assertEquals("이용 안내", place.detailItems.single().title)
         assertEquals("예약 없이 입장 가능", place.detailItems.single().description)
+        assertEquals("휠체어", place.accessibilityItems.single().title)
+        assertEquals("대여 가능", place.accessibilityItems.single().description)
         assertEquals("공공누리 제3유형", place.imageAttributions.single().copyrightLabel)
         assertEquals("17:30", place.lastAdmission)
         assertEquals("무료 주차", place.parkingInfo)

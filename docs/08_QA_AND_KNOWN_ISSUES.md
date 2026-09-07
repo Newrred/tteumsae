@@ -371,7 +371,7 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
 - [x] Backend 200/200과 프로젝트 검사 107개, Android 30 suites 145/145, lint 오류 0·경고 44,
   `assembleDebug`를 배포 시점에 다시 통과했다.
 - [ ] `TOUR_CONGESTION_API_SERVICE_KEY`, `KMA_SHORT_FORECAST_SERVICE_KEY`가 없으므로 혼잡도와
-  날씨는 운영 화면에 아직 표시되지 않는다. 도보 실제 경로도 플래그를 켜기 전에는 예상값을 유지한다.
+  날씨는 운영 화면에 아직 표시되지 않는다. 도보 경로는 현행 제품 범위에서 제외했다.
 - [ ] 현재 연결된 Android 기기가 없어 새 debug APK의 설치·화면 확인은 수행하지 않았다.
 
 운영 배포 뒤 읽기 전용 점검에서 활성 장소 1,713곳 중 intro 239곳, common 9곳,
@@ -383,3 +383,18 @@ media 0곳, info 0곳이었다. 마지막 `tour_presentation` 실행은 새 배�
 debug APK는 64,671,011바이트이고 SHA-256은
 `7C96D65EF1955C99FE8327D502362368A712655B9850707A7D616D85DEB01891`이다. 앱의
 `API_BASE_URL`은 운영 고정 주소 `https://tteumsae-backend-one.vercel.app`을 사용한다.
+
+## 14. 2026-09-07 무장애 여행정보 코드 검증
+
+- [x] `KorWithService2/areaBasedSyncList2` 강원 목록과 `detailWithTour2` 단건 계약을 테스트했다.
+- [x] 목록 대상만 기본 20개·동시성 최대 4로 처리하고 독립 lease·페이지 cursor를 사용하는
+  `stage=accessibility`를 구현했다.
+- [x] migration 010의 service-role 전용 원자 병합 RPC로 기존 `enrichment_raw`를 보존한다.
+- [x] 공급자 원문은 숨기고 정규화된 `accessibility_items`만 장소 단건 API에 공개한다.
+- [x] Android 추천 상세와 저장 장소 상세는 값이 있을 때만 `접근성 안내`를 표시하고,
+  저장 스냅샷과 최신 상세 병합에서도 값을 보존한다.
+- [x] Node.js 24.19.0 기준 Backend 207/207, 프로젝트 검사 112개 관리 파일을 통과했다.
+- [x] Android 30 suites 145/145, lint 오류 0·경고 44, `assembleDebug`를 통과했다.
+- [ ] 공공데이터포털 활용신청, 운영 migration 010 적용, Preview 실제 응답·content ID 매칭률,
+  기본·큰 글자 실기기 화면 검증이 필요하다.
+- [ ] 위 검증 전에는 Cron 예약이나 검색 필터·추천 점수 반영을 하지 않는다.

@@ -126,6 +126,7 @@ Vercel 경계 정책으로 교체해야 한다.
 | GET | `/api/cron/tour-intro-sync` | Bearer | 운영시간·휴무일 intro 보강 |
 | GET | `/api/cron/tour-intro-sync?stage=presentation` | Bearer | 소개·사진·반려동물·반복 상세 보강 |
 | GET | `/api/cron/tour-intro-sync?stage=congestion` | Bearer | 강릉 관광지 향후 30일 집중률 선동기화(현재 수동 전용) |
+| GET | `/api/cron/tour-intro-sync?stage=accessibility` | Bearer | 강원 무장애 장소 목록·상세 동기화(활용신청 후 수동 전용) |
 | GET | `/api/ops/status` | Bearer | Gate 1 호출량·동기화·데이터 품질 집계 |
 
 ## 4. 장소 데이터 계약
@@ -155,10 +156,11 @@ Vercel 경계 정책으로 교체해야 한다.
 | `opening_hours` | string | 예 | TourAPI 원문을 HTML 제거·공백 정리한 값 |
 | `closed_days` | string | 예 | TourAPI 원문을 HTML 제거·공백 정리한 값 |
 | `detail_items` | object[] | 아니오 | 단건 조회 전용. `title`, `description` 반복 상세 목록 |
+| `accessibility_items` | object[] | 아니오 | 단건 조회 전용. 정규화된 무장애·영유아 편의 안내 목록 |
 | `image_attributions` | object[] | 아니오 | 단건 조회 전용. 이미지 URL·명칭·공공누리 유형 |
 | `congestion_forecast` | object | 예 | 단건 조회 전용. 요청 예상일의 상대 집중률 예측 |
 
-`detail_items`와 `image_attributions`는 장소 목록·추천 payload를 키우지 않기 위해
+`detail_items`, `accessibility_items`와 `image_attributions`는 장소 목록·추천 payload를 키우지 않기 위해
 `GET /api/places/{id}`에서만 내려준다. DB의 `raw`, `enrichment_raw`, `is_active`,
 `source_modified_at`, `synced_at` 필드는 공개 응답에서 제외된다.
 
@@ -757,6 +759,26 @@ numOfRows=100
 `stage=congestion`은 같은 서버 함수 안에 구현됐지만 아직 Cron 목록에는 없다. 별도 활용신청,
 `TOUR_CONGESTION_API_SERVICE_KEY`, migration 008과 Preview 매칭률 검수가 끝난 후에만 예약한다.
 
+### 6.4 무장애 여행정보 동기화
+
+경로: `GET /api/cron/tour-intro-sync?stage=accessibility`
+
+소스는 한국관광공사 `KorWithService2`의 `areaBasedSyncList2`와 `detailWithTour2`다.
+강원도 `areaCode=32`, 표출 상태 `showflag=1` 목록을 기본 20개씩 읽고
+`sync_state(id='tour_accessibility')`의 페이지 cursor를 갱신한다. 목록에 포함된 content ID만
+상세 조회하므로 일반 장소 1,713곳을
+전부 무장애 API에 대입하지 않는다. 동시성은 기존 `TOUR_SYNC_CONCURRENCY`와 코드상 최대 4를
+따른다.
+
+공급자 원문은 `enrichment_raw.accessibility`, 공개용 제목·설명은
+`enrichment_raw.accessibilityItems`에 보존한다. `save_place_accessibility` RPC가 기존 intro,
+common, media, info 값을 잃지 않도록 JSONB를 원자 병합한다. 상세 API는 공개용 배열만
+`accessibility_items`로 반환하고 Android는 배열이 비어 있으면 섹션 자체를 만들지 않는다.
+`없음` 같은 공식 값도 임의로 가능·불가능으로 해석하지 않고 원문 의미를 유지한다.
+
+현재 이 stage는 Vercel Cron에 예약하지 않았다. 공식 활용신청, migration 010 적용,
+Preview 실응답과 강원도 content ID 매칭률을 확인한 뒤에만 운영 주기를 정한다.
+
 ## 7. Supabase 스키마
 
 마이그레이션 적용 순서:
@@ -770,6 +792,7 @@ numOfRows=100
 7. [`007_tour_detail_info.sql`](../backend/migrations/007_tour_detail_info.sql)
 8. [`008_tour_congestion_forecasts.sql`](../backend/migrations/008_tour_congestion_forecasts.sql)
 9. [`009_weather_forecast_cache.sql`](../backend/migrations/009_weather_forecast_cache.sql)
+10. [`010_tour_accessibility.sql`](../backend/migrations/010_tour_accessibility.sql)
 
 ### 7.1 `public.places`
 
@@ -791,6 +814,7 @@ numOfRows=100
 | `raw` | jsonb | TourAPI 카탈로그 원문 |
 | `enrichment_raw` | jsonb | intro/common/media/detailInfo2 원문과 공개용 정규화 결과 |
 | `info_synced_at` | timestamptz | detailInfo2 정상 응답 확인 시각, 빈 응답도 완료로 기록 |
+| `accessibility_synced_at` | timestamptz | detailWithTour2 정상 응답을 원자 병합한 시각 |
 
 인덱스는 `category`, `(latitude, longitude)`, 활성 행의 `is_active`에 있다.
 
@@ -798,7 +822,7 @@ numOfRows=100
 
 | 컬럼 | 의미 |
 |---|---|
-| `id` | `tour_api` 또는 `tour_details`, PK |
+| `id` | `tour_api`, `tour_details`, `tour_accessibility` 등의 작업 ID, PK |
 | `next_page` | 다음 실행에서 읽을 페이지 |
 | `total_count` | 마지막 기본 동기화의 TourAPI 총 개수 |
 | `last_processed_page` | 마지막 처리 페이지 |
@@ -898,7 +922,7 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 - 도보는 실제 길찾기가 아닌 추정이다.
 - 영업시간 파서는 단순 요일·시간 범위만 안전하게 해석한다.
 - TourAPI 원문 변경이나 복잡한 휴무 표현은 `UNKNOWN`으로 남는다.
-- 카페 분류와 무장애·고령자 태그가 없다.
+- 무장애 정보는 상세 조건부 표시까지만 준비됐고, 실데이터 범위가 확인되기 전에는 필터나 추천에 쓰지 않는다.
 - 미디어·반려동물 정보의 신규 전용 동기화 경로는 아직 구현하지 않았다.
 - `vercel.json`의 `/downloads/tteumsae-latest-debug.apk` rewrite는 과거
   `v0.4.0` 파일을 가리키는 레거시 설정이다. 현재 APK 다운로드는 별도
