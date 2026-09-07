@@ -497,6 +497,43 @@ export async function upsertCongestionForecasts(rows, { signal } = {}) {
   }
 }
 
+export async function getWeatherForecastCache({
+  nx,
+  ny,
+  forecastAt,
+  minimumIssuedAt,
+  signal
+}) {
+  const query = new URLSearchParams({
+    select: "forecast_at,issued_at,condition_label,temperature_c,precipitation_probability,wind_speed_mps,fetched_at",
+    nx: `eq.${nx}`,
+    ny: `eq.${ny}`,
+    forecast_at: `eq.${forecastAt}`,
+    issued_at: `gte.${minimumIssuedAt}`,
+    limit: "1"
+  });
+  try {
+    const rows = await databaseRequest(`weather_forecast_cache?${query}`, { signal });
+    return rows?.[0] ?? null;
+  } catch (error) {
+    if (["42P01", "PGRST205"].includes(error.code) ||
+      /weather_forecast_cache/i.test(error.databaseMessage ?? "")) return null;
+    throw error;
+  }
+}
+
+export async function upsertWeatherForecastCache(row, { signal } = {}) {
+  await databaseRequest(
+    "weather_forecast_cache?on_conflict=nx,ny,forecast_at",
+    {
+      method: "POST",
+      body: row,
+      prefer: "resolution=merge-duplicates,return=minimal",
+      signal
+    }
+  );
+}
+
 export async function savePlaceInfo(place, enrichment, { signal } = {}) {
   await databaseRequest(`places?content_id=eq.${encodeURIComponent(place.content_id)}`, {
     method: "PATCH",

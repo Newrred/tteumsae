@@ -452,6 +452,23 @@ private fun JSONObject.toPlaceCandidate(
             it.label.isNotBlank() &&
             it.concentrationRate in 0.0..100.0
     },
+    weatherForecast = optJSONObject("weather_forecast")?.let {
+        com.tteumsae.app.domain.PlaceWeatherForecast(
+            forecastAt = it.optText("forecast_at"),
+            conditionLabel = it.optText("condition_label"),
+            temperatureC = it.optDouble("temperature_c", Double.NaN),
+            precipitationProbability = it.optNullableDouble("precipitation_probability"),
+            windSpeedMps = it.optNullableDouble("wind_speed_mps"),
+            issuedAt = it.optText("issued_at"),
+            fetchedAt = it.optText("fetched_at"),
+            source = it.optText("source"),
+            basis = it.optText("basis"),
+        )
+    }?.takeIf {
+        it.forecastAt.isNotBlank() &&
+            it.conditionLabel.isNotBlank() &&
+            it.temperatureC.isFinite()
+    },
 )
 
 internal fun parsePlaceResponse(response: JSONObject): PlaceCandidate =
@@ -497,3 +514,6 @@ private fun JSONArray.mapStrings(): List<String> =
 
 private fun JSONObject.optText(name: String): String =
     if (!has(name) || isNull(name)) "" else optString(name).trim()
+
+private fun JSONObject.optNullableDouble(name: String): Double? =
+    if (!has(name) || isNull(name)) null else optDouble(name, Double.NaN).takeIf(Double::isFinite)

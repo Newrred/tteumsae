@@ -1,6 +1,8 @@
 package com.tteumsae.app.ui.route
 
 import com.tteumsae.app.domain.PlaceCandidate
+import java.time.Instant
+import java.time.ZoneId
 
 internal fun normalizedVisitInfo(value: String?): String? = value
     ?.trim()
@@ -69,6 +71,7 @@ internal fun mergeFreshPlaceDetails(
             routePlace.imageAttributions
         },
         congestionForecast = freshPlace.congestionForecast ?: routePlace.congestionForecast,
+        weatherForecast = freshPlace.weatherForecast ?: routePlace.weatherForecast,
     )
 }
 
@@ -92,6 +95,20 @@ internal fun practicalVisitFacts(place: PlaceCandidate): List<PlaceVisitFact> = 
             )
         }
     }
+    place.weatherForecast?.let { forecast ->
+        weatherForecastDateTimeLabel(forecast.forecastAt)?.let { dateTimeLabel ->
+            val values = buildList {
+                add(forecast.conditionLabel)
+                add("${weatherNumber(forecast.temperatureC)}℃")
+                forecast.precipitationProbability?.let {
+                    add("강수확률 ${weatherNumber(it)}%")
+                }
+                forecast.windSpeedMps?.let { add("바람 ${weatherNumber(it)}m/s") }
+                normalizedVisitInfo(forecast.source)?.let(::add)
+            }
+            add(PlaceVisitFact("$dateTimeLabel 날씨", values.joinToString(" · ")))
+        }
+    }
 }
 
 private fun congestionForecastDateLabel(value: String): String? {
@@ -101,6 +118,14 @@ private fun congestionForecastDateLabel(value: String): String? {
     val day = parts[2].toIntOrNull() ?: return null
     return "${month}월 ${day}일"
 }
+
+private fun weatherForecastDateTimeLabel(value: String): String? = runCatching {
+    val time = Instant.parse(value).atZone(ZoneId.of("Asia/Seoul"))
+    "${time.monthValue}월 ${time.dayOfMonth}일 ${time.hour}시"
+}.getOrNull()
+
+private fun weatherNumber(value: Double): String =
+    if (value % 1.0 == 0.0) value.toInt().toString() else String.format("%.1f", value)
 
 internal fun structuredClosedDays(value: String): String = value
     .split(Regex("\\s*/\\s*"))

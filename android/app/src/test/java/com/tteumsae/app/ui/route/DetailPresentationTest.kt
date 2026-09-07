@@ -5,6 +5,7 @@ import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.domain.PlaceDetailItem
 import com.tteumsae.app.domain.PlaceImageAttribution
 import com.tteumsae.app.domain.PlaceCongestionForecast
+import com.tteumsae.app.domain.PlaceWeatherForecast
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -74,6 +75,17 @@ class DetailPresentationTest {
                 source = "한국관광공사 관광지 집중률 예측",
                 basis = "상대 예측값",
             ),
+            weatherForecast = PlaceWeatherForecast(
+                forecastAt = "2026-09-08T02:00:00Z",
+                conditionLabel = "비 예상",
+                temperatureC = 18.0,
+                precipitationProbability = 70.0,
+                windSpeedMps = 3.2,
+                issuedAt = "2026-09-07T23:00:00Z",
+                fetchedAt = "2026-09-07T23:20:00Z",
+                source = "기상청 단기예보",
+                basis = "5km 격자의 도착 무렵 예보",
+            ),
         )
 
         val merged = mergeFreshPlaceDetails(routePlace, fresh)
@@ -87,6 +99,7 @@ class DetailPresentationTest {
         assertEquals("이용 안내", merged.detailItems.single().title)
         assertEquals("공공누리 제3유형", merged.imageAttributions.single().copyrightLabel)
         assertEquals("혼잡 예상", merged.congestionForecast?.label)
+        assertEquals("비 예상", merged.weatherForecast?.conditionLabel)
     }
 
     @Test
@@ -136,6 +149,31 @@ class DetailPresentationTest {
 
         assertEquals("9월 8일 혼잡", facts.single().label)
         assertEquals("혼잡 예상 · 평소 최고치 대비 72%", facts.single().value)
+    }
+
+    @Test
+    fun `도착 무렵 날씨는 예보시각과 핵심 수치를 함께 표시한다`() {
+        val facts = practicalVisitFacts(
+            place().copy(
+                weatherForecast = PlaceWeatherForecast(
+                    forecastAt = "2026-09-08T02:00:00Z",
+                    conditionLabel = "비 예상",
+                    temperatureC = 18.0,
+                    precipitationProbability = 70.0,
+                    windSpeedMps = 3.2,
+                    issuedAt = "2026-09-07T23:00:00Z",
+                    fetchedAt = "2026-09-07T23:20:00Z",
+                    source = "기상청 단기예보",
+                    basis = "5km 격자의 도착 무렵 예보",
+                ),
+            ),
+        )
+
+        assertEquals("9월 8일 11시 날씨", facts.single().label)
+        assertEquals(
+            "비 예상 · 18℃ · 강수확률 70% · 바람 3.2m/s · 기상청 단기예보",
+            facts.single().value,
+        )
     }
 
     @Test

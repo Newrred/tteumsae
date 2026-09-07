@@ -461,6 +461,10 @@ Cron은 DB를 변경하고 외부 API 쿼터를 사용한다. 운영 담당자�
 `/api/cron/tour-intro-sync?stage=congestion`을 수동 실행한다. 응답의 `matchedRows`,
 `ambiguousRows`, `unmatchedRows`를 기록하고 이름 불일치가 많은 상태에서는 Cron을 예약하지 않는다.
 
+날씨 보강은 별도 단기예보 활용신청과 migration 009 뒤 Preview에서
+`KMA_WEATHER_ENABLED=true`로 제한 검증한다. 자연 관광지 한 곳의 도착시각을 바꿔
+예보시각·캐시 hit·공급자 실패 폴백을 확인하고, 같은 설정을 Production에 바로 복사하지 않는다.
+
 ```powershell
 $base = 'https://tteumsae-backend-one.vercel.app'
 $headers = @{ Authorization = "Bearer $env:TTEUMSAE_CRON_CALL_SECRET" }

@@ -117,6 +117,17 @@ class TteumsaeApiTest {
                     "fetched_at":"2026-09-07T00:00:00Z",
                     "source":"한국관광공사 관광지 집중률 예측",
                     "basis":"해당 관광지의 과거 최고 혼잡 시기 대비 상대 예측값"
+                  },
+                  "weather_forecast":{
+                    "forecast_at":"2026-09-08T02:00:00Z",
+                    "condition_label":"비 예상",
+                    "temperature_c":18.0,
+                    "precipitation_probability":70.0,
+                    "wind_speed_mps":3.2,
+                    "issued_at":"2026-09-07T23:00:00Z",
+                    "fetched_at":"2026-09-07T23:20:00Z",
+                    "source":"기상청 단기예보",
+                    "basis":"5km 격자의 도착 무렵 예보"
                   }
                 }}
                 """.trimIndent(),
@@ -138,6 +149,9 @@ class TteumsaeApiTest {
         assertEquals("혼잡 예상", place.congestionForecast?.label)
         assertEquals(72.35, place.congestionForecast?.concentrationRate ?: 0.0, 0.001)
         assertEquals("2026-09-08", place.congestionForecast?.forecastDate)
+        assertEquals("비 예상", place.weatherForecast?.conditionLabel)
+        assertEquals(18.0, place.weatherForecast?.temperatureC ?: 0.0, 0.001)
+        assertEquals(70.0, place.weatherForecast?.precipitationProbability ?: 0.0, 0.001)
         assertEquals("", place.reason)
     }
 

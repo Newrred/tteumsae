@@ -12,6 +12,8 @@ export default {
       integrations: {
         tourApiConfigured: Boolean(process.env.TOUR_API_SERVICE_KEY),
         tourCongestionConfigured: Boolean(process.env.TOUR_CONGESTION_API_SERVICE_KEY),
+        weatherConfigured: Boolean(process.env.KMA_SHORT_FORECAST_SERVICE_KEY),
+        weatherEnabled: process.env.KMA_WEATHER_ENABLED?.trim().toLowerCase() === "true",
         databaseConfigured: Boolean(
           process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
         ),

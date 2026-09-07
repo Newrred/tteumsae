@@ -204,6 +204,9 @@ ATTRACTION, RESTAURANT, CAFE, CULTURE, FESTIVAL, SHOPPING, LEISURE
   "timestamp": "2026-08-16T00:00:00.000Z",
   "integrations": {
     "tourApiConfigured": true,
+    "tourCongestionConfigured": false,
+    "weatherConfigured": false,
+    "weatherEnabled": false,
     "databaseConfigured": true,
     "kakaoRoutingConfigured": true
   }
@@ -302,6 +305,30 @@ Android 장소 탐색 화면은 최초 `강릉`을 선택해 `sigunguCode=1`을 
 `LOW < 40`, `MODERATE < 70`, `HIGH >= 70`은 앱 표시용 초기 구간이다. 이 값은
 KT 이동통신 기반으로 해당 관광지의 과거 최고 집중 시기를 100으로 둔 향후 30일 예측이며,
 실시간 혼잡이나 장소 간 절대 인원 비교에 사용하지 않는다. 추천 순위에도 반영하지 않는다.
+
+`KMA_WEATHER_ENABLED=true`이고 장소가 자연 관광지 `cat1=A01` 또는 명시적 야외 태그로
+확인되면 같은 `atEpochMillis`의 도착 뒤 첫 정시 단기예보도 조회한다. 동일 격자·예보시각의
+최신 발표 캐시가 있으면 공급자를 다시 호출하지 않는다. 예보가 없거나 공급자 호출이 실패하면
+`weather_forecast`만 생략하고 기존 장소 상세는 200으로 유지한다.
+
+```json
+{
+  "weather_forecast": {
+    "forecast_at": "2026-09-08T02:00:00.000Z",
+    "condition_label": "비 예상",
+    "temperature_c": 18,
+    "precipitation_probability": 70,
+    "wind_speed_mps": 3.2,
+    "issued_at": "2026-09-07T23:00:00.000Z",
+    "fetched_at": "2026-09-07T23:20:00.000Z",
+    "source": "기상청 단기예보",
+    "basis": "5km 격자의 도착 무렵 예보"
+  }
+}
+```
+
+강수형태가 있으면 하늘상태보다 우선해 `비·눈·소나기` 등으로 표시한다. 날씨는 5km 격자
+예측이며 현장 관측값이나 방문 가능 보장이 아니다. 추천 제외·순위·체류시간에는 반영하지 않는다.
 
 ### 5.4 `GET /api/geocode`
 
@@ -742,6 +769,7 @@ numOfRows=100
 6. [`006_gate_1b_data_trust.sql`](../backend/migrations/006_gate_1b_data_trust.sql)
 7. [`007_tour_detail_info.sql`](../backend/migrations/007_tour_detail_info.sql)
 8. [`008_tour_congestion_forecasts.sql`](../backend/migrations/008_tour_congestion_forecasts.sql)
+9. [`009_weather_forecast_cache.sql`](../backend/migrations/009_weather_forecast_cache.sql)
 
 ### 7.1 `public.places`
 
@@ -823,6 +851,12 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 원천에는 TourAPI content ID가 없으므로 공백·유니코드를 정규화한 이름이 활성 비음식 장소
 하나와 정확히 일치할 때만 `content_id`를 연결한다. 나머지는 `AMBIGUOUS` 또는 `UNMATCHED`로
 보존하며 공개 상세에는 `MATCHED`만 조회된다. RLS를 활성화하고 service role에만 권한을 준다.
+
+### 7.7 `public.weather_forecast_cache`
+
+기상청 단기예보를 `nx`, `ny`, `forecast_at` 복합키로 캐시한다. 발표시각, 수집시각,
+기온, 강수확률·형태, 하늘상태와 풍속을 저장하며 RLS와 권한 회수로 service role만 접근한다.
+장소별 복제 대신 5km 격자별로 공유해 같은 시간대의 인접 장소 상세 호출을 한 번으로 줄인다.
 
 `GET /api/ops/status`는 공개 health와 분리되어 `CRON_SECRET` Bearer 인증 뒤에만
 집계값을 반환한다. 좌표, 검색어, 사용자 식별자와 외부 응답 전문은 집계하지 않는다.

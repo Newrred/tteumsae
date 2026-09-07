@@ -54,6 +54,18 @@ data class PlaceCongestionForecast(
     val basis: String,
 )
 
+data class PlaceWeatherForecast(
+    val forecastAt: String,
+    val conditionLabel: String,
+    val temperatureC: Double,
+    val precipitationProbability: Double?,
+    val windSpeedMps: Double?,
+    val issuedAt: String,
+    val fetchedAt: String,
+    val source: String,
+    val basis: String,
+)
+
 data class PlaceCandidate(
     val id: String,
     val name: String,
@@ -89,6 +101,7 @@ data class PlaceCandidate(
     val detailItems: List<PlaceDetailItem> = emptyList(),
     val imageAttributions: List<PlaceImageAttribution> = emptyList(),
     val congestionForecast: PlaceCongestionForecast? = null,
+    val weatherForecast: PlaceWeatherForecast? = null,
 )
 
 data class RouteLeg(
