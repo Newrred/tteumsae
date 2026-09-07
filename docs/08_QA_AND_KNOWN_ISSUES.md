@@ -374,6 +374,12 @@ APK Signature Scheme v2, signer 1개로 서명을 재검증했다.
   날씨는 운영 화면에 아직 표시되지 않는다. 도보 실제 경로도 플래그를 켜기 전에는 예상값을 유지한다.
 - [ ] 현재 연결된 Android 기기가 없어 새 debug APK의 설치·화면 확인은 수행하지 않았다.
 
+운영 배포 뒤 읽기 전용 점검에서 활성 장소 1,713곳 중 intro 239곳, common 9곳,
+media 0곳, info 0곳이었다. 마지막 `tour_presentation` 실행은 새 배포 전인
+`2026-09-06T22:50:53.782Z`에 시작해 common 5건을 갱신했지만 media 5건 실패로
+`partial`이었다. 이는 새 코드의 예약 실행 결과가 아니므로 다음 자동 주기에서 common·media·info
+수치 증가와 실패 요약을 다시 확인한다. 수동 Production Cron은 별도 승인 없이 실행하지 않는다.
+
 debug APK는 64,671,011바이트이고 SHA-256은
 `7C96D65EF1955C99FE8327D502362368A712655B9850707A7D616D85DEB01891`이다. 앱의
 `API_BASE_URL`은 운영 고정 주소 `https://tteumsae-backend-one.vercel.app`을 사용한다.
