@@ -77,7 +77,15 @@ export function unauthorized() {
 export function serverError(error) {
   const requestId = crypto.randomUUID();
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[${requestId}] ${message}`);
+  console.error(JSON.stringify({
+    level: "error",
+    requestId,
+    message,
+    code: typeof error?.code === "string" ? error.code : undefined,
+    provider: typeof error?.provider === "string" ? error.provider : undefined,
+    status: Number.isInteger(error?.status) ? error.status : undefined,
+    providerCode: error?.providerCode == null ? undefined : String(error.providerCode)
+  }));
   if (
     error?.code === "UPSTREAM_BUDGET_EXHAUSTED" ||
     error?.code === "UPSTREAM_QUOTA_EXHAUSTED"

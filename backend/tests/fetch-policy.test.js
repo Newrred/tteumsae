@@ -75,6 +75,32 @@ test("공개 timeout 응답은 세부정보 없이 504다", async () => {
   }
 });
 
+test("provider 오류는 비밀값 없이 운영 진단 메타데이터를 구조화해 기록한다", () => {
+  const logs = [];
+  const originalConsoleError = console.error;
+  console.error = (value) => logs.push(String(value));
+  try {
+    const error = Object.assign(new Error("외부 서비스가 요청을 처리하지 못했습니다."), {
+      code: "UPSTREAM_ERROR",
+      provider: "TOUR_API",
+      status: 401,
+      providerCode: "20"
+    });
+    serverError(error);
+    const logged = JSON.parse(logs[0]);
+    assert.equal(logged.level, "error");
+    assert.equal(logged.message, "외부 서비스가 요청을 처리하지 못했습니다.");
+    assert.equal(logged.code, "UPSTREAM_ERROR");
+    assert.equal(logged.provider, "TOUR_API");
+    assert.equal(logged.status, 401);
+    assert.equal(logged.providerCode, "20");
+    assert.equal(typeof logged.requestId, "string");
+    assert.equal(Object.hasOwn(logged, "stack"), false);
+  } finally {
+    console.error = originalConsoleError;
+  }
+});
+
 test("운영 timeout 상수는 설계값을 유지한다", () => {
   assert.deepEqual(NETWORK_TIMEOUT_MS, {
     SUPABASE: 5_000,

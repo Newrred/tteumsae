@@ -94,7 +94,9 @@ Cache-Control: no-store
 }
 ```
 
-실제 오류 메시지는 Vercel Function 로그에서 같은 `requestId`로 확인한다.
+실제 오류 메시지는 Vercel Function 로그에서 같은 `requestId`로 확인한다. 공급자 오류는
+비밀값·응답 원문·stack 없이 `code`, `provider`, HTTP `status`, `providerCode`만 구조화해
+기록하므로 운영 401/403·quota·timeout을 공개 응답보다 구체적으로 구분할 수 있다.
 Android는 비정상 HTTP 응답의 status, `error.code`, `error.message`, `requestId`,
 `Retry-After`와 요청 path를 `ApiException`에 보존한다. UI에는 message를 우선
 표시하고 JSON 해석에 실패하면 `서버 요청에 실패했습니다.`를 표시한다.

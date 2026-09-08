@@ -779,11 +779,18 @@ Production 배포 `dpl_Gm5QeJD4hycCoY7qjZAh8TeKAfLE`가 고정 주소
 `https://tteumsae-backend-one.vercel.app`에 반영됐다. 관광지 집중률 2,880건 중
 450건이 앱 장소와 보수적으로 연결됐고, 소돌해수욕장 상세에서 당일 `한산 예상`과
 상대값을 확인했다. 날씨 기능 플래그를 켜고 순포해변의 도착 무렵 기상청 예보와
-격자 캐시 저장을 확인했다. 무장애 API는 기존 `TOUR_API_SERVICE_KEY`가 403을 반환해
-새 프로젝트 키로 교체하기 전에는 활성화하지 않았다.
+격자 캐시 저장을 확인했다. 무장애 API는 이후 `TOUR_API_SERVICE_KEY`를 갱신하고 Production을
+재배포했지만 전용 `KorWithService2`만 계속 403이었다. 같은 키의 일반 intro stage는
+20건 처리·18건 갱신·2건 빈 응답·실패 0으로 성공했으므로 무장애 활용 권한 활성화를
+확인하기 전에는 stage를 반복하거나 Cron에 넣지 않는다.
 
 Node.js 24.19.0 기준 Backend 215/215와 프로젝트 검사 118개를 통과했다. Android는
 `0.12.6`(`versionCode 27`) 30 suites 145/145, lint 오류 0·경고 44,
 `assembleDebug`를 통과했다. APK Production `dpl_BCPv4Pvg5YVGmG1JoQ5HrHqnyMK8`를
 `https://tteumsae-apk-six.vercel.app`에 배포했다. APK는 64,500,238바이트이며 로컬·원격
 SHA-256은 모두 `CF04A60F2CAF6D688CCD1843954DEB6D8D68AD3CAF4A69B31B415794C69DFF6A`다.
+
+같은 날 TourAPI 키 갱신 뒤 후속 Production `dpl_5EY1aBPNLwZNvpSoNyWhKmTNhNEj`를
+고정 주소에 반영했다. 일반 intro stage는 20건 중 18건 갱신·2건 빈 응답·실패 0이었고,
+무장애 stage의 `TOUR_API` HTTP 403은 비밀값 없는 구조화 로그로 분리 확인했다. 최종 health와
+장소 목록은 모두 200이며 무장애 활용 권한이 활성화될 때까지 해당 stage를 반복하지 않는다.
