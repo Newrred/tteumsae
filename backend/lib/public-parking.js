@@ -52,7 +52,9 @@ function isGangwonAddress(value) {
 export function mapPublicParkingLot(item, syncedAt = new Date().toISOString()) {
   const parkingNo = text(item?.prkplceNo);
   const name = text(item?.prkplceNm);
-  const institutionCode = text(item?.instt_code) ?? text(item?.institutionNm);
+  const institutionCode = text(item?.insttCode) ??
+    text(item?.instt_code) ??
+    text(item?.institutionNm);
   const address = text(item?.rdnmadr) ?? text(item?.lnmadr);
   const latitude = coordinate(item?.latitude, -90, 90);
   const longitude = coordinate(item?.longitude, -180, 180);
@@ -117,7 +119,7 @@ export async function fetchPublicParkingPage(
     numOfRows: String(numOfRows),
     type: "json",
     prkplceSe: "공영",
-    rdnmadr: "강원특별자치도"
+    instt_nm: "강원특별자치도 강릉시"
   });
   const payload = await usageTracker({
     provider: "PUBLIC_DATA",
@@ -140,14 +142,15 @@ export async function fetchPublicParkingPage(
         throw await createProviderResponseError(response, "PUBLIC_DATA", { now });
       }
       const result = await response.json();
-      const resultCode = String(result?.response?.header?.resultCode ?? "");
+      const root = result?.response ?? result;
+      const resultCode = String(root?.header?.resultCode ?? "");
       if (!["00", "0000"].includes(resultCode)) {
         throw new ProviderResponseError("PUBLIC_DATA", 200, resultCode || "UNKNOWN");
       }
-      return result;
+      return root;
     }
   });
-  const body = payload.response.body ?? {};
+  const body = payload.body ?? {};
   const items = parseItems(body);
   const syncedAt = new Date().toISOString();
   return {

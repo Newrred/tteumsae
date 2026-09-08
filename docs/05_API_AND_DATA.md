@@ -805,7 +805,7 @@ Preview 실응답과 강원도 content ID 매칭률을 확인한 뒤에만 운�
 
 경로: `GET /api/cron/tour-intro-sync?stage=parking`
 
-국토교통부·지방자치단체의 전국주차장정보표준데이터에서 `공영`이면서 주소가 강원특별자치도
+국토교통부·지방자치단체의 전국주차장정보표준데이터에서 강릉시 제공기관의 `공영`이면서 주소가 강원특별자치도
 또는 구 강원도 표기이고 좌표가 유효한 행만 정규화한다. `sync_state(id='public_parking')`의
 독립 페이지 cursor를 사용해 한 번에 100건을 읽고 `source_id` 충돌 시 최신 값으로 갱신한다.
 원문과 운영·요금 세부값은 RLS와 권한이 적용된 서버 전용 테이블에 저장하고 공개 API에는
@@ -830,6 +830,7 @@ migration 011, Preview 전체 순회와 폐업·삭제 행 갱신 정책 검증 
 9. [`009_weather_forecast_cache.sql`](../backend/migrations/009_weather_forecast_cache.sql)
 10. [`010_tour_accessibility.sql`](../backend/migrations/010_tour_accessibility.sql)
 11. [`011_public_parking_lots.sql`](../backend/migrations/011_public_parking_lots.sql)
+12. [`012_provider_usage_sources.sql`](../backend/migrations/012_provider_usage_sources.sql)
 
 ### 7.1 `public.places`
 
@@ -921,7 +922,7 @@ Kakao Mobility는 기본 7,000건부터 경고하고 8,000건에서 호출 전�
 
 ### 7.8 `public.public_parking_lots`
 
-전국주차장정보표준데이터 중 공영·강원 주소·유효 좌표 조건을 통과한 행을 `source_id`로
+전국주차장정보표준데이터 중 공영·강릉 제공기관·강원 주소·유효 좌표 조건을 통과한 행을 `source_id`로
 upsert한다. 운영요일·시간, 요금, 주차면수, 장애인 전용 주차구역 여부, 데이터 기준일과
 원문을 저장한다. `(latitude, longitude)` 인덱스로 장소 주변 경계 상자를 좁히고 서버에서
 직선거리를 재계산한다. RLS를 활성화하고 service role에만 CRUD를 허용하며 Android와

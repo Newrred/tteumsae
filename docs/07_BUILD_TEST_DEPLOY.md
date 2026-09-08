@@ -766,3 +766,24 @@ Android는 `0.12.5`(`versionCode 26`)로 올려 30 suites 145/145, lint 오류 0
 401로 종료됐고 DB를 변경하지 않았다. 공영주차장은 `PUBLIC_PARKING_API_SERVICE_KEY`가
 없어 실행하지 않았다. 따라서 두 섹션은 실데이터가 들어오기 전까지 설계대로 숨겨지며,
 Cron은 예약하지 않는다.
+
+### 13.4 2026-09-08 공간 정보 실데이터 활성화와 APK
+
+공공데이터포털 키 등록 뒤 migration 012로 사용량 원장의 허용 공급자에 `KMA`와
+`PUBLIC_DATA`를 추가했다. 전국주차장 표준 API의 실제 최상위 `header/body` 응답과
+`instt_nm=강원특별자치도 강릉시` 필터에 맞춰 호출을 교정했다. 운영 전체 순회는
+170건 중 유효 좌표 167건을 저장했고 강릉항회센터 상세에서 8m·320m·508m의 가까운
+공영주차장 3곳을 확인했다.
+
+Production 배포 `dpl_Gm5QeJD4hycCoY7qjZAh8TeKAfLE`가 고정 주소
+`https://tteumsae-backend-one.vercel.app`에 반영됐다. 관광지 집중률 2,880건 중
+450건이 앱 장소와 보수적으로 연결됐고, 소돌해수욕장 상세에서 당일 `한산 예상`과
+상대값을 확인했다. 날씨 기능 플래그를 켜고 순포해변의 도착 무렵 기상청 예보와
+격자 캐시 저장을 확인했다. 무장애 API는 기존 `TOUR_API_SERVICE_KEY`가 403을 반환해
+새 프로젝트 키로 교체하기 전에는 활성화하지 않았다.
+
+Node.js 24.19.0 기준 Backend 215/215와 프로젝트 검사 118개를 통과했다. Android는
+`0.12.6`(`versionCode 27`) 30 suites 145/145, lint 오류 0·경고 44,
+`assembleDebug`를 통과했다. APK Production `dpl_BCPv4Pvg5YVGmG1JoQ5HrHqnyMK8`를
+`https://tteumsae-apk-six.vercel.app`에 배포했다. APK는 64,500,238바이트이며 로컬·원격
+SHA-256은 모두 `CF04A60F2CAF6D688CCD1843954DEB6D8D68AD3CAF4A69B31B415794C69DFF6A`다.

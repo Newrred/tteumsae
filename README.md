@@ -4,8 +4,8 @@
 
 ## 현재 기준선
 
-- 기준일: `2026-08-28`
-- Android 앱: `0.12.4` (`versionCode 25`)
+- 기준일: `2026-09-08`
+- Android 앱: `0.12.6` (`versionCode 27`)
 - Android 패키지: `com.tteumsae.app`
 - 현재 제품 단계: 목적지·도착 마감 기반 한 곳 우선 경유 판단 MVP
 - 다음 제품 목표: Gate 2 실기기 검증 후 Gate 3 사용자·실경로 검증

@@ -66,8 +66,8 @@ android {
         applicationId = "com.tteumsae.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 26
-        versionName = "0.12.5"
+        versionCode = 27
+        versionName = "0.12.6"
         buildConfigField(
             "String",
             "API_BASE_URL",

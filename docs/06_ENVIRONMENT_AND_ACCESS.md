@@ -163,10 +163,14 @@ Play Store용 릴리스는 디버그 인증서와 서명이 다르다. 출시 �
 | `KAKAO_REST_API_KEY` | 예 | Kakao Local 검색·지역·도보 경로, Kakao Mobility | 위치 검색·지역·차량 추천 실패, 활성 도보는 예상값 전환 |
 | `SUPABASE_URL` | 아니오에 가까움 | PostgREST 기준 주소 | 장소·추천·동기화 실패 |
 | `SUPABASE_SERVICE_ROLE_KEY` | 매우 중요 | 서버 전용 DB 전체 접근 | 장소·추천·동기화 실패 |
-| `CRON_SECRET` | 예 | 두 Cron Bearer 검증 | 예약/수동 동기화 인증 불가 |
+| `CRON_SECRET` | 예 | 예약·수동 동기화 Bearer 검증 | 예약/수동 동기화 인증 불가 |
 
 `SUPABASE_SERVICE_ROLE_KEY`는 RLS를 우회한다. Android, 프런트엔드, 공개 로그,
 문서, 이슈에 절대 노출하지 않는다.
+
+공공데이터포털에서 같은 프로젝트 서비스 키로 여러 API를 활용신청했다면 위 세 공급자
+변수에 같은 값을 등록할 수 있다. 다만 기존 `TOUR_API_SERVICE_KEY`가 다른 프로젝트 키라면
+무장애 API처럼 새 활용신청 권한이 없는 서비스에서 403이 날 수 있으므로 함께 교체해야 한다.
 
 ### 4.2 선택 조정 변수
 

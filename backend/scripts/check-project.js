@@ -27,6 +27,7 @@ const requiredFiles = [
   "migrations/009_weather_forecast_cache.sql",
   "migrations/010_tour_accessibility.sql",
   "migrations/011_public_parking_lots.sql",
+  "migrations/012_provider_usage_sources.sql",
   "scripts/verify-user-rls.js",
   "scripts/export-place-curations.mjs",
   "scripts/apply-tour-curation-research.mjs",

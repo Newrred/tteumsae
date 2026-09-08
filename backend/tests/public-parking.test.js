@@ -52,7 +52,7 @@ test("공영·강원·유효 좌표 주차장만 서버 저장 행으로 정규�
   assert.equal(mapPublicParkingLot({ ...mapped.raw, rdnmadr: "서울특별시 중구" }), null);
 });
 
-test("전국주차장 표준 API는 공영·강원 주소 필터와 별도 키를 사용한다", async () => {
+test("전국주차장 표준 API는 공영·강릉 제공기관 필터와 공식 응답 루트를 사용한다", async () => {
   const originalKey = process.env.PUBLIC_PARKING_API_SERVICE_KEY;
   process.env.PUBLIC_PARKING_API_SERVICE_KEY = "parking-key";
   let requestUrl;
@@ -62,22 +62,21 @@ test("전국주차장 표준 API는 공영·강원 주소 필터와 별도 키�
       fetchImpl: async (url) => {
         requestUrl = new URL(String(url));
         return Response.json({
-          response: {
-            header: { resultCode: "00", resultMsg: "NORMAL SERVICE" },
-            body: {
-              pageNo: 2,
-              numOfRows: 100,
-              totalCount: 101,
-              items: [{
-                prkplceNo: "P-1",
-                prkplceNm: "경포 공영주차장",
-                prkplceSe: "공영",
-                rdnmadr: "강원특별자치도 강릉시 창해로 1",
-                latitude: "37.80",
-                longitude: "128.90",
-                instt_code: "4200000"
-              }]
-            }
+          header: { resultCode: "00", resultMsg: "NORMAL SERVICE" },
+          body: {
+            pageNo: 2,
+            numOfRows: 100,
+            totalCount: 101,
+            items: [{
+              prkplceNo: "P-1",
+              prkplceNm: "경포 공영주차장",
+              prkplceSe: "공영",
+              rdnmadr: "강원특별자치도 강릉시 창해로 1",
+              latitude: "37.80",
+              longitude: "128.90",
+              insttCode: "4200000",
+              insttNm: "강원특별자치도 강릉시"
+            }]
           }
         });
       }
@@ -85,7 +84,8 @@ test("전국주차장 표준 API는 공영·강원 주소 필터와 별도 키�
 
     assert.equal(requestUrl.pathname, "/openapi/tn_pubr_prkplce_info_api");
     assert.equal(requestUrl.searchParams.get("prkplceSe"), "공영");
-    assert.equal(requestUrl.searchParams.get("rdnmadr"), "강원특별자치도");
+    assert.equal(requestUrl.searchParams.get("instt_nm"), "강원특별자치도 강릉시");
+    assert.equal(requestUrl.searchParams.has("rdnmadr"), false);
     assert.equal(requestUrl.searchParams.get("type"), "json");
     assert.equal(result.totalCount, 101);
     assert.equal(result.rows.length, 1);
