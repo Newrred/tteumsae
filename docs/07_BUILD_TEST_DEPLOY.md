@@ -793,4 +793,10 @@ SHA-256은 모두 `CF04A60F2CAF6D688CCD1843954DEB6D8D68AD3CAF4A69B31B415794C69DF
 같은 날 TourAPI 키 갱신 뒤 후속 Production `dpl_5EY1aBPNLwZNvpSoNyWhKmTNhNEj`를
 고정 주소에 반영했다. 일반 intro stage는 20건 중 18건 갱신·2건 빈 응답·실패 0이었고,
 무장애 stage의 `TOUR_API` HTTP 403은 비밀값 없는 구조화 로그로 분리 확인했다. 최종 health와
-장소 목록은 모두 200이며 무장애 활용 권한이 활성화될 때까지 해당 stage를 반복하지 않는다.
+장소 목록은 모두 200이었다.
+
+활용신청 승인 반영 뒤 후속 Production `dpl_BvbbKjxJy1bQu3eZFFZ9vmQ3RGGR`에서 무장애
+첫 페이지 20건을 다시 처리해 13곳 연결·7곳 미매칭·실패 0을 확인했다. 실응답 검수에서
+`route`와 `publictransport` 제목이 뒤바뀐 문제를 발견해 각각 `접근로`와 `대중교통`으로
+교정하고 같은 페이지를 재동기화했다. 강릉 `정은숙초당순두부` 공개 상세는 접근로·대중교통·
+출입구 3개 항목을 올바르게 반환한다.

@@ -457,10 +457,14 @@ debug APK는 64,672,246바이트이고 SHA-256은
 - [x] Android `0.12.6`(`versionCode 27`) APK의 원격 Content-Length·전체 SHA-256 일치.
 - [ ] 혼잡 450건의 오매칭 표본과 0·중간·높은 등급, 날씨 캐시 재사용 및 두 섹션의
   기본·큰 글자 실기기 화면을 확인하기 전에는 신규 stage Cron을 예약하지 않는다.
-- [ ] 무장애 활용신청 뒤 Production `TOUR_API_SERVICE_KEY`를 `2026-09-08 09:17 KST`에
-  갱신하고 재배포했다. 같은 키의 일반 intro는 20건 중 18건을 갱신했지만 전용 API만
-  계속 403이므로 공공데이터포털 개발계정 승인·활용 상태 확인 뒤 목록·상세 매칭을 검증한다.
+- [x] 무장애 활용신청 승인 뒤 Production 첫 페이지 20건 중 13곳 연결·7곳 미매칭·실패 0.
+  `tour_accessibility` cursor 2와 total 939, 데이터 보유 장소 13곳을 확인했다.
+- [x] 강릉 `정은숙초당순두부` 단건 API에서 접근로·대중교통·출입구 3개 항목을 확인했고,
+  실응답으로 발견한 `route`/`publictransport` 제목 역전을 교정한 뒤 재동기화했다.
+- [x] 교정 뒤 Backend 216/216·프로젝트 검사 118개와 Android 145/145·lint·`assembleDebug`를
+  다시 통과했다. Android 코드 변경은 없어 기존 `0.12.6` APK가 최신 서버 데이터를 사용한다.
 - [x] 외부 공급자 실패 로그를 비밀값·응답 원문 없이 requestId·code·provider·HTTP status·
   providerCode 구조로 보강해 무장애 실패가 `TOUR_API` HTTP 403임을 운영 로그에서 확인했다.
 - [ ] TourAPI presentation은 common 15건까지 성공했으나 media·info는 0건이고 media 단계가
   `partial`이다. 다음 예약 실행 전에 저장 실패 원인을 별도 진단한다.
+- [ ] 무장애 전체 939건 순회와 기본·큰 글자 실기기 상세 확인 전에는 stage Cron을 예약하지 않는다.

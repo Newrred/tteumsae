@@ -10,8 +10,8 @@ const serviceBaseUrl = "https://apis.data.go.kr/B551011/KorWithService2";
 
 const accessibilityFields = [
   ["parking", "장애인 주차"],
-  ["route", "대중교통"],
-  ["publictransport", "접근로"],
+  ["route", "접근로"],
+  ["publictransport", "대중교통"],
   ["ticketoffice", "매표소"],
   ["promotion", "홍보물"],
   ["wheelchair", "휠체어"],

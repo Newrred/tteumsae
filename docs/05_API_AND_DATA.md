@@ -798,6 +798,7 @@ numOfRows=100
 `enrichment_raw.accessibilityItems`에 보존한다. `save_place_accessibility` RPC가 기존 intro,
 common, media, info 값을 잃지 않도록 JSONB를 원자 병합한다. 상세 API는 공개용 배열만
 `accessibility_items`로 반환하고 Android는 배열이 비어 있으면 섹션 자체를 만들지 않는다.
+공식 필드 의미에 따라 `route`는 `접근로`, `publictransport`는 `대중교통`으로 표시한다.
 `없음` 같은 공식 값도 임의로 가능·불가능으로 해석하지 않고 원문 의미를 유지한다.
 
 현재 이 stage는 Vercel Cron에 예약하지 않았다. 공식 활용신청, migration 010 적용,

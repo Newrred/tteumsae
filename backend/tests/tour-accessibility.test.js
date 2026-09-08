@@ -25,8 +25,8 @@ test("무장애 상세를 의미를 추측하지 않는 공개 안내 항목으�
   const result = normalizeTourAccessibility({
     detail: {
       parking: "장애인 전용 주차구역 있음",
-      route: "저상버스 정류장 이용 가능",
-      publictransport: "주출입구까지 턱 없는 접근로",
+      route: "주출입구까지 턱 없는 접근로",
+      publictransport: "저상버스 정류장 이용 가능",
       promotion: "안내책자 있음",
       wheelchair: "휠체어 대여 가능",
       restroom: "장애인 화장실 있음",
@@ -40,8 +40,8 @@ test("무장애 상세를 의미를 추측하지 않는 공개 안내 항목으�
 
   assert.deepEqual(result.items, [
     { title: "장애인 주차", description: "장애인 전용 주차구역 있음" },
-    { title: "대중교통", description: "저상버스 정류장 이용 가능" },
     { title: "접근로", description: "주출입구까지 턱 없는 접근로" },
+    { title: "대중교통", description: "저상버스 정류장 이용 가능" },
     { title: "홍보물", description: "안내책자 있음" },
     { title: "휠체어", description: "휠체어 대여 가능" },
     { title: "엘리베이터", description: "없음" },
