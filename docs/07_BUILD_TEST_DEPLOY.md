@@ -10,15 +10,15 @@
 
 | 구성 | 소스 버전/상태 | 운영 위치 |
 |---|---|---|
-| Android | `0.12.5`, `versionCode 26` | `android/` |
+| Android | `0.12.7`, `versionCode 28` | `android/` |
 | Backend | npm package `0.2.0`, health `0.2.0` | `backend/` |
-| APK 다운로드 HTML | `tteumsae-v0.12.5-spatial-data-20260907-debug.apk`를 가리킴 | `download/` |
+| APK 다운로드 HTML | `tteumsae-v0.12.6-spatial-data-live-20260908-debug.apk`를 가리킴 | `download/` |
 
 ### 반드시 알고 시작할 배포 원칙
 
 - APK·AAB는 Git에서 제외하므로 이 저장소의 `download/`에는 HTML만 있고 APK
   바이너리는 없다.
-- 현재 운영 다운로드 주소는 `v0.12.5` 공간 정보 보강 확인용 디버그 APK를 제공한다.
+- 현재 운영 다운로드 주소는 `v0.12.6` 공간 정보 실데이터 확인용 디버그 APK를 제공한다.
 - 소스 변경 후 다시 배포할 때는 기존 APK를 덮어쓰지 말고 새 파일명과 더 높은
   `versionCode`를 사용한다.
 - `backend/vercel.json`의 `v0.4.0` APK rewrite는 레거시이며 현재 APK 다운로드
@@ -503,8 +503,8 @@ versionCode = 이전 값보다 큰 정수
 versionName = "새 버전"
 ```
 
-현재 확인용 APK가 `versionCode 26`, `versionName 0.12.5`이므로 다음 배포
-빌드는 최소 `versionCode 27`, `versionName 0.12.6`을 사용한다.
+현재 확인용 APK가 `versionCode 27`, `versionName 0.12.6`이므로 다음 배포
+빌드는 최소 `versionCode 28`, `versionName 0.12.7`을 사용한다.
 
 ### 8.2 APK 생성과 복사
 

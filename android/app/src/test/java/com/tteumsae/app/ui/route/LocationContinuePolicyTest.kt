@@ -15,6 +15,11 @@ class LocationContinuePolicyTest {
     private val destination = RouteLocation("경포대", Coordinates(37.80, 128.90))
 
     @Test
+    fun `검색 결과는 열 건까지 노출한다`() {
+        assertEquals(10, LOCATION_SEARCH_VISIBLE_LIMIT)
+    }
+
+    @Test
     fun `출발지 목적지 도착 마감이 모두 있어야 계속할 수 있다`() {
         assertFalse(canContinueRouteInput(RouteFlowInput(), now, isBusy = false))
         assertFalse(

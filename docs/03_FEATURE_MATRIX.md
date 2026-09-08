@@ -1,7 +1,7 @@
 # 기능 구현 현황표
 
 기준일: `2026-09-08`
-Android 버전: `0.12.6` (`versionCode 27`)
+Android 버전: `0.12.7` (`versionCode 28`)
 
 이 표는 현재 `main`의 Gate 2 실제 코드 동작을 기록한다. 자동 검증과 실기기 QA를
 구분하며, 향후 아이디어는 [다음 버전 계획](09_NEXT_VERSION_PLAN.md)에만 기록한다.

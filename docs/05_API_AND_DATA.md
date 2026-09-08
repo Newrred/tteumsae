@@ -390,9 +390,11 @@ Kakao Local 키워드 검색을 서버에서 대행한다.
 }
 ```
 
-Android의 `searchPlaces(query, gangwonOnly=true)`는 검색어에 `강원`이 없으면
-자동으로 `강원 ` 접두어를 붙인다. 현재 Android는 응답 중 `id`, `name`,
-`address`, 좌표만 사용한다.
+Android는 출발지와 목적지 모두 사용자가 입력한 원문 검색어로 요청한다. 목적지에서는
+응답 주소가 강원으로 확인된 결과를 먼저 정렬하고, 강원 밖 결과를 숨기지 않고
+`현재 지원 지역 아님`으로 표시해 선택을 막는다. 주소가 비어 판별할 수 없는 결과는
+선택을 허용하되 진행 직전 `/api/region` 좌표 검증으로 다시 확인한다. 현재 Android는
+응답 중 `id`, `name`, `address`, 좌표만 사용한다.
 
 ### 5.5 `GET /api/region`
 

@@ -13,6 +13,7 @@ import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SafetyLevel
 import com.tteumsae.app.domain.SearchCriteria
+import com.tteumsae.app.domain.prioritizeGangwonDestinations
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -30,10 +31,11 @@ class TteumsaeApi(
         query: String,
         gangwonOnly: Boolean = false,
     ): List<LocationSearchResult> = withContext(Dispatchers.IO) {
-        val normalized = locationSearchQuery(query, gangwonOnly)
+        val normalized = locationSearchQuery(query)
         val encoded = URLEncoder.encode(normalized, StandardCharsets.UTF_8.name())
         val response = request("GET", "/api/geocode?q=$encoded")
-        response.getJSONArray("data").mapObjects { it.toLocationSearchResult() }
+        val results = response.getJSONArray("data").mapObjects { it.toLocationSearchResult() }
+        if (gangwonOnly) prioritizeGangwonDestinations(results) else results
     }
 
     suspend fun searchPlace(
@@ -261,8 +263,7 @@ internal fun parseRecommendationResponse(response: JSONObject): RecommendationRe
     }
 }
 
-internal fun locationSearchQuery(query: String, gangwonOnly: Boolean): String =
-    if (gangwonOnly && !query.contains("강원")) "강원 $query" else query
+internal fun locationSearchQuery(query: String): String = query.trim()
 
 data class PlacePage(
     val places: List<PlaceCandidate>,

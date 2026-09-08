@@ -14,10 +14,10 @@ import org.junit.Test
 
 class TteumsaeApiTest {
     @Test
-    fun limitsOnlyGangwonScopedSearches() {
-        assertEquals("서울역", locationSearchQuery("서울역", gangwonOnly = false))
-        assertEquals("강원 강릉역", locationSearchQuery("강릉역", gangwonOnly = true))
-        assertEquals("강원 원주시청", locationSearchQuery("강원 원주시청", gangwonOnly = true))
+    fun `검색어는 지원 지역과 무관하게 사용자가 입력한 그대로 전달한다`() {
+        assertEquals("서울역", locationSearchQuery("서울역"))
+        assertEquals("강릉역", locationSearchQuery("  강릉역  "))
+        assertEquals("강원 원주시청", locationSearchQuery("강원 원주시청"))
     }
 
     @Test

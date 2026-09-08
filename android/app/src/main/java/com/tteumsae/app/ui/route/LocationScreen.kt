@@ -87,8 +87,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.Coordinates
+import com.tteumsae.app.domain.DestinationSupport
 import com.tteumsae.app.domain.LocationSearchResult
 import com.tteumsae.app.domain.PlaceCategory
+import com.tteumsae.app.domain.destinationSupport
 import com.tteumsae.app.domain.route.RouteFlowInput
 import com.tteumsae.app.domain.route.RouteLocation
 import com.tteumsae.app.domain.route.isValidArrivalDeadline
@@ -110,6 +112,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+
+internal const val LOCATION_SEARCH_VISIBLE_LIMIT = 10
+private const val UNSUPPORTED_DESTINATION_MESSAGE = "현재는 강원도 목적지만 추천할 수 있어요."
 
 internal fun canContinueRouteInput(
     input: RouteFlowInput,
@@ -824,7 +829,13 @@ private fun RouteLocationSearchField(
         }
         if (results.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color.White)) {
-                results.take(5).forEachIndexed { index, result ->
+                results.take(LOCATION_SEARCH_VISIBLE_LIMIT).forEachIndexed { index, result ->
+                    val support = if (gangwonOnly) {
+                        destinationSupport(result.address)
+                    } else {
+                        DestinationSupport.SUPPORTED
+                    }
+                    val isUnsupported = support == DestinationSupport.UNSUPPORTED
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -832,13 +843,34 @@ private fun RouteLocationSearchField(
                                 if (index == 0) Modifier.bringIntoViewRequester(firstResultRequester) else Modifier,
                             )
                             .clickable {
-                                onSelected(result)
-                                focusManager.clearFocus(force = true)
-                                keyboardController?.hide()
+                                if (isUnsupported) {
+                                    searchFailed = false
+                                    searchMessage = UNSUPPORTED_DESTINATION_MESSAGE
+                                } else {
+                                    onSelected(result)
+                                    focusManager.clearFocus(force = true)
+                                    keyboardController?.hide()
+                                }
                             }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
-                        Text(result.name, fontWeight = FontWeight.Bold)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                result.name,
+                                modifier = Modifier.weight(1f),
+                                color = if (isUnsupported) TteumMuted else TteumInk,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            if (isUnsupported) {
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "현재 지원 지역 아님",
+                                    color = TteumRed,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                        }
                         if (result.address.isNotBlank()) {
                             Text(
                                 result.address,
@@ -851,7 +883,8 @@ private fun RouteLocationSearchField(
                     }
                 }
             }
-        } else if (searchMessage != null) {
+        }
+        if (searchMessage != null) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,

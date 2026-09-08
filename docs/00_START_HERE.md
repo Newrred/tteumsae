@@ -1,7 +1,7 @@
 # 새 담당자 시작 안내
 
 기준일: `2026-09-08`
-Android 버전: `0.12.6` (`versionCode 27`)
+Android 버전: `0.12.7` (`versionCode 28`)
 Android 패키지: `com.tteumsae.app`
 
 이 저장소가 Android 앱, 백엔드, 다운로드 페이지와 인수인계 문서의 유일한 기준 원본입니다. 다른 폴더에 남은 APK나 과거 소스 사본을 기준으로 작업하지 마세요.
