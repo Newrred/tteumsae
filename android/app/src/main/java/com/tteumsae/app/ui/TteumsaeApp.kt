@@ -129,7 +129,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -338,6 +340,7 @@ private const val HOME_INTRO_HIDDEN_DATE = "hidden_date"
 @Composable
 fun TteumsaeApp() {
     val context = LocalContext.current
+    val resultUiStateHolder = rememberSaveableStateHolder()
     val automaticLocationEnabled = LocationAccessPolicy.automaticLocationEnabled
     val api = remember { TteumsaeApi() }
     val application = context.applicationContext as TteumsaeApplication
@@ -439,6 +442,7 @@ fun TteumsaeApp() {
         pendingReminderPlaceId = null
     }
     val startNewRouteSearch: () -> Unit = {
+        resultUiStateHolder.removeState("route-results")
         locationCheckRequestId += 1
         locationChecking = false
         selectedDetailPlaceId = null
@@ -710,6 +714,7 @@ fun TteumsaeApp() {
                                             ).show()
                                         } else {
                                             clearDepartureReminder()
+                                            resultUiStateHolder.removeState("route-results")
                                             routeViewModel.search()
                                         }
                                     } catch (error: Exception) {
@@ -946,7 +951,8 @@ fun TteumsaeApp() {
             },
         )
 
-        AppDestination.RESULTS -> RouteResultsScreen(
+        AppDestination.RESULTS -> resultUiStateHolder.SaveableStateProvider("route-results") {
+        RouteResultsScreen(
             criteria = criteria,
             recommendations = routeState.recommendations,
             baseRoute = routeState.baseRoute,
@@ -1023,6 +1029,8 @@ fun TteumsaeApp() {
                 screen = AppDestination.DETAIL
             },
         )
+
+        }
 
         AppDestination.DETAIL -> detailRecommendation?.let { recommendation ->
             LaunchedEffect(recommendation.place.id, detailMetadataRequestId) {
@@ -2358,6 +2366,7 @@ internal fun RouteMap(
     centerRequestedLocation: Boolean = false,
     overviewRequestId: Int = 0,
     mapBottomPadding: Dp = 300.dp,
+    mapTopPadding: Dp = 128.dp,
     onMapInteraction: () -> Unit = {},
     onCandidateClick: (String) -> Unit = {},
     onClusterClick: (List<String>) -> Unit = {},
@@ -2409,6 +2418,7 @@ internal fun RouteMap(
             ?: (criteria.deadlineMinutesFromNow * 20).coerceIn(800, 8_000),
         overviewRequestId = overviewRequestId,
         mapBottomPadding = mapBottomPadding,
+        mapTopPadding = mapTopPadding,
         onMapInteraction = onMapInteraction,
         onCandidateClick = onCandidateClick,
         onClusterClick = onClusterClick,
@@ -2431,6 +2441,7 @@ private fun KakaoMapSurface(
     corridorPoints: List<Coordinates> = emptyList(),
     corridorRadiusMeters: Int = 0,
     mapBottomPadding: Dp = 300.dp,
+    mapTopPadding: Dp = 128.dp,
     logoBottomMargin: Dp? = null,
     onMapInteraction: () -> Unit = {},
     onCandidateClick: (String) -> Unit = {},
@@ -2470,6 +2481,7 @@ private fun KakaoMapSurface(
         mutableFloatStateOf(CLUSTER_DISTANCE_NEUTRAL_DP.toFloat())
     }
     var revealedClusterMemberIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var pendingClusterFocus by remember { mutableStateOf<RouteMapLabelTarget.Cluster?>(null) }
     val currentOnMapInteraction by rememberUpdatedState(onMapInteraction)
     val currentOnCandidateClick by rememberUpdatedState(onCandidateClick)
     val currentOnClusterClick by rememberUpdatedState(onClusterClick)
@@ -2483,11 +2495,14 @@ private fun KakaoMapSurface(
         if (hasRouteCandidates) 72.dp.toPx().toInt() else 0
     }
     val mapTopPaddingPixels = with(density) {
-        if (hasRouteCandidates) 128.dp.toPx().toInt() else 0
+        if (hasRouteCandidates) mapTopPadding.toPx().toInt() else 0
     }
     val mapBottomPaddingPixels = with(density) {
         if (hasRouteCandidates) mapBottomPadding.toPx().toInt() else 0
     }
+    val latestMapViewportPadding by rememberUpdatedState(
+        Triple(mapHorizontalPaddingPixels, mapTopPaddingPixels, mapBottomPaddingPixels),
+    )
     val clusterFitPaddingPixels = with(density) { 32.dp.toPx().toInt() }
     val effectiveClusterDistanceDp = if (revealedClusterMemberIds.isEmpty()) {
         clusterDistanceDp
@@ -2629,6 +2644,26 @@ private fun KakaoMapSurface(
         )
     }
 
+    LaunchedEffect(kakaoMap, pendingClusterFocus) {
+        val map = kakaoMap ?: return@LaunchedEffect
+        val target = pendingClusterFocus ?: return@LaunchedEffect
+        // Let the parent apply the requested sheet viewport and measure its header.
+        // Only an explicit cluster request fits the camera, not later sheet drags.
+        withFrameNanos { }
+        if (pendingClusterFocus != target) return@LaunchedEffect
+        val (horizontal, top, bottom) = latestMapViewportPadding
+        map.setPadding(horizontal, top, horizontal, bottom)
+        map.moveCamera(
+            CameraUpdateFactory.fitMapPoints(
+                target.coordinates.map { LatLng.from(it.latitude, it.longitude) }.toTypedArray(),
+                clusterFitPaddingPixels,
+                target.expansionZoom,
+            ),
+            CameraAnimation.from(550),
+        )
+        pendingClusterFocus = null
+    }
+
     // Move only the SDK attribution, never the camera viewport. The expanded
     // search form is a temporary overlay; its collapsed map must show the logo.
     LaunchedEffect(kakaoMap, logoBottomMarginPixels, logoEndMarginPixels) {
@@ -2659,11 +2694,13 @@ private fun KakaoMapSurface(
             onDispose { }
         } else {
             map.setOnMapClickListener { _, _, _, _ ->
+                pendingClusterFocus = null
                 revealedClusterMemberIds = emptySet()
                 currentOnMapInteraction()
             }
             map.setOnCameraMoveStartListener { _, gesture ->
                 if (gesture != GestureType.Unknown) {
+                    pendingClusterFocus = null
                     revealedClusterMemberIds = emptySet()
                     currentOnMapInteraction()
                 }
@@ -2680,6 +2717,7 @@ private fun KakaoMapSurface(
             map.setOnLabelClickListener { _, _, label ->
                 when (val target = label.tag) {
                     is RouteMapLabelTarget.Candidate -> {
+                        pendingClusterFocus = null
                         revealedClusterMemberIds = emptySet()
                         currentOnCandidateClick(target.id)
                         true
@@ -2687,16 +2725,7 @@ private fun KakaoMapSurface(
                     is RouteMapLabelTarget.Cluster -> {
                         revealedClusterMemberIds = target.memberIds.toSet()
                         currentOnClusterClick(target.memberIds)
-                        map.moveCamera(
-                            CameraUpdateFactory.fitMapPoints(
-                                target.coordinates.map {
-                                    LatLng.from(it.latitude, it.longitude)
-                                }.toTypedArray(),
-                                clusterFitPaddingPixels,
-                                target.expansionZoom,
-                            ),
-                            CameraAnimation.from(550),
-                        )
+                        pendingClusterFocus = target
                         true
                     }
                     else -> false
@@ -2933,6 +2962,7 @@ private fun KakaoMapSurface(
     LaunchedEffect(kakaoMap, selectedCandidate?.id) {
         val map = kakaoMap ?: return@LaunchedEffect
         val candidate = selectedCandidate ?: return@LaunchedEffect
+        pendingClusterFocus = null
         map.moveCamera(
             CameraUpdateFactory.newCenterPosition(
                 LatLng.from(candidate.coordinates.latitude, candidate.coordinates.longitude),
@@ -2945,6 +2975,7 @@ private fun KakaoMapSurface(
     LaunchedEffect(kakaoMap, overviewRequestId) {
         val map = kakaoMap ?: return@LaunchedEffect
         if (overviewRequestId <= 0 || routePoints.size < 2) return@LaunchedEffect
+        pendingClusterFocus = null
         map.moveCamera(
             CameraUpdateFactory.fitMapPoints(
                 routePoints.map { LatLng.from(it.latitude, it.longitude) }.toTypedArray(),

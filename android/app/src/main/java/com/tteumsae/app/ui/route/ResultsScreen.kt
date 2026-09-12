@@ -1,5 +1,7 @@
 package com.tteumsae.app.ui.route
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
@@ -12,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -24,6 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -42,16 +48,20 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.style.TextOverflow
 import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SearchCriteria
@@ -90,21 +100,20 @@ internal fun RouteResultsScreen(
 ) {
     val selected = recommendations.firstOrNull { it.place.id == selectedPlaceId }
     val focusedPlaceId = selectedPlaceId
-    var clusterScopeIds by remember { mutableStateOf<Set<String>?>(null) }
+    var clusterScopeIds by rememberSaveable { mutableStateOf<List<String>?>(null) }
     val visibleRecommendations = clusterScopeIds?.let { ids ->
         recommendations.filter { it.place.id in ids }
     }?.takeIf { it.isNotEmpty() } ?: recommendations
     var overviewRequestId by remember { mutableIntStateOf(0) }
-    var showingMap by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    var sheetPosition by rememberSaveable { mutableStateOf(ResultSheetPosition.BALANCED) }
+    var revealRequestId by remember { mutableIntStateOf(0) }
+    var revealPlaceId by remember { mutableStateOf<String?>(null) }
     var nowEpochMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val recommendationListState = rememberLazyListState()
     val deadlineCannotBeRechecked = arrivalDeadlineCannotBeRechecked(criteria, nowEpochMillis)
     val navigationAction = routeNavigationAction(
         criteria, listOfNotNull(selected), calculatedAtEpochMillis, nowEpochMillis,
     )
-    val selectedNeedsRecheck = selected?.let {
-        recommendationNeedsRecheck(it, calculatedAtEpochMillis, nowEpochMillis)
-    } == true
     val directRouteIsTight = baseRoute != null &&
         baseRoute.totalDrivingMinutes + criteria.safetyBufferMinutes > criteria.deadlineMinutesFromNow
     val fontScale = LocalDensity.current.fontScale
@@ -118,20 +127,20 @@ internal fun RouteResultsScreen(
 
     LaunchedEffect(recommendations.map { it.place.id }) {
         clusterScopeIds = clusterScopeIds?.intersect(recommendations.map { it.place.id }.toSet())
-            ?.takeIf { it.isNotEmpty() }
+            ?.takeIf { it.isNotEmpty() }?.toList()
     }
 
-    LaunchedEffect(selectedPlaceId, visibleRecommendations, warning, showingMap) {
-        val selectedIndex = visibleRecommendations.indexOfFirst { it.place.id == selectedPlaceId }
-        if (!showingMap && selectedIndex >= 0) {
-            val targetIndex = selectedIndex + 1 + if (warning.isNotBlank()) 1 else 0
-            recommendationListState.animateScrollToItem(targetIndex)
-            // The selected row and sheet both grow. Re-anchor after those
-            // animations so the chosen place, rather than the previous row,
-            // remains at the visual top of the list.
-            delay(360)
-            recommendationListState.animateScrollToItem(targetIndex)
-        }
+    // Explicit pin/cluster actions reveal a row once. Merely browsing, refreshing or
+    // expanding the sheet must not move the list away from the user's reading position.
+    LaunchedEffect(revealRequestId) {
+        if (revealRequestId == 0) return@LaunchedEffect
+        val id = revealPlaceId ?: return@LaunchedEffect
+        withFrameNanos { }
+        resultCandidateRevealIndex(visibleRecommendations.map { it.place.id }, id, warning.isNotBlank())
+            ?.let { recommendationListState.animateScrollToItem(it) }
+    }
+    BackHandler(enabled = sheetPosition == ResultSheetPosition.LIST) {
+        sheetPosition = ResultSheetPosition.BALANCED
     }
 
     Scaffold(
@@ -205,27 +214,11 @@ internal fun RouteResultsScreen(
                         }
                     }
                 }
-
-                TextButton(
-                    onClick = { showingMap = !showingMap; if (showingMap) overviewRequestId += 1 },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                ) {
-                    Text(resultViewActionLabel(showingMap), fontWeight = FontWeight.Bold)
-                }
             }
         },
         bottomBar = {
             Surface(color = Color.White, shadowElevation = 8.dp) {
                 Column {
-                if (showingMap) {
-                    TextButton(onClick = { showingMap = false }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(selected?.let {
-                            if (selectedNeedsRecheck) "${it.place.name} · 시간 재확인 필요 · 목록에서 확인"
-                            else "${it.place.name} · 최대 ${compactMaximumStayLabel(it)} · 목록에서 확인"
-                        }
-                            ?: "지도 핀을 누르거나 목록에서 장소를 선택하세요", lineHeight = 20.sp)
-                    }
-                }
                 Button(
                     onClick = {
                         when (routeNavigationAction(
@@ -265,7 +258,23 @@ internal fun RouteResultsScreen(
         },
     ) { padding ->
         Box(Modifier.fillMaxSize().padding(padding)) {
-            if (showingMap) {
+            ResultMapSheetLayout(
+                listState = recommendationListState,
+                position = sheetPosition,
+                onPositionSettled = { sheetPosition = it },
+                header = { dragModifier ->
+                    ResultSheetHeader(
+                        modifier = dragModifier,
+                        count = visibleRecommendations.size,
+                        calculatedAtEpochMillis = calculatedAtEpochMillis,
+                        isClusterScope = clusterScopeIds != null,
+                        position = sheetPosition,
+                        onShowAll = { clusterScopeIds = null },
+                        onPositionChanged = { sheetPosition = it },
+                    )
+                },
+                mapContent = { obscuredHeight, visibleHeight, availableHeight ->
+                val mapInsets = resultMapViewportInsets(availableHeight, obscuredHeight)
                 RouteMapCanvas(
                     modifier = Modifier.fillMaxSize(),
                     criteria = criteria,
@@ -276,49 +285,61 @@ internal fun RouteResultsScreen(
                     focusedPlaceId = focusedPlaceId,
                     corridorRadiusMeters = corridorRadiusMeters,
                     overviewRequestId = overviewRequestId,
-                    mapBottomPadding = 32.dp,
+                    mapTopPadding = mapInsets.topDp.dp,
+                    mapBottomPadding = mapInsets.bottomDp.dp,
                     onMapInteraction = {
                         if (clusterScopeIds != null) clusterScopeIds = null
                     },
                     onCandidateClick = { tapped ->
+                        if (clusterScopeIds?.contains(tapped) == false) clusterScopeIds = null
                         when (nextSelectedPlaceId(selectedPlaceId, tapped)) {
                             null -> onClearSelection()
-                            else -> onSelectPlace(tapped)
+                            else -> {
+                                onSelectPlace(tapped)
+                                revealPlaceId = tapped
+                                revealRequestId += 1
+                                sheetPosition = ResultSheetPosition.BALANCED
+                            }
                         }
                     },
                     onClusterClick = { memberIds ->
-                        clusterScopeIds = memberIds.toSet()
-                        showingMap = false
-                        if (selectedPlaceId != null && selectedPlaceId !in memberIds) {
-                            onClearSelection()
-                        }
+                        clusterScopeIds = memberIds.toList()
+                        // Browsing a cluster is not a change to the chosen trip or reminder.
+                        revealPlaceId = memberIds.firstOrNull()
+                        revealRequestId += 1
+                        sheetPosition = ResultSheetPosition.BALANCED
                     },
                 )
-            } else {
-                if (recommendations.isEmpty()) {
-                    EmptyResultSheet(
-                        directRouteIsTight = directRouteIsTight,
-                        warning = warning,
-                        onNewSearch = onNewSearch,
-                    )
-                } else {
+                if (visibleHeight > 72f) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                        shape = RoundedCornerShape(50),
+                        color = Color.White,
+                        shadowElevation = 3.dp,
+                    ) {
+                        TextButton(onClick = { overviewRequestId += 1 }) {
+                            Icon(Icons.Default.Map, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("전체 경로", fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+                },
+                sheetContent = {
                     LazyColumn(
                         state = recommendationListState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .fillMaxSize(),
+                            .weight(1f),
                         contentPadding = PaddingValues(bottom = 20.dp),
                     ) {
-                        item(key = "result-sheet-header") {
-                            ResultSheetHeader(
-                                count = visibleRecommendations.size,
-                                calculatedAtEpochMillis = calculatedAtEpochMillis,
-                                isClusterScope = clusterScopeIds != null,
-                                onShowAll = { clusterScopeIds = null },
-                            )
+                        if (recommendations.isEmpty()) {
+                            item(key = "empty-results") {
+                                EmptyResultSheet(directRouteIsTight, warning, onNewSearch)
+                            }
                         }
-                        if (warning.isNotBlank()) {
-                            item {
+                        if (warning.isNotBlank() && recommendations.isNotEmpty()) {
+                            item(key = "result-warning") {
                                 Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                                     ResultWarningBanner(
                                         message = warning,
@@ -381,44 +402,82 @@ internal fun RouteResultsScreen(
                             }
                         }
                     }
-                }
-            }
+                },
+            )
         }
     }
 }
 
 @Composable
 private fun ResultSheetHeader(
+    modifier: Modifier,
     count: Int,
     calculatedAtEpochMillis: Long?,
     isClusterScope: Boolean,
+    position: ResultSheetPosition,
     onShowAll: () -> Unit,
+    onPositionChanged: (ResultSheetPosition) -> Unit,
 ) {
+    val largeText = LocalDensity.current.fontScale > 1.3f
+    Column(modifier) {
+    Box(Modifier.fillMaxWidth().height(28.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.width(36.dp).height(4.dp).background(Color(0xFFD3D6DB), RoundedCornerShape(50)))
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 20.dp, end = 12.dp, bottom = 12.dp),
+            .padding(start = 20.dp, end = 8.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
             Text(
-                if (isClusterScope) "이 주변 ${count}곳" else "경로 주변 추천 ${count}곳",
-                fontSize = 19.sp,
+                when {
+                    isClusterScope && largeText -> "주변 ${count}곳"
+                    isClusterScope -> "이 주변 ${count}곳"
+                    largeText -> "추천 ${count}곳"
+                    else -> "경로 주변 추천 ${count}곳"
+                },
+                fontSize = 17.sp,
                 lineHeight = 24.sp,
                 fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 "${calculatedTimeLabel(calculatedAtEpochMillis)} 계산 기준 · 한 곳 선택",
                 color = TteumMuted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
-        if (isClusterScope) {
-            TextButton(onClick = onShowAll) {
-                Text("전체 보기", color = TteumRed, fontWeight = FontWeight.SemiBold)
-            }
+        IconButton(
+            onClick = { onPositionChanged(ResultSheetPosition.MAP) },
+            enabled = position != ResultSheetPosition.MAP,
+            modifier = Modifier.semantics { contentDescription = "지도 크게 보기" },
+        ) {
+            Icon(Icons.Default.Map, contentDescription = null)
         }
+        IconButton(
+            onClick = {
+                onPositionChanged(if (position == ResultSheetPosition.LIST) ResultSheetPosition.BALANCED else ResultSheetPosition.LIST)
+            },
+            modifier = Modifier.semantics {
+                contentDescription = if (position == ResultSheetPosition.LIST) "지도와 목록 함께 보기" else "목록 펼치기"
+            },
+        ) {
+            Icon(
+                if (position == ResultSheetPosition.LIST) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowUp,
+                contentDescription = null,
+            )
+        }
+    }
+    if (isClusterScope) {
+        TextButton(onClick = onShowAll, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+            Text("전체 추천 보기", color = TteumRed, fontWeight = FontWeight.SemiBold)
+        }
+    }
     }
 }
 

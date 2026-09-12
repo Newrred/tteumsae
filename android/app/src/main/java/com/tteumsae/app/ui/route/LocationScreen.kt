@@ -89,6 +89,7 @@ import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.Coordinates
 import com.tteumsae.app.domain.DestinationSupport
 import com.tteumsae.app.domain.LocationSearchResult
+import com.tteumsae.app.domain.LocationSearchResultType
 import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.domain.destinationSupport
 import com.tteumsae.app.domain.route.RouteFlowInput
@@ -737,7 +738,7 @@ private fun RouteLocationSearchField(
         isLoading = true
         try {
             results = searchPlaces(value, gangwonOnly)
-            if (results.isEmpty()) searchMessage = "검색 결과가 없어요. 장소명을 더 자세히 입력해 주세요."
+            if (results.isEmpty()) searchMessage = "검색 결과가 없어요. 장소명이나 도로명·지번 주소를 더 자세히 입력해 주세요."
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             searchFailed = true
@@ -777,11 +778,13 @@ private fun RouteLocationSearchField(
                         value,
                         modifier = Modifier.fillMaxWidth(),
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        // Building numbers remain readable at narrow widths and large font scales.
+                        // The row has a minimum height only; the surrounding input list can scroll.
+                        maxLines = Int.MAX_VALUE,
+                        softWrap = true,
                     )
                 } else {
-                    if (value.isBlank()) Text("장소 검색", color = TteumMuted)
+                    if (value.isBlank()) Text("장소명 또는 주소", color = TteumMuted)
                     BasicTextField(
                         value = value,
                         onValueChange = onValueChange,
@@ -863,6 +866,8 @@ private fun RouteLocationSearchField(
         if (results.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color.White)) {
                 results.take(LOCATION_SEARCH_VISIBLE_LIMIT).forEachIndexed { index, result ->
+                    val isAddress = result.type == LocationSearchResultType.ADDRESS
+                    val supportingAddress = if (isAddress) result.secondaryAddress else result.address
                     val support = if (gangwonOnly) {
                         destinationSupport(result.address)
                     } else {
@@ -888,6 +893,15 @@ private fun RouteLocationSearchField(
                             }
                             .padding(horizontal = 16.dp, vertical = 12.dp),
                     ) {
+                        if (isAddress) {
+                            Text(
+                                "주소",
+                                color = TteumMuted,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(bottom = 3.dp),
+                            )
+                        }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 result.name,
@@ -908,12 +922,12 @@ private fun RouteLocationSearchField(
                         if (isUnsupported && rejectedPlaceId == result.id) {
                             Text(UNSUPPORTED_DESTINATION_MESSAGE, color = TteumRed, fontSize = 12.sp)
                         }
-                        if (result.address.isNotBlank()) {
+                        if (supportingAddress.isNotBlank()) {
                             Text(
-                                result.address,
+                                supportingAddress,
                                 color = TteumMuted,
                                 fontSize = 12.sp,
-                                maxLines = 1,
+                                maxLines = if (isAddress) 2 else 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }

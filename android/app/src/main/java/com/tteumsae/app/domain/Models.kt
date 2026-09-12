@@ -142,11 +142,18 @@ data class Coordinates(
     val longitude: Double,
 )
 
+enum class LocationSearchResultType {
+    PLACE,
+    ADDRESS,
+}
+
 data class LocationSearchResult(
     val id: String,
     val name: String,
     val address: String,
     val coordinates: Coordinates,
+    val type: LocationSearchResultType = LocationSearchResultType.PLACE,
+    val secondaryAddress: String = "",
 )
 
 data class SearchCriteria(

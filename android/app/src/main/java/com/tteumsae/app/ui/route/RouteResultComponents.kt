@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -29,8 +31,6 @@ import androidx.compose.material.icons.filled.LocalCafe
 import androidx.compose.material.icons.filled.Museum
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingBag
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -43,8 +43,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -150,7 +152,10 @@ internal fun RouteCandidateCard(
                 value = selected,
                 role = Role.Checkbox,
                 onValueChange = { onSelect() },
-            ),
+            )
+            .semantics {
+                stateDescription = resultSelectionStateDescription(selected)
+            },
         color = if (selected) Color(0xFFFFF7F8) else Color.White,
     ) {
         Box {
@@ -169,17 +174,17 @@ internal fun RouteCandidateCard(
                 ) {
                     Column(Modifier.fillMaxWidth()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                        PlaceCategoryIcon(category = recommendation.place.category, selected = selected)
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            recommendation.place.name,
-                            modifier = Modifier.weight(1f),
-                            color = TteumInk,
-                            fontSize = 17.sp,
-                            lineHeight = 23.sp,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 2,
-                        )
+                            PlaceCategoryIcon(category = recommendation.place.category, selected = selected)
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                recommendation.place.name,
+                                modifier = Modifier.weight(1f),
+                                color = TteumInk,
+                                fontSize = 17.sp,
+                                lineHeight = 23.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 2,
+                            )
                         }
                         Spacer(Modifier.height(3.dp))
                         Text(
@@ -212,44 +217,17 @@ internal fun RouteCandidateCard(
                             }
                         }
                     }
-                    FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        if (selected) {
-                            Surface(
-                                modifier = Modifier.size(28.dp),
-                                color = TteumRed,
-                                shape = RoundedCornerShape(50),
-                            ) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = "선택됨",
-                                    tint = Color.White,
-                                    modifier = Modifier.padding(5.dp),
-                                )
-                            }
-                        } else {
-                            Text(
-                                "선택",
-                                color = TteumRed,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(top = 3.dp, start = 8.dp),
-                            )
-                        }
-                        TextButton(
-                            onClick = onDetail,
-                            modifier = Modifier
-                                .heightIn(min = 48.dp)
-                                .semantics {
-                                    contentDescription = "${recommendation.place.name} 장소 정보 보기"
-                                },
-                        ) {
-                            Text("상세보기 ›", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    ResultCandidateActions(
+                        placeName = recommendation.place.name,
+                        selected = selected,
+                        onDetail = onDetail,
+                    )
                 }
 
                 AnimatedVisibility(visible = selected) {
                     Column {
+                        Spacer(Modifier.height(10.dp))
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = TteumRedSoft,
@@ -312,6 +290,105 @@ internal fun RouteCandidateCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ResultCandidateActions(
+    placeName: String,
+    selected: Boolean,
+    onDetail: () -> Unit,
+) {
+    val fontScale = LocalDensity.current.fontScale
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (resultCandidateActionsStack(maxWidth.value, fontScale)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ResultSelectionControl(selected, Modifier.fillMaxWidth())
+                ResultDetailAction(placeName, onDetail, Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ResultSelectionControl(selected, Modifier.weight(1f).fillMaxHeight())
+                ResultDetailAction(placeName, onDetail, Modifier.weight(1f).fillMaxHeight())
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultSelectionControl(
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    // The enclosing candidate owns the only selection action. This visual indicator
+    // must not create a second click target or repeat the checkbox announcement.
+    Surface(
+        modifier = modifier.heightIn(min = 48.dp).clearAndSetSemantics { },
+        color = if (selected) TteumRedSoft else Color.White,
+        shape = RoundedCornerShape(10.dp),
+        border = BorderStroke(1.dp, if (selected) TteumRed.copy(alpha = 0.5f) else Color(0xFFDCE0E6)),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Surface(
+                modifier = Modifier.size(20.dp),
+                color = if (selected) TteumRed else Color.White,
+                shape = RoundedCornerShape(50),
+                border = if (selected) null else BorderStroke(1.5.dp, Color(0xFF9299A4)),
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    if (selected) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                resultSelectionActionLabel(selected),
+                color = if (selected) TteumRed else TteumInk,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ResultDetailAction(
+    placeName: String,
+    onDetail: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    TextButton(
+        onClick = onDetail,
+        modifier = modifier.heightIn(min = 48.dp).semantics {
+            contentDescription = "$placeName 장소 정보 보기"
+        },
+        shape = RoundedCornerShape(10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            "상세보기 ›",
+            color = TteumMuted,
+            fontSize = 13.sp,
+            lineHeight = 20.sp,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 1,
+        )
     }
 }
 

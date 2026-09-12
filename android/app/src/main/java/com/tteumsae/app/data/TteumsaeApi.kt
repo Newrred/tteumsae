@@ -5,6 +5,7 @@ import com.tteumsae.app.data.route.RouteGateway
 import com.tteumsae.app.data.route.RouteWaypoint
 import com.tteumsae.app.domain.Coordinates
 import com.tteumsae.app.domain.LocationSearchResult
+import com.tteumsae.app.domain.LocationSearchResultType
 import com.tteumsae.app.domain.OperationStatus
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
@@ -305,7 +306,7 @@ private fun Coordinates.toJson() = JSONObject()
     .put("latitude", latitude)
     .put("longitude", longitude)
 
-private fun JSONObject.toLocationSearchResult() = LocationSearchResult(
+internal fun JSONObject.toLocationSearchResult() = LocationSearchResult(
     id = getString("id"),
     name = getString("name"),
     address = optString("address"),
@@ -313,6 +314,8 @@ private fun JSONObject.toLocationSearchResult() = LocationSearchResult(
         latitude = getDouble("latitude"),
         longitude = getDouble("longitude"),
     ),
+    type = if (optString("type") == "ADDRESS") LocationSearchResultType.ADDRESS else LocationSearchResultType.PLACE,
+    secondaryAddress = if (isNull("secondaryAddress")) "" else optString("secondaryAddress"),
 )
 
 private fun JSONObject.toRecommendation(requireV1Fields: Boolean): SafeRecommendation {
