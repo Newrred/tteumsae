@@ -28,14 +28,6 @@ class RouteResultPolicyTest {
     }
 
     @Test
-    fun `선택 결과 시트는 큰 글자에서 높아지고 지도 영역을 위해 상한을 둔다`() {
-        assertEquals(420f, selectedResultPeekHeightDp(0.9f))
-        assertEquals(420f, selectedResultPeekHeightDp(1f))
-        assertEquals(546f, selectedResultPeekHeightDp(1.3f))
-        assertEquals(590f, selectedResultPeekHeightDp(2f))
-    }
-
-    @Test
     fun `선택 요약은 최대 체류와 출발 권장시각을 사용한다`() {
         val recommendation = recommendation("one", detour = 8)
 

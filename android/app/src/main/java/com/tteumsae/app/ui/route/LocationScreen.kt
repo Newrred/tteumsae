@@ -688,6 +688,7 @@ private fun RouteLocationSearchField(
     var results by remember { mutableStateOf(emptyList<LocationSearchResult>()) }
     var isLoading by remember { mutableStateOf(false) }
     var searchMessage by remember { mutableStateOf<String?>(null) }
+    var rejectedPlaceId by remember { mutableStateOf<String?>(null) }
     var searchFailed by remember { mutableStateOf(false) }
     var searchAttempt by remember { mutableIntStateOf(0) }
     var focusAfterClear by remember { mutableStateOf(false) }
@@ -710,6 +711,7 @@ private fun RouteLocationSearchField(
         results = emptyList()
         isLoading = false
         searchMessage = null
+        rejectedPlaceId = null
         searchFailed = false
         if (value.length < 2 || selected?.name == value || value == "현재 위치") return@LaunchedEffect
         delay(350)
@@ -827,6 +829,18 @@ private fun RouteLocationSearchField(
                 }
             }
         }
+        if (searchMessage != null) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(searchMessage.orEmpty(), modifier = Modifier.weight(1f), color = TteumMuted, fontSize = 12.sp)
+                if (searchFailed) TextButton(onClick = { searchAttempt += 1 }) { Text("다시 시도") }
+            }
+        }
+        if (gangwonOnly && selected == null && searchMessage == null) {
+            Text("현재는 강원도 목적지를 지원해요", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = TteumMuted, fontSize = 12.sp)
+        }
         if (results.isNotEmpty()) {
             Column(modifier = Modifier.fillMaxWidth().background(androidx.compose.ui.graphics.Color.White)) {
                 results.take(LOCATION_SEARCH_VISIBLE_LIMIT).forEachIndexed { index, result ->
@@ -845,6 +859,7 @@ private fun RouteLocationSearchField(
                             .clickable {
                                 if (isUnsupported) {
                                     searchFailed = false
+                                    rejectedPlaceId = result.id
                                     searchMessage = UNSUPPORTED_DESTINATION_MESSAGE
                                 } else {
                                     onSelected(result)
@@ -871,6 +886,9 @@ private fun RouteLocationSearchField(
                                 )
                             }
                         }
+                        if (isUnsupported && rejectedPlaceId == result.id) {
+                            Text(UNSUPPORTED_DESTINATION_MESSAGE, color = TteumRed, fontSize = 12.sp)
+                        }
                         if (result.address.isNotBlank()) {
                             Text(
                                 result.address,
@@ -884,15 +902,7 @@ private fun RouteLocationSearchField(
                 }
             }
         }
-        if (searchMessage != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(searchMessage.orEmpty(), modifier = Modifier.weight(1f), color = TteumMuted, fontSize = 12.sp)
-                if (searchFailed) TextButton(onClick = { searchAttempt += 1 }) { Text("다시 시도") }
-            }
-        }
+
     }
 }
 

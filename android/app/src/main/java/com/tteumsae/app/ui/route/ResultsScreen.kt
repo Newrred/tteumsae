@@ -1,9 +1,7 @@
 package com.tteumsae.app.ui.route
 
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -28,8 +26,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material3.Button
-import androidx.compose.material3.BottomSheetDefaults
-import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -60,7 +56,6 @@ import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SearchCriteria
 import com.tteumsae.app.ui.theme.TteumMuted
-import com.tteumsae.app.ui.theme.TteumHandle
 import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
 import java.time.Instant
@@ -96,6 +91,7 @@ internal fun RouteResultsScreen(
         recommendations.filter { it.place.id in ids }
     }?.takeIf { it.isNotEmpty() } ?: recommendations
     var overviewRequestId by remember { mutableIntStateOf(0) }
+    var showingMap by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var nowEpochMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val recommendationListState = rememberLazyListState()
     val deadlineHasPassed = arrivalDeadlineHasPassed(criteria, nowEpochMillis)
@@ -108,15 +104,6 @@ internal fun RouteResultsScreen(
     val directRouteIsTight = baseRoute != null &&
         baseRoute.totalDrivingMinutes + criteria.safetyBufferMinutes > criteria.deadlineMinutesFromNow
     val fontScale = LocalDensity.current.fontScale
-    val sheetPeekHeight by animateDpAsState(
-        targetValue = when {
-            recommendations.isEmpty() -> 210.dp
-            selected != null -> selectedResultPeekHeightDp(fontScale).dp
-            else -> 380.dp
-        },
-        animationSpec = tween(280),
-        label = "result-sheet-peek-height",
-    )
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -130,9 +117,9 @@ internal fun RouteResultsScreen(
             ?.takeIf { it.isNotEmpty() }
     }
 
-    LaunchedEffect(selectedPlaceId, visibleRecommendations, warning) {
+    LaunchedEffect(selectedPlaceId, visibleRecommendations, warning, showingMap) {
         val selectedIndex = visibleRecommendations.indexOfFirst { it.place.id == selectedPlaceId }
-        if (selectedIndex >= 0) {
+        if (!showingMap && selectedIndex >= 0) {
             val targetIndex = selectedIndex + 1 + if (warning.isNotBlank()) 1 else 0
             recommendationListState.animateScrollToItem(targetIndex)
             // The selected row and sheet both grow. Re-anchor after those
@@ -145,8 +132,85 @@ internal fun RouteResultsScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            Column {
+                Surface(
+                    modifier = Modifier
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxWidth(),
+                    color = Color.White.copy(alpha = 0.97f),
+                    shape = RoundedCornerShape(16.dp),
+                    shadowElevation = 6.dp,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
+                        }
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                if (recommendations.isEmpty()) {
+                                    "추천 가능한 장소가 없어요"
+                                } else if (fontScale > 1.3f) {
+                                    "경유지 선택"
+                                } else {
+                                    "들를 곳을 골라보세요"
+                                },
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                lineHeight = 20.sp,
+                            )
+                            Text(
+                                if (recommendations.isEmpty()) {
+                                    "조건을 바꾸거나 목적지로 바로 이동할 수 있어요"
+                                } else {
+                                    resultFreshnessLabel(calculatedAtEpochMillis, nowEpochMillis)
+                                },
+                                color = TteumMuted,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                            )
+                        }
+                        IconButton(
+                            onClick = if (deadlineCannotBeRechecked) onNewSearch else onRefresh,
+                            enabled = !isRefreshing,
+                        ) {
+                            if (isRefreshing) {
+                                CircularProgressIndicator(modifier = Modifier.padding(8.dp), strokeWidth = 2.dp)
+                            } else {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = if (deadlineCannotBeRechecked) {
+                                        "도착 마감 다시 정하기"
+                                    } else {
+                                        "현재 교통으로 다시 확인"
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+
+                TextButton(
+                    onClick = { showingMap = !showingMap; if (showingMap) overviewRequestId += 1 },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) {
+                    Text(resultViewActionLabel(showingMap), fontWeight = FontWeight.Bold)
+                }
+            }
+        },
         bottomBar = {
             Surface(color = Color.White, shadowElevation = 8.dp) {
+                Column {
+                if (showingMap) {
+                    TextButton(onClick = { showingMap = false }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
+                        Text(selected?.let { "${it.place.name} · 최대 ${compactMaximumStayLabel(it)} · 목록에서 확인" }
+                            ?: "지도 핀을 누르거나 목록에서 장소를 선택하세요", lineHeight = 20.sp)
+                    }
+                }
                 Button(
                     onClick = {
                         when {
@@ -182,20 +246,40 @@ internal fun RouteResultsScreen(
                     )
                 }
             }
+                }
         },
     ) { padding ->
-        BottomSheetScaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            sheetPeekHeight = sheetPeekHeight,
-            sheetShape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
-            sheetContainerColor = Color.White,
-            sheetShadowElevation = 12.dp,
-            sheetDragHandle = {
-                BottomSheetDefaults.DragHandle(color = TteumHandle)
-            },
-            sheetContent = {
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            if (showingMap) {
+                RouteMapCanvas(
+                    modifier = Modifier.fillMaxSize(),
+                    criteria = criteria,
+                    selected = selected,
+                    baseRoute = baseRoute,
+                    recommendations = recommendations,
+                    selectedPlaceId = selectedPlaceId,
+                    focusedPlaceId = focusedPlaceId,
+                    corridorRadiusMeters = corridorRadiusMeters,
+                    overviewRequestId = overviewRequestId,
+                    mapBottomPadding = 32.dp,
+                    onMapInteraction = {
+                        if (clusterScopeIds != null) clusterScopeIds = null
+                    },
+                    onCandidateClick = { tapped ->
+                        when (nextSelectedPlaceId(selectedPlaceId, tapped)) {
+                            null -> onClearSelection()
+                            else -> onSelectPlace(tapped)
+                        }
+                    },
+                    onClusterClick = { memberIds ->
+                        clusterScopeIds = memberIds.toSet()
+                        showingMap = false
+                        if (selectedPlaceId != null && selectedPlaceId !in memberIds) {
+                            onClearSelection()
+                        }
+                    },
+                )
+            } else {
                 if (recommendations.isEmpty()) {
                     EmptyResultSheet(
                         directRouteIsTight = directRouteIsTight,
@@ -207,7 +291,7 @@ internal fun RouteResultsScreen(
                         state = recommendationListState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .heightIn(min = 250.dp, max = 590.dp),
+                            .fillMaxSize(),
                         contentPadding = PaddingValues(bottom = 20.dp),
                     ) {
                         item(key = "result-sheet-header") {
@@ -281,111 +365,6 @@ internal fun RouteResultsScreen(
                         }
                     }
                 }
-            },
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                RouteMapCanvas(
-                    modifier = Modifier.fillMaxSize(),
-                    criteria = criteria,
-                    selected = selected,
-                    baseRoute = baseRoute,
-                    recommendations = recommendations,
-                    selectedPlaceId = selectedPlaceId,
-                    focusedPlaceId = focusedPlaceId,
-                    corridorRadiusMeters = corridorRadiusMeters,
-                    overviewRequestId = overviewRequestId,
-                    mapBottomPadding = sheetPeekHeight + 20.dp,
-                    onMapInteraction = {
-                        if (clusterScopeIds != null) clusterScopeIds = null
-                    },
-                    onCandidateClick = { tapped ->
-                        when (nextSelectedPlaceId(selectedPlaceId, tapped)) {
-                            null -> onClearSelection()
-                            else -> onSelectPlace(tapped)
-                        }
-                    },
-                    onClusterClick = { memberIds ->
-                        clusterScopeIds = memberIds.toSet()
-                        if (selectedPlaceId != null && selectedPlaceId !in memberIds) {
-                            onClearSelection()
-                        }
-                    },
-                )
-
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .fillMaxWidth(),
-                    color = Color.White.copy(alpha = 0.97f),
-                    shape = RoundedCornerShape(16.dp),
-                    shadowElevation = 6.dp,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "뒤로")
-                        }
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                if (recommendations.isEmpty()) {
-                                    "추천 가능한 장소가 없어요"
-                                } else {
-                                    "들를 곳을 골라보세요"
-                                },
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                if (recommendations.isEmpty()) {
-                                    "조건을 바꾸거나 목적지로 바로 이동할 수 있어요"
-                                } else {
-                                    resultMapCaption(
-                                        calculatedAtEpochMillis,
-                                        recommendations.size,
-                                    )
-                                },
-                                color = TteumMuted,
-                                fontSize = 12.sp,
-                            )
-                        }
-                        IconButton(
-                            onClick = if (deadlineCannotBeRechecked) onNewSearch else onRefresh,
-                            enabled = !isRefreshing,
-                        ) {
-                            if (isRefreshing) {
-                                CircularProgressIndicator(modifier = Modifier.padding(8.dp), strokeWidth = 2.dp)
-                            } else {
-                                Icon(
-                                    Icons.Default.Refresh,
-                                    contentDescription = if (deadlineCannotBeRechecked) {
-                                        "도착 마감 다시 정하기"
-                                    } else {
-                                        "현재 교통으로 다시 확인"
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
-
-                if (selected != null) {
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .statusBarsPadding()
-                            .padding(top = 82.dp, end = 16.dp),
-                        color = Color.White.copy(alpha = 0.96f),
-                        shape = RoundedCornerShape(50),
-                        shadowElevation = 5.dp,
-                    ) {
-                        TextButton(onClick = { overviewRequestId += 1 }) {
-                            Text("전체 경로", color = TteumRed, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
             }
         }
     }
@@ -412,7 +391,7 @@ private fun ResultSheetHeader(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "${calculatedTimeLabel(calculatedAtEpochMillis)} 현재 교통 반영 · 한 곳 선택",
+                "${calculatedTimeLabel(calculatedAtEpochMillis)} 계산 기준 · 한 곳 선택",
                 color = TteumMuted,
                 fontSize = 12.sp,
                 lineHeight = 18.sp,
@@ -467,7 +446,7 @@ private fun ReminderToggle(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 60.dp)
-            .clickable(enabled = enabled) { onCheckedChange(!checked) }
+            .toggleable(value = checked, enabled = enabled, role = androidx.compose.ui.semantics.Role.Switch, onValueChange = onCheckedChange)
             .padding(horizontal = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

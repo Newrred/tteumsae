@@ -1701,7 +1701,7 @@ private fun DetailScreen(
                                 deadlineHasPassed -> "도착 마감 다시 정하기"
                                 needsNewDeadline -> "도착 마감 다시 정하기"
                                 departureHasPassed -> "현재 교통으로 다시 확인"
-                                else -> "카카오맵에서 경유지로 안내"
+                                else -> "이곳 들러 카카오맵 안내"
                             },
                             fontSize = 17.sp,
                             fontWeight = FontWeight.Bold,
@@ -1751,7 +1751,7 @@ private fun DetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 18.dp)
-                            .height(132.dp),
+                            .height(64.dp),
                         color = Color(0xFFF5F6F8),
                         shape = RoundedCornerShape(18.dp),
                     ) {
@@ -1964,27 +1964,7 @@ private fun DetailScreen(
 
                     if (place.nearbyParkingLots.isNotEmpty()) {
                         Spacer(Modifier.height(26.dp))
-                        Text(
-                            "주변 공영주차장",
-                            fontSize = 21.sp,
-                            lineHeight = 27.sp,
-                            fontWeight = FontWeight.Bold,
-                        )
-                        Spacer(Modifier.height(11.dp))
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color(0xFFF7F8F9),
-                            shape = RoundedCornerShape(16.dp),
-                        ) {
-                            Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                                place.nearbyParkingLots.forEachIndexed { index, parking ->
-                                    VisitInfo(parking.name, nearbyParkingDescription(parking))
-                                    if (index != place.nearbyParkingLots.lastIndex) {
-                                        HorizontalDivider(color = Color(0xFFE5E7EA))
-                                    }
-                                }
-                            }
-                        }
+                        com.tteumsae.app.ui.route.NearbyParkingSection(place.nearbyParkingLots)
                     }
 
                     overview?.let { description ->

@@ -66,10 +66,6 @@ internal fun detourPinLabel(recommendation: SafeRecommendation): String =
 internal fun nextSelectedPlaceId(current: String?, tapped: String): String? =
     tapped.takeUnless { it == current }
 
-internal fun selectedResultPeekHeightDp(fontScale: Float): Float =
-    (420f * fontScale.coerceAtLeast(1f))
-        .coerceAtMost(590f)
-
 internal fun maximumStayLabel(recommendation: SafeRecommendation): String =
     recommendation.maximumStayMinutes?.let {
         "여기서 최대 약 ${readableDuration(it)} 머물 수 있어요"
@@ -168,24 +164,23 @@ internal fun RouteCandidateCard(
                 )
             }
             Column(Modifier.padding(start = 16.dp, end = 12.dp, top = 14.dp, bottom = 12.dp)) {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top,
                 ) {
-                    PlaceCategoryIcon(
-                        category = recommendation.place.category,
-                        selected = selected,
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.fillMaxWidth()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlaceCategoryIcon(category = recommendation.place.category, selected = selected)
+                        Spacer(Modifier.width(12.dp))
                         Text(
                             recommendation.place.name,
+                            modifier = Modifier.weight(1f),
                             color = TteumInk,
                             fontSize = 17.sp,
                             lineHeight = 23.sp,
                             fontWeight = FontWeight.Bold,
                             maxLines = 2,
                         )
+                        }
                         Spacer(Modifier.height(3.dp))
                         Text(
                             "경유 ${detourPinLabel(recommendation)} · 최대 ${compactMaximumStayLabel(recommendation)}",
@@ -204,6 +199,9 @@ internal fun RouteCandidateCard(
                                 foreground = Color(0xFF50545C),
                                 background = Color(0xFFF1F2F4),
                             )
+                            if (recommendation.operationStatus != OperationStatus.OPEN) {
+                                ResultTag("운영 확인 필요", TteumMuted, Color(0xFFF1F2F4))
+                            }
                             if (recommendation.operationStatus == OperationStatus.OPEN) {
                                 ResultTag(
                                     text = "운영 가능",
@@ -213,7 +211,7 @@ internal fun RouteCandidateCard(
                             }
                         }
                     }
-                    Column(horizontalAlignment = Alignment.End) {
+                    FlowRow(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (selected) {
                             Surface(
                                 modifier = Modifier.size(28.dp),
@@ -258,7 +256,7 @@ internal fun RouteCandidateCard(
                         ) {
                             Column(Modifier.padding(14.dp)) {
                                 Text(
-                                    "이 경유지를 선택하면",
+                                    "계산 시점에 출발하는 경우",
                                     color = TteumRed,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
@@ -272,7 +270,7 @@ internal fun RouteCandidateCard(
                                                 value = compactMaximumStayLabel(recommendation),
                                             )
                                             SelectionMetric(
-                                                label = "출발 권장",
+                                                label = "경유지에서 출발 권장",
                                                 value = if (departureHasPassed) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
                                                 emphasized = true,
                                             )
@@ -285,7 +283,7 @@ internal fun RouteCandidateCard(
                                                 modifier = Modifier.weight(1f),
                                             )
                                             SelectionMetric(
-                                                label = "출발 권장",
+                                                label = "경유지에서 출발 권장",
                                                 value = if (departureHasPassed) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
                                                 emphasized = true,
                                                 modifier = Modifier.weight(1f),

@@ -1,5 +1,7 @@
 package com.tteumsae.app.ui.saved
 
+import androidx.compose.material3.CircularProgressIndicator
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -229,7 +231,7 @@ internal fun SavedPlacesScreen(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("탐색 위치 검색", color = TteumMuted) },
+                    placeholder = { Text("장소명·주소 검색", color = TteumMuted) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = if (query.isNotBlank()) {
                         {
@@ -357,31 +359,11 @@ internal fun SavedPlacesScreen(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        if (isLoading) "불러오는 중" else "스팟 (${visiblePlaces.size})",
+                        if (isLoading) "불러오는 중" else "표시 중 ${visiblePlaces.size}곳",
                         color = TteumMuted,
                         fontWeight = FontWeight.Bold,
                     )
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                        tooltip = {
-                            PlainTooltip {
-                                Text("아래로 스크롤하면 장소를 계속 불러와요.")
-                            }
-                        },
-                        state = rememberTooltipState(),
-                    ) {
-                        Box(
-                            modifier = Modifier.size(36.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Default.Info,
-                                contentDescription = "목록 안내",
-                                tint = TteumMuted,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
-                    }
+
                 }
                 TextButton(
                     onClick = {
@@ -389,13 +371,23 @@ internal fun SavedPlacesScreen(
                     },
                 ) {
                     Text(
-                        if (sort == SavedSort.DEFAULT) "추천순" else "이름순",
+                        if (sort == SavedSort.DEFAULT) "기본순" else "이름순",
                         color = TteumMuted,
                         fontWeight = FontWeight.Bold,
                     )
                 }
             }
 
+            if (!isLoading && errorMessage == null && visiblePlaces.isNotEmpty()) {
+                Text(
+                    if (hasMore || isLoadingMore || loadMoreFailed) catalogContinuationLabel(hasMore, isLoadingMore, loadMoreFailed)
+                    else "불러올 장소를 모두 표시했어요",
+                    modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    color = TteumMuted,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                )
+            }
             if (isLoading) {
                 SavedPlacesLoadingGrid()
             } else if (errorMessage != null) {
@@ -494,6 +486,21 @@ internal fun SavedPlacesScreen(
                                 }
                             },
                         )
+                    }
+                    item(key = "catalog-continuation", span = { GridItemSpan(maxLineSpan) }) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(catalogContinuationLabel(hasMore, isLoadingMore, loadMoreFailed), color = TteumMuted)
+                            if (isLoadingMore) {
+                                CircularProgressIndicator(Modifier.padding(12.dp).size(24.dp))
+                            } else if (hasMore && !loadMoreFailed) {
+                                TextButton(onClick = onLoadMore, modifier = Modifier.heightIn(min = 48.dp)) {
+                                    Text("장소 더 보기")
+                                }
+                            }
+                        }
                     }
                     if (loadMoreFailed) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
