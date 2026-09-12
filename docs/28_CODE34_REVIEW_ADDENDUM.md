@@ -60,7 +60,8 @@ code34로 갱신했다. 과거 code33을 그대로 올리라는 지시로 해석
 - **06:39 공개 교체 완료.** [기존 APK 페이지](https://tteumsae-apk-six.vercel.app/)는200응답과
   version34·파일명·해시를 표시한다. 익명으로 APK를 다시 받아 위 로컬·폰 설치 파일과 SHA-256 일치를 확인했다.
   배포는 `dpl_DXnfSUZaJuK3MATk6WGU8DqVE2Ma`다. 원스토어 업로드·심사와 별개다.
-- Git은 검증된 주소 backend `8e3ae42`만 반영됐고 Android/UI·문서·다운로드 변경의 최종 커밋은 대기다.
+- 주소 backend는 `8e3ae42`, Android/UI·검증 문서·다운로드 변경은 **`d877f32`로 origin/main 반영 완료**다.
+  공개30E0 APK의 Android 소스는 `d877f32` 기준이며 이후 Git 상태 기록만 보완한 문서 커밋과 구분한다.
 
 ### 이전 E55D 후보에서 실제 확인한 내용
 

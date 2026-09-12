@@ -10,7 +10,7 @@
 최종 파일·해시 및 실행별 증거는 [보완 기록](27_RELEASE_UX_REFINEMENT.md)을 따른다.
 주소 backend는 **265/265·검사121개**, 실제 주소/장소명 응답 확인 후 운영 승격했다
 (`dpl_5YFbunSK8kYumCs1Lxki7oV4bN6H`). 앱 공개와 별개다.
-backend·API 문서만 `8e3ae42`로 origin/main에 반영했고 Android/UI·최신 문서의 Git 반영은 아직 대기다.
+주소 backend는 `8e3ae42`, Android/UI·검증 문서·다운로드 페이지는 **`d877f32`로 origin/main 반영 완료**다.
 **06:39 공개 code34 배포·익명 재다운로드 해시 대조 완료**다. 기존11시묶음33과
 원스토어 등록APK32는 보존한다. [변경 안내](28_CODE34_REVIEW_ADDENDUM.md)로 옛 자료와 현재 검토 대상을 구분한다.
 상세 왕복은 시트·목록을 복원하되 카메라는 재생성한다. [구현·미검증 구분](27_RELEASE_UX_REFINEMENT.md)을 따른다.
