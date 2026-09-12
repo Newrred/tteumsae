@@ -15,7 +15,7 @@ TourAPI 동기화 과정을 설명한다. 기획상 예정된 동작이 아니�
 ```text
 Android 앱
   ├─ 선택 로그인·프로필 ─────> Supabase Auth / profiles(RLS)
-  ├─ 위치 검색 ──────────────> GET /api/geocode ──> Kakao Local 키워드 검색
+  ├─ 위치 검색 ──────────────> GET /api/geocode ──> Kakao Local 장소명·주소 검색
   ├─ 행정구역 확인/역지오코딩 > GET /api/region ───> Kakao Local 좌표→행정구역
   ├─ 틈새 발견 목록 ─────────> GET /api/places ────> Supabase places
   ├─ 추천 요청 ──────────────> POST /api/recommendations
@@ -118,7 +118,7 @@ Vercel 경계 정책으로 교체해야 한다.
 | GET | `/api/health` | 없음 | 서버 버전과 연동 설정 존재 여부 |
 | GET | `/api/places` | 없음 | 활성 TourAPI 장소 페이지 조회 |
 | GET | `/api/places/{contentId}` | 없음 | 활성 장소 한 건 조회 |
-| GET | `/api/geocode` | 없음 | 카카오 키워드 장소 검색 |
+| GET | `/api/geocode` | 없음 | 카카오 장소명·도로명·지번 주소 검색 |
 | GET | `/api/region` | 없음 | 좌표의 행정구역 및 강원도 여부 |
 | POST | `/api/recommendations` | 없음 | 시간·경로·카테고리 기반 추천 |
 | POST | `/api/route` | 없음 | 출발·최종 목적지와 경유지 0~5개의 통합 차량 경로 재계산 |
@@ -130,6 +130,34 @@ Vercel 경계 정책으로 교체해야 한다.
 | GET | `/api/cron/tour-intro-sync?stage=congestion` | Bearer | 강릉 관광지 향후 30일 집중률 선동기화(현재 수동 전용) |
 | GET | `/api/cron/tour-intro-sync?stage=accessibility` | Bearer | 강원 무장애 장소 목록·상세 동기화(활용신청 후 수동 전용) |
 | GET | `/api/ops/status` | Bearer | Gate 1 호출량·동기화·데이터 품질 집계 |
+
+### 3.1 장소명·주소 검색 — 2026-09-13 보완
+
+`GET /api/geocode?query=...`는 도로명+건물번호 또는 동·리·가+지번으로 끝나는
+검색어를 Kakao Local 주소 검색(`analyze_type=exact`)으로 먼저 조회한다. 실제 주소 유형
+`ROAD_ADDR`/`REGION_ADDR`와 유효 좌표만 허용한다. 도로·행정구역의 중심점을 정확한
+출발지로 제시하지 않는다. 주소 검색이 정상적으로 빈 결과를 반환한 경우만 기존 키워드
+검색으로 이어지며, 공급자 오류를 빈 결과로 숨기지 않는다. `강릉역 2번출구`나
+`용지로 176 주차장`처럼 장소명을 포함한 검색은 기존 키워드 검색을 유지한다.
+
+기존 `id`, `name`, `address`, `category`, `latitude`, `longitude`, `kakaoMapUrl` 계약을
+유지한다. 주소 응답은 `type: "ADDRESS"`, `secondaryAddress`를 추가한다. 표시 주소는
+도로명 우선이며 지번 주소가 다르면 보조 정보로 제공한다. `address:`로 시작하는 안정 ID를
+사용하고 중복을 제거해 최대 10건을 반환한다. 기존 클라이언트도 기존 필드로 선택할 수 있다.
+출발지 전국 검색과 목적지의 강원도 지원 범위 검증은 그대로다.
+
+변경·검증 기록:
+
+- 새 주소 테스트는 구현 전 실패를 확인한 뒤 통과했다. Backend 전체 **265/265**,
+  프로젝트 검사 **121개** 통과. DB 구조·Cron·환경변수·비밀키는 변경하지 않았다.
+- Production 환경을 사용하는 도메인 미연결 후보 `dpl_5YFbunSK8kYumCs1Lxki7oV4bN6H`를
+  검증한 뒤 기존 사용자 승인 범위에서 운영 도메인으로 승격했다.
+- 운영 `/api/geocode`에서 `강릉시 강릉대로 33`과 `전북 익산시 부송동 100`은 각각
+  실제 주소 1건, `강릉역`은 기존 장소 10건을 확인했다. 주소 응답의 좌표도 확인했다.
+- 일반 Preview는 해당 환경에 필요한 비공개 설정이 없어 실패했으며 승격하지 않았다.
+  운영 환경 후보의 성공과 일반 Preview 실패를 혼동하지 않는다.
+- Android의 주소 구분 표시와 결과 시트 변경은 별도 code34 후보이며, 이 서버 검증은
+  새 APK의 실기기 화면·제스처 검증을 대신하지 않는다.
 
 ## 4. 장소 데이터 계약
 
