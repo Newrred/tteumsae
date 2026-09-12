@@ -136,7 +136,7 @@ internal fun reminderTimeLabel(
 internal fun RouteCandidateCard(
     recommendation: SafeRecommendation,
     selected: Boolean,
-    departureHasPassed: Boolean = false,
+    needsRecheck: Boolean = false,
     onSelect: () -> Unit,
     onDetail: () -> Unit,
     reminderContent: (@Composable () -> Unit)? = null,
@@ -183,7 +183,8 @@ internal fun RouteCandidateCard(
                         }
                         Spacer(Modifier.height(3.dp))
                         Text(
-                            "경유 ${detourPinLabel(recommendation)} · 최대 ${compactMaximumStayLabel(recommendation)}",
+                            if (needsRecheck) "경유 ${detourPinLabel(recommendation)} · 시간 재확인 필요"
+                            else "경유 ${detourPinLabel(recommendation)} · 최대 ${compactMaximumStayLabel(recommendation)}",
                             color = Color(0xFF50545C),
                             fontSize = 14.sp,
                             lineHeight = 20.sp,
@@ -199,10 +200,10 @@ internal fun RouteCandidateCard(
                                 foreground = Color(0xFF50545C),
                                 background = Color(0xFFF1F2F4),
                             )
-                            if (recommendation.operationStatus != OperationStatus.OPEN) {
+                            if (recommendation.operationStatus != OperationStatus.OPEN || needsRecheck) {
                                 ResultTag("운영 확인 필요", TteumMuted, Color(0xFFF1F2F4))
                             }
-                            if (recommendation.operationStatus == OperationStatus.OPEN) {
+                            if (recommendation.operationStatus == OperationStatus.OPEN && !needsRecheck) {
                                 ResultTag(
                                     text = "운영 가능",
                                     foreground = Color(0xFF20724E),
@@ -256,7 +257,8 @@ internal fun RouteCandidateCard(
                         ) {
                             Column(Modifier.padding(14.dp)) {
                                 Text(
-                                    "계산 시점에 출발하는 경우",
+                                    if (needsRecheck) "출발 전 현재 교통으로 다시 확인해 주세요"
+                                    else "계산 시점에 출발하는 경우",
                                     color = TteumRed,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
@@ -266,25 +268,25 @@ internal fun RouteCandidateCard(
                                     if (fontScale > 1.35f || maxWidth < 300.dp) {
                                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                             SelectionMetric(
-                                                label = "머물 수 있는 시간",
+                                                label = "계산 당시 최대 체류",
                                                 value = compactMaximumStayLabel(recommendation),
                                             )
                                             SelectionMetric(
                                                 label = "경유지에서 출발 권장",
-                                                value = if (departureHasPassed) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
+                                                value = if (needsRecheck) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
                                                 emphasized = true,
                                             )
                                         }
                                     } else {
                                         Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                                             SelectionMetric(
-                                                label = "머물 수 있는 시간",
+                                                label = "계산 당시 최대 체류",
                                                 value = compactMaximumStayLabel(recommendation),
                                                 modifier = Modifier.weight(1f),
                                             )
                                             SelectionMetric(
                                                 label = "경유지에서 출발 권장",
-                                                value = if (departureHasPassed) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
+                                                value = if (needsRecheck) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
                                                 emphasized = true,
                                                 modifier = Modifier.weight(1f),
                                             )

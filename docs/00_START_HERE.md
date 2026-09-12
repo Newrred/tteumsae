@@ -1,5 +1,16 @@
 # 새 담당자 시작 안내
 
+## 2026-09-13 출시 후보 0.13.0 / code 32
+
+현재 작업 트리는 기본 빌드를 수동 출발지 선택으로 전환하고 기존 자동 GPS 구현은 별도
+소스로 보존한다. 사진 이용조건·오프라인 라이선스 고지를 더해 수동 **190/190**,
+lint 오류0/경고48, 서명 APK 업데이트 설치와 카카오 로그인 유지까지 확인했다.
+운영 backend **253/253**, 공개 APK는 `https://tteumsae-apk-six.vercel.app/`.
+ONE store에는 code32 APK를 업로드했으나 아직 심사 신청·승인 완료가 아니다.
+[위치 빌드 모드](18_LOCATION_BUILD_MODES.md)를 먼저 확인한다.
+아래 0.12.9 GPS·실기기 이력은 이전 배포본 기록이며 신규 수동 APK 검증·원스토어 심사 완료가 아니다.
+최신 진행 상태는 [출시 스프린트](16_RELEASE_SPRINT_2026-09-13.md)를 따른다.
+
 기준일: `2026-09-11`
 Android 버전: `0.12.9` (`versionCode 30`)
 
@@ -22,7 +33,7 @@ Android 패키지: `com.tteumsae.app`
 
 - Kotlin·Jetpack Compose Android 앱
 - Kakao Map Android SDK 지도
-- GPS 권한과 현재 위치
+- GPS 권한과 현재 위치는 별도 `automatic` 빌드에 보존하며, 현재 수동 제출본에서는 사용하지 않음
 - Vercel Functions 백엔드
 - Supabase 장소 DB
 - 한국관광공사 TourAPI 동기화

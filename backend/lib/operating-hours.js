@@ -36,7 +36,8 @@ function localParts(value, timeZone) {
   return {
     weekday,
     dayOrdinal,
-    minute: Number(parts.hour) * 60 + Number(parts.minute)
+    minute: Number(parts.hour) * 60 + Number(parts.minute),
+    epochMinute: Math.floor(date.getTime() / 60_000)
   };
 }
 
@@ -137,15 +138,22 @@ function parseSchedule(hours, admissionText) {
     };
   }
 
-  let embeddedAdmission = "";
+  const embeddedAdmissions = [];
+  const admissionPattern = String.raw`(?:입장|매표)\s*마감\s*(?:\d{1,2}:\d{2}|(?:운영\s*)?종료\s*\d{1,3}\s*분\s*전)`;
   const withoutAdmission = hours.replace(
-    /(?:입장|매표)\s*마감\s*(?:\d{1,2}:\d{2}|(?:운영\s*)?종료\s*\d{1,3}\s*분\s*전)/g,
-    (match) => {
-      embeddedAdmission ||= match;
+    // Remove parentheses only when their entire content is a recognized cutoff.
+    // Other annotations remain in the remainder and cannot silently become OPEN.
+    new RegExp(`\\(\\s*(${admissionPattern})\\s*\\)|(${admissionPattern})`, "g"),
+    (_match, parenthesized, plain) => {
+      embeddedAdmissions.push(parenthesized || plain);
       return " ";
     }
   );
-  const admission = parseAdmission(admissionText || embeddedAdmission);
+  // A single global cutoff cannot represent different day-specific cutoffs.
+  if (embeddedAdmissions.length > 1) {
+    return { complete: false, reason: "AMBIGUOUS_LAST_ADMISSION" };
+  }
+  const admission = parseAdmission(admissionText || embeddedAdmissions[0]);
   if (!admission.complete) return { complete: false, reason: admission.reason };
 
   const intervalPattern = /(?:(평일|주말|매일|연중무휴|(?:매주\s*)?[월화수목금토일](?:요일)?(?:\s*~\s*[월화수목금토일](?:요일)?)?)\s*)?(\d{1,2})(?::(\d{2}))?\s*~\s*(\d{1,2})(?::(\d{2}))?/g;
@@ -194,8 +202,7 @@ export function evaluateOperatingWindow(
   const arrivalLocal = localParts(arrival, timeZone);
   const departureLocal = localParts(departure, timeZone);
   const closed = parseClosedDays(closedDays);
-  if (!closed.complete) return { status: "UNKNOWN", reason: closed.reason };
-  if (closed.days.has(arrivalLocal.weekday)) {
+  if (closed.complete && closed.days.has(arrivalLocal.weekday)) {
     return { status: "CLOSED", reason: "REGULAR_CLOSED_DAY" };
   }
 
@@ -216,7 +223,7 @@ export function evaluateOperatingWindow(
   ];
 
   for (const anchor of anchors) {
-    if (closed.days.has(anchor.weekday)) continue;
+    if (closed.complete && closed.days.has(anchor.weekday)) continue;
     for (const [start, rawEnd] of schedule.intervalsByDay.get(anchor.weekday) ?? []) {
       const end = rawEnd > start ? rawEnd : rawEnd + 1_440;
       const intervalStart = anchor.dayOrdinal + start;
@@ -226,7 +233,18 @@ export function evaluateOperatingWindow(
       if (limit != null && arrivalMinute > anchor.dayOrdinal + limit) {
         return { status: "CLOSED", reason: "AFTER_LAST_ADMISSION" };
       }
-      return { status: "OPEN", reason: "WITHIN_OPERATING_WINDOW" };
+      // Unresolved holidays can only restrict a clear schedule, not make its
+      // closed hours open. Preserve UNKNOWN inside that schedule until verified.
+      const result = closed.complete
+        ? { status: "OPEN", reason: "WITHIN_OPERATING_WINDOW" }
+        : { status: "UNKNOWN", reason: closed.reason };
+      // The product uses KST (no daylight-saving shift). A full-day interval is
+      // not evidence of a midnight closing time, so never invent a cap for it.
+      if (timeZone === "Asia/Seoul" && end - start < 1_440) {
+        result.closesAtEpochMillis =
+          (arrivalLocal.epochMinute + intervalEnd - arrivalMinute) * 60_000;
+      }
+      return result;
     }
   }
   return { status: "CLOSED", reason: "OUTSIDE_OPERATING_WINDOW" };

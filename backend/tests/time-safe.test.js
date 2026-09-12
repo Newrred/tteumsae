@@ -229,6 +229,29 @@ test("V1은 영업시간을 해석할 수 없는 후보도 확인 필요 상태�
   assert.equal(result.maximumStayMinutes, 35);
 });
 
+test("V1은 휴무가 불명확해도 확실한 폐점 전에 최대 체류를 제한한다", () => {
+  const now = new Date("2026-09-13T08:00:00Z");
+  const v1Criteria = {
+    ...criteria,
+    timeModel: "ARRIVAL_DEADLINE_V1",
+    deadlineMinutes: 120,
+    safetyBufferMinutes: 10,
+    arrivalDeadlineEpochMillis: now.getTime() + 120 * 60_000
+  };
+  const closingPlace = {
+    ...place,
+    opening_hours: "10:00~18:00",
+    closed_days: "월요일 / 설날·추석 당일"
+  };
+
+  const [result] = recommendPlaces(v1Criteria, [closingPlace], fixedRoute, now);
+  assert.equal(result.maximumStayMinutes, 50);
+  assert.equal(result.operationStatus, "UNKNOWN");
+  assert.deepEqual(recommendPlaces(v1Criteria, [
+    { ...closingPlace, opening_hours: "10:00~17:24" }
+  ], fixedRoute, now), []);
+});
+
 test("legacy 추천은 기존 체류 필드를 유지하고 V1 필드를 노출하지 않는다", () => {
   const [result] = recommendPlaces(criteria, [place], fixedRoute);
 

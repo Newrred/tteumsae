@@ -39,6 +39,17 @@ const defaultDependencies = {
   })
 };
 
+async function optionalDetail(load, fallback, section) {
+  try {
+    return await load();
+  } catch {
+    // Optional providers must not hide the core place. Never log their raw
+    // errors: request URLs and provider messages can contain credentials.
+    console.warn(`Optional place detail unavailable: ${section}`);
+    return fallback;
+  }
+}
+
 export function createPlaceHandler(dependencies = {}) {
   const deps = { ...defaultDependencies, ...dependencies };
   return { async fetch(request) {
@@ -52,16 +63,13 @@ export function createPlaceHandler(dependencies = {}) {
       if (!forecastInstant) return badRequest("atEpochMillis 값이 올바르지 않습니다.");
       const place = await deps.getPlace(id);
       if (!place) return notFound("장소를 찾을 수 없습니다.");
-      const forecast = await deps.getCongestion(id, kstUsageDate(forecastInstant));
-      const parkingLots = await deps.getParking(place);
-      let weather = null;
-      if (process.env.KMA_WEATHER_ENABLED?.trim().toLowerCase() === "true") {
-        try {
-          weather = await deps.getWeather(place, forecastInstant);
-        } catch {
-          console.error("Weather forecast could not be loaded");
-        }
-      }
+      const [forecast, parkingLots, weather] = await Promise.all([
+        optionalDetail(() => deps.getCongestion(id, kstUsageDate(forecastInstant)), null, "congestion"),
+        optionalDetail(() => deps.getParking(place), [], "parking"),
+        process.env.KMA_WEATHER_ENABLED?.trim().toLowerCase() === "true"
+          ? optionalDetail(() => deps.getWeather(place, forecastInstant), null, "weather")
+          : null
+      ]);
       return json({
         data: {
           ...place,

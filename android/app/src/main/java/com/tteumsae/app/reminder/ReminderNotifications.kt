@@ -17,6 +17,12 @@ object ReminderNotifications {
     private const val NOTIFICATION_ID = 4105
 
     fun createChannel(context: Context) {
+        // Also runs after an APK update and before any Activity/Receiver restores an old trip.
+        val applicationContext = context.applicationContext
+        DepartureReminderCoordinator(
+            ActiveTripStore(SharedPreferencesActiveTripPreferences(applicationContext)),
+            AlarmManagerDepartureReminderScheduler(applicationContext),
+        ).currentEnabledStopId()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(
@@ -30,6 +36,10 @@ object ReminderNotifications {
     }
 
     fun show(context: Context, trip: ActiveTrip) {
+        if (navigationUrlForReminderTap(trip, trip.locationMode, trip.navigationToken, System.currentTimeMillis()) == null) {
+            cancel(context)
+            return
+        }
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) !=
@@ -37,12 +47,14 @@ object ReminderNotifications {
         ) {
             return
         }
-        val navigationIntent = Intent(Intent.ACTION_VIEW, Uri.parse(trip.navigationUrl))
+        val navigationIntent = navigationIntent(context)
+            .putExtra(ReminderNavigationActivity.EXTRA_LOCATION_MODE, trip.locationMode)
+            .putExtra(ReminderNavigationActivity.EXTRA_NAVIGATION_TOKEN, trip.navigationToken)
         val contentIntent = PendingIntent.getActivity(
             context,
             NOTIFICATION_ID,
             navigationIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            PendingIntent.FLAG_CANCEL_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher)
@@ -55,4 +67,21 @@ object ReminderNotifications {
         context.getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, notification)
     }
+
+    internal fun cancel(context: Context, previousNavigationUrl: String? = null) {
+        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+        PendingIntent.getActivity(
+            context, NOTIFICATION_ID, navigationIntent(context),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+        )?.cancel()
+        previousNavigationUrl?.let { url ->
+            PendingIntent.getActivity(
+                context, NOTIFICATION_ID, Intent(Intent.ACTION_VIEW, Uri.parse(url)),
+                PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+            )?.cancel()
+        }
+    }
+
+    private fun navigationIntent(context: Context): Intent =
+        Intent(context, ReminderNavigationActivity::class.java)
 }

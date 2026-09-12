@@ -27,13 +27,9 @@ internal fun openKakaoMapHome(context: Context) {
 }
 
 internal fun openKakaoMapInstallPage(context: Context) {
-    val query = Uri.encode("카카오맵")
-    val intents = listOf(
-        Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$query")),
-        Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=$query&c=apps")),
-    )
-    if (intents.none { runCatching { context.startActivity(it) }.isSuccess }) {
-        Toast.makeText(context, "앱 스토어를 열 수 없습니다.", Toast.LENGTH_SHORT).show()
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://map.kakao.com/"))
+    if (runCatching { context.startActivity(intent) }.isFailure) {
+        Toast.makeText(context, "지도를 열 수 없습니다.", Toast.LENGTH_SHORT).show()
     }
 }
 

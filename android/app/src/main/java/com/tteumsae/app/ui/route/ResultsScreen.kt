@@ -55,6 +55,10 @@ import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.RouteSummary
 import com.tteumsae.app.domain.SafeRecommendation
 import com.tteumsae.app.domain.SearchCriteria
+import com.tteumsae.app.domain.route.RouteNavigationAction
+import com.tteumsae.app.domain.route.recommendationNeedsRecheck
+import com.tteumsae.app.domain.route.routeNavigationAction
+import com.tteumsae.app.location.LocationAccessPolicy
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
@@ -94,13 +98,13 @@ internal fun RouteResultsScreen(
     var showingMap by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var nowEpochMillis by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val recommendationListState = rememberLazyListState()
-    val deadlineHasPassed = arrivalDeadlineHasPassed(criteria, nowEpochMillis)
     val deadlineCannotBeRechecked = arrivalDeadlineCannotBeRechecked(criteria, nowEpochMillis)
-    val selectedDepartureHasPassed = selected?.let {
-        recommendationDepartureHasPassed(it, nowEpochMillis)
+    val navigationAction = routeNavigationAction(
+        criteria, listOfNotNull(selected), calculatedAtEpochMillis, nowEpochMillis,
+    )
+    val selectedNeedsRecheck = selected?.let {
+        recommendationNeedsRecheck(it, calculatedAtEpochMillis, nowEpochMillis)
     } == true
-    val selectedNeedsNewDeadline = selectedDepartureHasPassed &&
-        arrivalDeadlineCannotBeRechecked(criteria, nowEpochMillis)
     val directRouteIsTight = baseRoute != null &&
         baseRoute.totalDrivingMinutes + criteria.safetyBufferMinutes > criteria.deadlineMinutesFromNow
     val fontScale = LocalDensity.current.fontScale
@@ -173,6 +177,14 @@ internal fun RouteResultsScreen(
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp,
                             )
+                            if (!LocationAccessPolicy.automaticLocationEnabled) {
+                                Text(
+                                    "선택한 출발지 기준",
+                                    color = TteumMuted,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                )
+                            }
                         }
                         IconButton(
                             onClick = if (deadlineCannotBeRechecked) onNewSearch else onRefresh,
@@ -207,17 +219,21 @@ internal fun RouteResultsScreen(
                 Column {
                 if (showingMap) {
                     TextButton(onClick = { showingMap = false }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) {
-                        Text(selected?.let { "${it.place.name} · 최대 ${compactMaximumStayLabel(it)} · 목록에서 확인" }
+                        Text(selected?.let {
+                            if (selectedNeedsRecheck) "${it.place.name} · 시간 재확인 필요 · 목록에서 확인"
+                            else "${it.place.name} · 최대 ${compactMaximumStayLabel(it)} · 목록에서 확인"
+                        }
                             ?: "지도 핀을 누르거나 목록에서 장소를 선택하세요", lineHeight = 20.sp)
                     }
                 }
                 Button(
                     onClick = {
-                        when {
-                            deadlineHasPassed -> onNewSearch()
-                            selectedNeedsNewDeadline -> onNewSearch()
-                            selectedDepartureHasPassed -> onRefresh()
-                            else -> onNavigate(selected)
+                        when (routeNavigationAction(
+                            criteria, listOfNotNull(selected), calculatedAtEpochMillis, System.currentTimeMillis(),
+                        )) {
+                            RouteNavigationAction.RESET_DEADLINE -> onNewSearch()
+                            RouteNavigationAction.RECHECK -> onRefresh()
+                            RouteNavigationAction.OPEN_ROUTE -> onNavigate(selected)
                         }
                     },
                     enabled = !isRefreshing,
@@ -235,9 +251,8 @@ internal fun RouteResultsScreen(
                 ) {
                     Text(
                         when {
-                            deadlineHasPassed -> "도착 마감 다시 정하기"
-                            selectedNeedsNewDeadline -> "도착 마감 다시 정하기"
-                            selectedDepartureHasPassed -> "출발 시각 지남 · 다시 확인"
+                            navigationAction == RouteNavigationAction.RESET_DEADLINE -> "도착 마감 다시 정하기"
+                            navigationAction == RouteNavigationAction.RECHECK -> "현재 교통으로 다시 확인"
                             selected == null -> "목적지로 바로 안내"
                             else -> "이곳 들러 카카오맵 안내"
                         },
@@ -326,8 +341,9 @@ internal fun RouteResultsScreen(
                             RouteCandidateCard(
                                 recommendation = recommendation,
                                 selected = isSelected,
-                                departureHasPassed = recommendationDepartureHasPassed(
+                                needsRecheck = recommendationNeedsRecheck(
                                     recommendation,
+                                    calculatedAtEpochMillis,
                                     nowEpochMillis,
                                 ),
                                 onSelect = {
@@ -343,8 +359,9 @@ internal fun RouteResultsScreen(
                                             recommendation = recommendation,
                                             checked = reminderEnabled,
                                             enabled = reminderEnabled ||
-                                                !recommendationDepartureHasPassed(
+                                                !recommendationNeedsRecheck(
                                                     recommendation,
+                                                    calculatedAtEpochMillis,
                                                     nowEpochMillis,
                                                 ),
                                             onCheckedChange = {
@@ -458,17 +475,17 @@ private fun ReminderToggle(
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f)) {
             Text(
-                "${reminderTimeLabel(recommendation)}에 출발 알림",
+                "${reminderTimeLabel(recommendation)} 출발 알림 예정",
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
             )
             Text(
                 if (!enabled) {
-                    "권장 출발시각이 지나 설정할 수 없어요"
+                    "현재 교통으로 다시 확인한 뒤 켜 주세요"
                 } else if (checked) {
-                    "권장 출발 5분 전에 알려드려요"
+                    "출발 5분 전 예정 · 기기 절전 등으로 늦어질 수 있어요"
                 } else {
-                    "필요하면 켜 주세요"
+                    "선택 알림 · 기기 절전 등으로 늦어질 수 있어요"
                 },
                 color = TteumMuted,
                 fontSize = 11.sp,

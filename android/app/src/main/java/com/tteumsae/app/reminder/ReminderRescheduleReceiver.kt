@@ -9,7 +9,12 @@ class ReminderRescheduleReceiver : BroadcastReceiver() {
         if (intent.action !in SUPPORTED_ACTIONS) return
         val now = System.currentTimeMillis()
         val store = ActiveTripStore(SharedPreferencesActiveTripPreferences(context.applicationContext))
-        val trip = store.loadValid(now) ?: return
+        val scheduler = AlarmManagerDepartureReminderScheduler(context.applicationContext)
+        val trip = store.loadValid(now)
+        if (trip == null) {
+            scheduler.cancel()
+            return
+        }
         if (
             shouldRescheduleTrip(
                 latestDepartureEpochMillis = trip.latestDepartureEpochMillis,
@@ -17,7 +22,10 @@ class ReminderRescheduleReceiver : BroadcastReceiver() {
                 nowEpochMillis = now,
             )
         ) {
-            AlarmManagerDepartureReminderScheduler(context.applicationContext).schedule(trip, now)
+            scheduler.schedule(trip, now)
+        } else {
+            scheduler.cancel()
+            store.clear()
         }
     }
 

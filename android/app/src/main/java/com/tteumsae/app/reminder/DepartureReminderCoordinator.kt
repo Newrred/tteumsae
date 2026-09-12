@@ -7,7 +7,7 @@ class DepartureReminderCoordinator(
 ) {
     fun enable(trip: ActiveTrip): String? {
         val now = nowEpochMillis()
-        if (trip.latestDepartureEpochMillis <= now || trip.expiresAtEpochMillis <= now) {
+        if (!store.isCompatible(trip) || trip.latestDepartureEpochMillis <= now || trip.expiresAtEpochMillis <= now) {
             clear()
             return null
         }

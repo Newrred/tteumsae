@@ -204,7 +204,10 @@ class DetailPresentationTest {
             "사진 · 한국관광공사 TourAPI · 공공누리 제3유형",
             placePhotoSourceCaption(place, "https://example.com/hero.jpg"),
         )
-        assertNull(placePhotoSourceCaption(place, "https://example.com/other.jpg"))
+        assertEquals(
+            "사진 · 한국관광공사 TourAPI · 개별 이용조건 확인",
+            placePhotoSourceCaption(place, "https://example.com/other.jpg"),
+        )
     }
 
     private fun place() = PlaceCandidate(

@@ -1,10 +1,12 @@
 import { estimateRoute } from "./routing.js";
 import { evaluateOperatingWindow } from "./operating-hours.js";
 import { isFestivalVisitEligible } from "./festival-eligibility.js";
+import { isRecommendationStopSuitable } from "./recommendation-stop-suitability.js";
 
 export const MINIMUM_STAY_MINUTES = 15;
 const STAY_ROUNDING_MINUTES = 5;
 const ARRIVAL_DEADLINE_TIME_MODEL = "ARRIVAL_DEADLINE_V1";
+const CATEGORY_DIVERSITY_DETOUR_MINUTES = 5;
 
 export function safetyLevel(marginMinutes) {
   if (marginMinutes >= 20) return "COMFORTABLE";
@@ -22,19 +24,20 @@ function floorStayMinutes(value) {
   return Math.floor(value / STAY_ROUNDING_MINUTES) * STAY_ROUNDING_MINUTES;
 }
 
+function placeInformationScore(place) {
+  return Number(place.operating_info_status === "VERIFIED") +
+    Number(Boolean(place.image_url?.trim())) +
+    Number(Boolean(place.overview?.trim()));
+}
+
 function maximumStayWithinOperatingWindow(place, arrival, routeMaximumStayMinutes) {
   const minimumWindow = evaluateOperatingWindow(place, {
     arrival,
     departure: new Date(arrival.getTime() + MINIMUM_STAY_MINUTES * 60_000),
     timeZone: "Asia/Seoul"
   });
-  if (minimumWindow.status !== "OPEN") {
-    return {
-      maximumStayMinutes: minimumWindow.status === "UNKNOWN"
-        ? routeMaximumStayMinutes
-        : 0,
-      operationStatus: minimumWindow.status
-    };
+  if (minimumWindow.status === "CLOSED") {
+    return { maximumStayMinutes: 0, operationStatus: "CLOSED" };
   }
 
   for (
@@ -47,8 +50,15 @@ function maximumStayWithinOperatingWindow(place, arrival, routeMaximumStayMinute
       departure: new Date(arrival.getTime() + stayMinutes * 60_000),
       timeZone: "Asia/Seoul"
     });
-    if (window.status === "OPEN") {
-      return { maximumStayMinutes: stayMinutes, operationStatus: "OPEN" };
+    if (window.status !== "CLOSED") {
+      const closesAtEpochMillis = window.closesAtEpochMillis;
+      return {
+        maximumStayMinutes: Number.isFinite(closesAtEpochMillis)
+          ? Math.min(stayMinutes, floorStayMinutes((closesAtEpochMillis - arrival.getTime()) / 60_000))
+          : stayMinutes,
+        operationStatus: window.status,
+        closesAtEpochMillis
+      };
     }
   }
 
@@ -70,8 +80,10 @@ export function selectRouteCandidates(
   limit = 20,
   now = new Date()
 ) {
-  return places
+  const isArrivalDeadline = criteria.timeModel === ARRIVAL_DEADLINE_TIME_MODEL;
+  const candidates = places
     .filter((place) => matchesCategories(criteria, place))
+    .filter(isRecommendationStopSuitable)
     .map((place) => {
       const route = estimateRoute(
         criteria.start,
@@ -98,10 +110,36 @@ export function selectRouteCandidates(
     .sort(
       (left, right) =>
         left.estimatedDetourMinutes - right.estimatedDetourMinutes ||
-        left.estimatedTotalMinutes - right.estimatedTotalMinutes
-    )
-    .slice(0, Math.max(1, limit))
-    .map((item) => item.place);
+        left.estimatedTotalMinutes - right.estimatedTotalMinutes ||
+        (isArrivalDeadline
+          ? placeInformationScore(right.place) - placeInformationScore(left.place)
+          : 0)
+    );
+  const candidateLimit = Math.max(1, limit);
+  if (!isArrivalDeadline || candidates.length <= candidateLimit) {
+    return candidates.slice(0, candidateLimit).map((item) => item.place);
+  }
+
+  // A dense restaurant catalog must not consume every exact-route slot. Keep
+  // the closest option and one option per category only within a small detour
+  // band, then fill remaining slots by the same distance order. Actual travel
+  // time and opening-window checks still decide which places can be recommended.
+  const nearbyDetourLimit = candidates[0].estimatedDetourMinutes +
+    CATEGORY_DIVERSITY_DETOUR_MINUTES;
+  const selected = new Set();
+  const categories = new Set();
+  for (const candidate of candidates) {
+    if (selected.size >= candidateLimit ||
+      candidate.estimatedDetourMinutes > nearbyDetourLimit) break;
+    if (categories.has(candidate.place.category)) continue;
+    selected.add(candidate);
+    categories.add(candidate.place.category);
+  }
+  for (const candidate of candidates) {
+    if (selected.size >= candidateLimit) break;
+    selected.add(candidate);
+  }
+  return [...selected].map((item) => item.place);
 }
 
 export function recommendPlaces(
@@ -112,6 +150,7 @@ export function recommendPlaces(
 ) {
   return places
     .filter((place) => matchesCategories(criteria, place))
+    .filter(isRecommendationStopSuitable)
     .map((place) => {
       const route = routeProvider(
         criteria.start,
@@ -138,15 +177,19 @@ export function recommendPlaces(
           routeMaximumStayMinutes
         );
         if (operatingWindow.maximumStayMinutes < MINIMUM_STAY_MINUTES) return null;
+        const destinationDepartureEpochMillis = criteria.arrivalDeadlineEpochMillis -
+          (route.secondLegMinutes + criteria.safetyBufferMinutes) * 60_000;
 
         return {
           place,
           route,
           minimumStayMinutes: MINIMUM_STAY_MINUTES,
           maximumStayMinutes: operatingWindow.maximumStayMinutes,
-          latestDepartureEpochMillis:
-            criteria.arrivalDeadlineEpochMillis -
-            (route.secondLegMinutes + criteria.safetyBufferMinutes) * 60_000,
+          // Only a known absolute closing time can tighten this deadline. The
+          // five-minute rounded display stay must not remove remaining slack.
+          latestDepartureEpochMillis: Number.isFinite(operatingWindow.closesAtEpochMillis)
+            ? Math.min(destinationDepartureEpochMillis, operatingWindow.closesAtEpochMillis)
+            : destinationDepartureEpochMillis,
           operationStatus: operatingWindow.operationStatus
         };
       }

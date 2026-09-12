@@ -32,6 +32,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -43,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,7 +53,10 @@ import androidx.compose.ui.unit.sp
 import com.tteumsae.app.domain.PlaceCandidate
 import com.tteumsae.app.domain.PlaceCategory
 import com.tteumsae.app.platform.savedImageCache
+import com.tteumsae.app.platform.openPolicy
 import com.tteumsae.app.ui.common.compactTags
+import com.tteumsae.app.ui.route.TOUR_PHOTO_USAGE_CONDITIONS_URL
+import com.tteumsae.app.ui.route.placePhotoMayCrop
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
@@ -126,6 +131,7 @@ internal fun SavedPlaceCard(
                 SavedPlaceImage(
                     imageUrl = place.imageUrl,
                     category = place.category,
+                    cropAllowed = placePhotoMayCrop(place, place.imageUrl),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(128.dp),
@@ -228,6 +234,7 @@ internal fun SavedPlaceCard(
 internal fun SavedPlaceImage(
     imageUrl: String,
     category: PlaceCategory? = null,
+    cropAllowed: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     var bitmap by remember(imageUrl) {
@@ -282,8 +289,22 @@ internal fun SavedPlaceImage(
         Image(
             bitmap = bitmap!!,
             contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = modifier,
+            contentScale = if (cropAllowed) ContentScale.Crop else ContentScale.Fit,
+            modifier = if (cropAllowed) modifier else modifier.background(Color(0xFFF5F6F8)),
         )
+    }
+}
+
+@Composable
+internal fun TourPhotoAttribution(caption: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    Column(modifier) {
+        Text(caption, color = TteumMuted, fontSize = 11.sp, lineHeight = 16.sp)
+        TextButton(
+            onClick = { openPolicy(context, TOUR_PHOTO_USAGE_CONDITIONS_URL) },
+            modifier = Modifier.heightIn(min = 48.dp),
+        ) {
+            Text("사진 출처·이용조건 보기", fontSize = 12.sp)
+        }
     }
 }

@@ -9,6 +9,15 @@ plugins {
     id("org.jetbrains.kotlin.kapt")
 }
 
+// Location capability is part of the APK, never an account preference or a remote flag.
+// A reviewed automatic-location release can be built explicitly with -PlocationMode=automatic.
+val locationMode = providers.gradleProperty("locationMode").orElse("manual").get()
+if (locationMode !in setOf("manual", "automatic")) {
+    throw GradleException("Unknown locationMode '$locationMode'. Use manual (default) or automatic.")
+}
+val automaticLocationEnabled = locationMode == "automatic"
+val locationSourceSet = if (automaticLocationEnabled) "locationAutomatic" else "locationManual"
+
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
     if (file.exists()) {
@@ -66,8 +75,9 @@ android {
         applicationId = "com.tteumsae.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 30
-        versionName = "0.12.9"
+        versionCode = 32
+        versionName = "0.13.0"
+        buildConfigField("boolean", "AUTOMATIC_LOCATION_ENABLED", automaticLocationEnabled.toString())
         buildConfigField(
             "String",
             "API_BASE_URL",
@@ -117,6 +127,20 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            java.srcDir("src/$locationSourceSet/java")
+        }
+        // Overlay the shared manifest in both variants. The manual overlay also removes
+        // any location permission introduced by a library's manifest.
+        getByName("debug") {
+            manifest.srcFile("src/$locationSourceSet/AndroidManifest.xml")
+        }
+        getByName("release") {
+            manifest.srcFile("src/$locationSourceSet/AndroidManifest.xml")
         }
     }
 

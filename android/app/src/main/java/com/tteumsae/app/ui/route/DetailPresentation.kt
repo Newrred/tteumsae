@@ -215,12 +215,39 @@ internal fun placeSourceCaption(place: PlaceCandidate): String {
     return if (reviewed == null) source else "$source · $reviewed 확인"
 }
 
-internal fun placePhotoSourceCaption(place: PlaceCandidate, imageUrl: String?): String? {
+internal const val TOUR_PHOTO_USAGE_CONDITIONS_URL =
+    "https://www.data.go.kr/data/15101578/openapi.do"
+
+/** Only unambiguous rights for the actual displayed URL can permit cropping. */
+internal fun placePhotoMayCrop(place: PlaceCandidate, imageUrl: String?): Boolean =
+    matchingPhotoCopyrightType(place, imageUrl) == "Type1"
+
+private fun matchingPhotoCopyrightType(place: PlaceCandidate, imageUrl: String?): String? {
     val normalizedUrl = normalizedVisitInfo(imageUrl) ?: return null
-    val attribution = place.imageAttributions.firstOrNull {
+    val matches = place.imageAttributions.filter {
         normalizedVisitInfo(it.imageUrl) == normalizedUrl ||
             normalizedVisitInfo(it.thumbnailUrl) == normalizedUrl
-    } ?: return null
-    val copyright = normalizedVisitInfo(attribution.copyrightLabel) ?: return null
-    return "사진 · 한국관광공사 TourAPI · $copyright"
+    }
+    if (matches.isEmpty()) return null
+    val type = matches.map { normalizedVisitInfo(it.copyrightType) }.distinct().singleOrNull()
+    val expectedLabel = when (type) {
+        "Type1" -> "공공누리 제1유형"
+        "Type3" -> "공공누리 제3유형"
+        else -> return null
+    }
+    // Conflicting duplicate metadata or a contradictory label is not permission.
+    if (matches.any { normalizedVisitInfo(it.copyrightLabel)?.let { label -> label != expectedLabel } == true }) {
+        return null
+    }
+    return type
+}
+
+internal fun placePhotoSourceCaption(place: PlaceCandidate, imageUrl: String?): String? {
+    if (normalizedVisitInfo(imageUrl) == null) return null
+    val condition = when (matchingPhotoCopyrightType(place, imageUrl)) {
+        "Type1" -> "공공누리 제1유형"
+        "Type3" -> "공공누리 제3유형"
+        else -> "개별 이용조건 확인"
+    }
+    return "사진 · 한국관광공사 TourAPI · $condition"
 }

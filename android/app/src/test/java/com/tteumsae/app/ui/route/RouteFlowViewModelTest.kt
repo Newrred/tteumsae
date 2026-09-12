@@ -191,6 +191,44 @@ class RouteFlowViewModelTest {
         assertEquals("one", restored.uiState.value.selectedPlaceId)
     }
 
+    @Test
+    fun `이전 버전 좌표는 주소 이름이어도 복원하지 않고 다른 저장 상태는 보존한다`() {
+        val state = legacyLocationState()
+        state["unrelated.savedPlace"] = "keep"
+        val restored = viewModel(FakeRouteGateway(), state)
+
+        assertNull(restored.uiState.value.input.start)
+        assertNull(restored.uiState.value.input.destination)
+        assertNull(restored.uiState.value.selectedPlaceId)
+        assertFalse(state.contains("route.start.latitude"))
+        assertFalse(state.contains("route.start.longitude"))
+        assertEquals("keep", state.get<String>("unrelated.savedPlace"))
+    }
+
+    @Test
+    fun `현재 빌드와 다른 위치 모드의 경로를 복원하지 않는다`() {
+        val state = legacyLocationState()
+        state["route.locationMode"] = "unrecognized_mode"
+        val restored = viewModel(FakeRouteGateway(), state)
+
+        assertNull(restored.uiState.value.input.start)
+        assertNull(restored.uiState.value.input.arrivalDeadlineEpochMillis)
+        assertFalse(state.contains("route.destination.latitude"))
+    }
+
+    private fun legacyLocationState() = SavedStateHandle(
+        mapOf(
+            "route.start.name" to "강원특별자치도 강릉시 교동",
+            "route.start.latitude" to 37.75,
+            "route.start.longitude" to 128.87,
+            "route.destination.name" to "경포대",
+            "route.destination.latitude" to 37.80,
+            "route.destination.longitude" to 128.90,
+            "route.arrivalDeadlineEpochMillis" to now + 60 * 60_000,
+            "route.selectedPlaceId" to "one",
+        ),
+    )
+
     private fun viewModel(
         gateway: RouteGateway,
         savedStateHandle: SavedStateHandle = SavedStateHandle(),

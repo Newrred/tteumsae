@@ -18,6 +18,7 @@ import com.tteumsae.app.domain.route.RouteLocation
 import com.tteumsae.app.domain.route.SAFETY_BUFFER_MINUTES
 import com.tteumsae.app.domain.route.isValidArrivalDeadline
 import com.tteumsae.app.domain.route.remainingWholeMinutes
+import com.tteumsae.app.location.LocationAccessPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,6 +31,19 @@ class RouteFlowViewModel(
     private val gateway: RouteGateway,
     private val nowEpochMillis: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
+    init {
+        if (savedStateHandle.get<String>(KEY_LOCATION_MODE) != LocationAccessPolicy.persistenceMode) {
+            // Legacy GPS coordinates may already have an address as their display name.
+            // Reset this route only, without touching account or saved-place storage.
+            listOf(
+                KEY_START_NAME, KEY_START_LATITUDE, KEY_START_LONGITUDE,
+                KEY_DESTINATION_NAME, KEY_DESTINATION_LATITUDE, KEY_DESTINATION_LONGITUDE,
+                KEY_ARRIVAL_DEADLINE, KEY_TRANSPORT_MODE, KEY_CATEGORIES, KEY_SELECTED_PLACE_ID,
+            ).forEach { savedStateHandle.remove<Any?>(it) }
+            savedStateHandle[KEY_LOCATION_MODE] = LocationAccessPolicy.persistenceMode
+        }
+    }
+
     private val _uiState = MutableStateFlow(
         RouteFlowUiState(
             input = restoreInput(savedStateHandle),
@@ -218,6 +232,7 @@ class RouteFlowViewModel(
         }
 
         private const val KEY_START_NAME = "route.start.name"
+        private const val KEY_LOCATION_MODE = "route.locationMode"
         private const val KEY_START_LATITUDE = "route.start.latitude"
         private const val KEY_START_LONGITUDE = "route.start.longitude"
         private const val KEY_DESTINATION_NAME = "route.destination.name"

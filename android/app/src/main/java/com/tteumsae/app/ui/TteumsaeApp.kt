@@ -192,6 +192,7 @@ import com.kakao.vectormap.shape.PolygonOptions
 import com.kakao.vectormap.shape.PolygonStyles
 import com.kakao.vectormap.shape.PolygonStylesSet
 import com.tteumsae.app.BuildConfig
+import com.tteumsae.app.location.LocationAccessPolicy
 import com.tteumsae.app.TteumsaeApplication
 import com.tteumsae.app.data.TteumsaeApi
 import com.tteumsae.app.domain.Coordinates
@@ -212,7 +213,6 @@ import com.tteumsae.app.platform.CONTACT_EMAIL
 import com.tteumsae.app.platform.LOCATION_TERMS_URL
 import com.tteumsae.app.platform.PRIVACY_POLICY_URL
 import com.tteumsae.app.platform.clearAppCache
-import com.tteumsae.app.platform.buildKakaoMapMultiRouteUrl
 import com.tteumsae.app.platform.isKakaoMapAvailable
 import com.tteumsae.app.platform.openAppSettings
 import com.tteumsae.app.platform.openContactEmail
@@ -248,6 +248,8 @@ import com.tteumsae.app.ui.route.normalizedHomepageUrl
 import com.tteumsae.app.ui.route.normalizedVisitInfo
 import com.tteumsae.app.ui.route.placeSourceCaption
 import com.tteumsae.app.ui.route.placePhotoSourceCaption
+import com.tteumsae.app.ui.route.placePhotoMayCrop
+import com.tteumsae.app.ui.saved.TourPhotoAttribution
 import com.tteumsae.app.ui.route.plainTourText
 import com.tteumsae.app.ui.route.practicalVisitFacts
 import com.tteumsae.app.ui.route.compactMaximumStayLabel
@@ -265,6 +267,10 @@ import com.tteumsae.app.ui.theme.TteumRed
 import com.tteumsae.app.ui.theme.TteumRedSoft
 import com.tteumsae.app.reminder.ActiveTrip
 import com.tteumsae.app.reminder.activeTripExpiryEpochMillis
+import com.tteumsae.app.reminder.buildDepartureReminderNavigationUrl
+import com.tteumsae.app.domain.route.RouteNavigationAction
+import com.tteumsae.app.domain.route.recommendationNeedsRecheck
+import com.tteumsae.app.domain.route.routeNavigationAction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -319,14 +325,18 @@ internal fun deniedLocationPermissionNeedsSettings(
 internal fun networkFailureMessage(operation: String, detail: String?): String =
     "${operation}에 실패했어요. ${detail?.takeIf(String::isNotBlank) ?: "네트워크 연결을 확인해 주세요."}"
 
-internal fun shouldAutoLocateStart(startName: String, hasLocation: Boolean): Boolean =
-    startName == "현재 위치" && !hasLocation
+internal fun shouldAutoLocateStart(
+    startName: String,
+    hasLocation: Boolean,
+    automaticLocationEnabled: Boolean = true,
+): Boolean = automaticLocationEnabled && startName == "현재 위치" && !hasLocation
 private const val HOME_INTRO_PREFERENCES = "home_intro"
 private const val HOME_INTRO_HIDDEN_DATE = "hidden_date"
 
 @Composable
 fun TteumsaeApp() {
     val context = LocalContext.current
+    val automaticLocationEnabled = LocationAccessPolicy.automaticLocationEnabled
     val api = remember { TteumsaeApi() }
     val application = context.applicationContext as TteumsaeApplication
     val routeViewModel: RouteFlowViewModel = viewModel(
@@ -349,11 +359,21 @@ fun TteumsaeApp() {
         val trip = pendingReminderTrip
         val placeId = pendingReminderPlaceId
         if (granted && trip != null && placeId != null) {
-            reminderEnabledPlaceId = reminderCoordinator.enable(trip)
-            if (reminderEnabledPlaceId == null) {
+            val currentState = routeViewModel.uiState.value
+            val currentRecommendation = currentState.recommendations.firstOrNull { it.place.id == placeId }
+            val stillCurrent = currentState.selectedPlaceId == placeId &&
+                currentRecommendation != null &&
+                currentRecommendation.latestDepartureEpochMillis == trip.latestDepartureEpochMillis &&
+                !recommendationNeedsRecheck(
+                    currentRecommendation, currentState.calculatedAtEpochMillis, System.currentTimeMillis(),
+                )
+            if (stillCurrent) {
+                reminderEnabledPlaceId = reminderCoordinator.enable(trip)
+            }
+            if (!stillCurrent || reminderEnabledPlaceId == null) {
                 Toast.makeText(
                     context,
-                    "출발 권장시각이 지나 알림을 설정할 수 없어요.",
+                    "현재 교통으로 다시 확인한 뒤 알림을 켜 주세요.",
                     Toast.LENGTH_SHORT,
                 ).show()
             }
@@ -537,13 +557,46 @@ fun TteumsaeApp() {
             refreshedRecommendation?.let { activeTripFor(criteria, it) },
         )
     }
-    val openRoute: (List<SafeRecommendation>) -> Unit = { routeRecommendations ->
+    val openRoute: (List<SafeRecommendation>) -> Unit = openRoute@{ routeRecommendations ->
         val resolved = criteria
+        // UI timers may pause while another app is open. Check again at the
+        // external-app boundary, using the current result rather than a captured card.
+        val latestState = routeViewModel.uiState.value
+        if (routeRecommendations.isNotEmpty() && latestState.isRefreshing) {
+            screen = AppDestination.RESULTS
+            Toast.makeText(context, "현재 교통을 확인하고 있어요. 잠시만 기다려 주세요.", Toast.LENGTH_SHORT).show()
+            return@openRoute
+        }
+        val currentRecommendations = routeRecommendations.mapNotNull { requested ->
+            latestState.recommendations.firstOrNull { it.place.id == requested.place.id }
+        }
+        val allStopsStillPresent = currentRecommendations.size == routeRecommendations.size
+        val navigationAction = routeNavigationAction(
+            criteria = resolved,
+            recommendations = if (allStopsStillPresent) currentRecommendations else routeRecommendations,
+            calculatedAtEpochMillis = latestState.calculatedAtEpochMillis.takeIf { allStopsStillPresent },
+            nowEpochMillis = System.currentTimeMillis(),
+        )
+        when (navigationAction) {
+            RouteNavigationAction.RESET_DEADLINE -> {
+                startNewRouteSearch()
+                screen = AppDestination.LOCATION
+                Toast.makeText(context, "도착 마감을 다시 정해 주세요.", Toast.LENGTH_SHORT).show()
+                return@openRoute
+            }
+            RouteNavigationAction.RECHECK -> {
+                routeViewModel.refresh()
+                screen = AppDestination.RESULTS
+                Toast.makeText(context, "출발 전 체류 가능 시간을 다시 확인할게요.", Toast.LENGTH_SHORT).show()
+                return@openRoute
+            }
+            RouteNavigationAction.OPEN_ROUTE -> Unit
+        }
         openKakaoMapMultiRoute(
             context = context,
             start = resolved.startCoordinates,
             startName = resolved.startName,
-            waypoints = routeRecommendations.mapNotNull { recommendation ->
+            waypoints = currentRecommendations.mapNotNull { recommendation ->
                 recommendation.place.latitude?.let { latitude ->
                     recommendation.place.longitude?.let { longitude ->
                         recommendation.place.name to Coordinates(latitude, longitude)
@@ -574,7 +627,8 @@ fun TteumsaeApp() {
                     onStart = { coordinates ->
                         startNewRouteSearch()
                         routeViewModel.updateStart(
-                            coordinates?.let { RouteLocation("현재 위치", it) },
+                            coordinates?.takeIf { automaticLocationEnabled }
+                                ?.let { RouteLocation("현재 위치", it) },
                         )
                         routeViewModel.updateDestination(null)
                         routeViewModel.updateDeadline(null)
@@ -604,13 +658,15 @@ fun TteumsaeApp() {
                         resolveCurrentAddress = api::regionAddress,
                         onStartSelected = {
                             routeViewModel.updateStart(it)
-                            currentLocationTarget = it?.let { location ->
+                            val selectedTarget = it?.let { location ->
                                 RequestedMapLocation(
                                     latitude = location.coordinates.latitude,
                                     longitude = location.coordinates.longitude,
                                     requestId = System.nanoTime(),
                                 )
                             }
+                            currentLocationTarget = selectedTarget.takeIf { automaticLocationEnabled }
+                            if (!automaticLocationEnabled) routeMapFocusTarget = selectedTarget
                         },
                         onDestinationSelected = { location ->
                             routeViewModel.updateDestination(location)
@@ -773,7 +829,7 @@ fun TteumsaeApp() {
         AppDestination.SETTINGS -> {
             val lifecycleOwner = LocalLifecycleOwner.current
             var locationPermissionGranted by remember {
-                mutableStateOf(hasLocationPermission(context))
+                mutableStateOf(automaticLocationEnabled && hasLocationPermission(context))
             }
             var kakaoMapAvailable by remember {
                 mutableStateOf(isKakaoMapAvailable(context))
@@ -782,7 +838,7 @@ fun TteumsaeApp() {
             DisposableEffect(lifecycleOwner, context) {
                 val observer = LifecycleEventObserver { _, event ->
                     if (event == Lifecycle.Event.ON_RESUME) {
-                        locationPermissionGranted = hasLocationPermission(context)
+                        locationPermissionGranted = automaticLocationEnabled && hasLocationPermission(context)
                         kakaoMapAvailable = isKakaoMapAvailable(context)
                     }
                 }
@@ -812,7 +868,9 @@ fun TteumsaeApp() {
                 onRequireReauthentication = accountViewModel::requireReauthentication,
                 onReauthenticateForDeletion = accountViewModel::reauthenticateForDeletion,
                 onCancelDeletion = accountViewModel::cancelDeletion,
-                onOpenLocationSettings = { openAppSettings(context) },
+                onOpenLocationSettings = {
+                    if (automaticLocationEnabled) openAppSettings(context)
+                },
                 onOpenKakaoMap = {
                     if (kakaoMapAvailable) {
                         openKakaoMapHome(context)
@@ -910,6 +968,13 @@ fun TteumsaeApp() {
             onReminderChanged = reminder@{ recommendation, enabled ->
                 if (!enabled) {
                     clearDepartureReminder()
+                    return@reminder
+                }
+                if (recommendationNeedsRecheck(
+                        recommendation, routeState.calculatedAtEpochMillis, System.currentTimeMillis(),
+                    )
+                ) {
+                    Toast.makeText(context, "현재 교통으로 다시 확인한 뒤 알림을 켜 주세요.", Toast.LENGTH_SHORT).show()
                     return@reminder
                 }
                 val trip = activeTripFor(criteria, recommendation)
@@ -1019,6 +1084,7 @@ fun TteumsaeApp() {
                     openRoute(listOf(recommendation))
                 },
                 onRefreshResult = {
+                    routeViewModel.selectPlace(recommendation.place.id)
                     routeViewModel.refresh()
                     screen = AppDestination.RESULTS
                 },
@@ -1057,10 +1123,9 @@ private fun activeTripFor(
         stop = stop,
         arrivalDeadlineEpochMillis = deadline,
         latestDepartureEpochMillis = latestDeparture,
-        navigationUrl = buildKakaoMapMultiRouteUrl(
-            startName = criteria.startName,
-            start = start,
-            waypoints = listOf(recommendation.place.name to stop),
+        navigationUrl = buildDepartureReminderNavigationUrl(
+            stopName = recommendation.place.name,
+            stop = stop,
             destinationName = criteria.endName,
             destination = destination,
         ),
@@ -1080,12 +1145,14 @@ private fun HomeScreen(
     onTabSelected: (MainTab) -> Unit,
 ) {
     val context = LocalContext.current
+    val automaticLocationEnabled = LocationAccessPolicy.automaticLocationEnabled
     var isLocating by remember { mutableStateOf(false) }
     var cancelLocationRequest by remember { mutableStateOf<(() -> Unit)?>(null) }
     var showLocationSettingsDialog by remember { mutableStateOf(false) }
     var showPermissionSettingsDialog by remember { mutableStateOf(false) }
 
-    val locateCurrentPosition: () -> Unit = {
+    val locateCurrentPosition: () -> Unit = locate@{
+        if (!automaticLocationEnabled) return@locate
         cancelLocationRequest?.invoke()
         isLocating = true
         val cancel = requestCurrentLocation(
@@ -1129,6 +1196,7 @@ private fun HomeScreen(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
+        if (!automaticLocationEnabled) return@rememberLauncherForActivityResult
         if (permissions.values.any { it }) {
             locateCurrentPosition()
         } else if (deniedLocationPermissionNeedsSettings(permissions) { permission ->
@@ -1165,7 +1233,7 @@ private fun HomeScreen(
         ) {
             MapBackground(
                 modifier = Modifier.fillMaxSize(),
-                requestedLocation = currentLocationTarget,
+                requestedLocation = currentLocationTarget.takeIf { automaticLocationEnabled },
                 centerRequestedLocation = !routeInputOpen,
                 cameraTarget = routeMapFocusTarget,
             )
@@ -1180,7 +1248,7 @@ private fun HomeScreen(
                     supportingText = "가는 길에 잠깐 들를 한 곳을 찾아드려요",
                     onClick = {
                         onStart(
-                            currentLocationTarget?.let {
+                            currentLocationTarget?.takeIf { automaticLocationEnabled }?.let {
                                 Coordinates(it.latitude, it.longitude)
                             },
                         )
@@ -1198,7 +1266,7 @@ private fun HomeScreen(
                 exit = fadeOut(tween(130)),
             ) {
                 Box(modifier = Modifier.padding(end = 20.dp, bottom = 24.dp)) {
-                RoundMapButton(
+                if (automaticLocationEnabled) RoundMapButton(
                     onClick = if (isLocating) null else {
                         {
                             if (hasLocationPermission(context)) {
@@ -1242,7 +1310,7 @@ private fun HomeScreen(
         }
     }
 
-    if (showLocationSettingsDialog) {
+    if (automaticLocationEnabled && showLocationSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showLocationSettingsDialog = false },
             modifier = Modifier.widthIn(max = 420.dp),
@@ -1274,7 +1342,7 @@ private fun HomeScreen(
         )
     }
 
-    if (showPermissionSettingsDialog) {
+    if (automaticLocationEnabled && showPermissionSettingsDialog) {
         LocationPermissionSettingsDialog(
             onDismiss = { showPermissionSettingsDialog = false },
             onOpenSettings = {
@@ -1571,12 +1639,14 @@ private fun DetailScreen(
         criteria,
         nowEpochMillis,
     )
-    val departureHasPassed = com.tteumsae.app.ui.route.recommendationDepartureHasPassed(
+    val needsRecheck = recommendationNeedsRecheck(
         recommendation,
+        calculatedAtEpochMillis,
         nowEpochMillis,
     )
-    val needsNewDeadline = departureHasPassed &&
-        com.tteumsae.app.ui.route.arrivalDeadlineCannotBeRechecked(criteria, nowEpochMillis)
+    val navigationAction = routeNavigationAction(
+        criteria, listOf(recommendation), calculatedAtEpochMillis, nowEpochMillis,
+    )
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000L)
@@ -1590,17 +1660,17 @@ private fun DetailScreen(
     val homepageUrl = normalizedHomepageUrl(place.homepageUrl)
     val hasOperatingHours = normalizedVisitInfo(place.openingHours) != null
     val operationBadgeLabel = when {
-        recommendation.operationStatus == OperationStatus.OPEN -> "운영 가능"
+        recommendation.operationStatus == OperationStatus.OPEN && !needsRecheck -> "운영 가능"
         hasOperatingHours -> "운영시간 확인"
         else -> "운영 확인 필요"
     }
     val operationBadgeForeground = when {
-        recommendation.operationStatus == OperationStatus.OPEN -> Color(0xFF20724E)
+        recommendation.operationStatus == OperationStatus.OPEN && !needsRecheck -> Color(0xFF20724E)
         hasOperatingHours -> Color(0xFF365F9B)
         else -> Color(0xFF8A6418)
     }
     val operationBadgeBackground = when {
-        recommendation.operationStatus == OperationStatus.OPEN -> Color(0xFFEAF6EF)
+        recommendation.operationStatus == OperationStatus.OPEN && !needsRecheck -> Color(0xFFEAF6EF)
         hasOperatingHours -> Color(0xFFEAF1FB)
         else -> Color(0xFFFFF5DD)
     }
@@ -1660,7 +1730,7 @@ private fun DetailScreen(
                         .navigationBarsPadding()
                         .padding(horizontal = 18.dp, vertical = 12.dp),
                 ) {
-                    if (deadlineHasPassed || needsNewDeadline || departureHasPassed) {
+                    if (navigationAction != RouteNavigationAction.OPEN_ROUTE) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             color = TteumRedSoft,
@@ -1670,8 +1740,8 @@ private fun DetailScreen(
                             Text(
                                 when {
                                     deadlineHasPassed -> "도착 마감이 지났어요. 시간을 다시 정해 주세요"
-                                    needsNewDeadline -> "다시 계산하려면 도착 마감을 새로 정해 주세요"
-                                    else -> "출발 권장 시각이 지났어요. 결과를 다시 확인해 주세요"
+                                    navigationAction == RouteNavigationAction.RESET_DEADLINE -> "다시 계산하려면 도착 마감을 새로 정해 주세요"
+                                    else -> "계산 이후 시간이 지났어요. 지금 들를 수 있는지 다시 확인해 주세요"
                                 },
                                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
                                 textAlign = TextAlign.Center,
@@ -1682,11 +1752,12 @@ private fun DetailScreen(
                     }
                     Button(
                         onClick = {
-                            when {
-                                deadlineHasPassed -> onResetRoute()
-                                needsNewDeadline -> onResetRoute()
-                                departureHasPassed -> onRefreshResult()
-                                else -> onOpenRoute()
+                            when (routeNavigationAction(
+                                criteria, listOf(recommendation), calculatedAtEpochMillis, System.currentTimeMillis(),
+                            )) {
+                                RouteNavigationAction.RESET_DEADLINE -> onResetRoute()
+                                RouteNavigationAction.RECHECK -> onRefreshResult()
+                                RouteNavigationAction.OPEN_ROUTE -> onOpenRoute()
                             }
                         },
                         enabled = !isOpeningRoute,
@@ -1698,9 +1769,8 @@ private fun DetailScreen(
                         Text(
                             when {
                                 isOpeningRoute -> "경로 확인 중..."
-                                deadlineHasPassed -> "도착 마감 다시 정하기"
-                                needsNewDeadline -> "도착 마감 다시 정하기"
-                                departureHasPassed -> "현재 교통으로 다시 확인"
+                                navigationAction == RouteNavigationAction.RESET_DEADLINE -> "도착 마감 다시 정하기"
+                                navigationAction == RouteNavigationAction.RECHECK -> "현재 교통으로 다시 확인"
                                 else -> "이곳 들러 카카오맵 안내"
                             },
                             fontSize = 17.sp,
@@ -1728,6 +1798,7 @@ private fun DetailScreen(
                     SavedPlaceImage(
                         imageUrl = heroImageUrl,
                         category = place.category,
+                        cropAllowed = placePhotoMayCrop(place, heroImageUrl),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 18.dp)
@@ -1735,15 +1806,11 @@ private fun DetailScreen(
                             .aspectRatio(16f / 9f),
                     )
                     photoSourceCaption?.let { caption ->
-                        Text(
-                            caption,
+                        TourPhotoAttribution(
+                            caption = caption,
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp, vertical = 6.dp),
-                            color = TteumMuted,
-                            textAlign = TextAlign.End,
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp,
                         )
                     }
                 } else {
@@ -1849,25 +1916,25 @@ private fun DetailScreen(
                                 if (largeText || maxWidth < 300.dp) {
                                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                         DetailDecisionMetric(
-                                            label = "머물 수 있는 시간",
+                                            label = "계산 당시 최대 체류",
                                             value = compactMaximumStayLabel(recommendation),
                                         )
                                         DetailDecisionMetric(
-                                            label = "출발 권장",
-                                            value = if (departureHasPassed) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
+                                            label = "경유지에서 출발 권장",
+                                            value = if (needsRecheck) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
                                             emphasized = true,
                                         )
                                     }
                                 } else {
                                     Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                                         DetailDecisionMetric(
-                                            label = "머물 수 있는 시간",
+                                            label = "계산 당시 최대 체류",
                                             value = compactMaximumStayLabel(recommendation),
                                             modifier = Modifier.weight(1f),
                                         )
                                         DetailDecisionMetric(
-                                            label = "출발 권장",
-                                            value = if (departureHasPassed) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
+                                            label = "경유지에서 출발 권장",
+                                            value = if (needsRecheck) "다시 확인 필요" else latestDepartureTimeLabel(recommendation),
                                             emphasized = true,
                                             modifier = Modifier.weight(1f),
                                         )

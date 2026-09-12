@@ -1,7 +1,9 @@
 package com.tteumsae.app.reminder
 
 import com.tteumsae.app.domain.Coordinates
+import com.tteumsae.app.location.LocationAccessPolicy
 import org.json.JSONObject
+import java.util.UUID
 
 private const val ACTIVE_TRIP_RETENTION_MILLIS = 2 * 60 * 60_000L
 
@@ -17,6 +19,8 @@ data class ActiveTrip(
     val latestDepartureEpochMillis: Long,
     val navigationUrl: String,
     val expiresAtEpochMillis: Long,
+    val locationMode: String = LocationAccessPolicy.persistenceMode,
+    val navigationToken: String = UUID.randomUUID().toString(),
 )
 
 internal fun activeTripExpiryEpochMillis(arrivalDeadlineEpochMillis: Long): Long =
@@ -24,6 +28,9 @@ internal fun activeTripExpiryEpochMillis(arrivalDeadlineEpochMillis: Long): Long
 
 internal object ActiveTripCodec {
     fun encode(trip: ActiveTrip): String = JSONObject()
+        .put("schemaVersion", 2)
+        .put("locationMode", trip.locationMode)
+        .put("navigationToken", trip.navigationToken)
         .put("startName", trip.startName)
         .put("start", trip.start.toJson())
         .put("destinationName", trip.destinationName)
@@ -38,6 +45,7 @@ internal object ActiveTripCodec {
         .toString()
 
     fun decode(value: String): ActiveTrip = JSONObject(value).let { json ->
+        require(json.optInt("schemaVersion", 0) == 2) { "Unsupported active trip snapshot" }
         ActiveTrip(
             startName = json.getString("startName"),
             start = json.getJSONObject("start").toCoordinates(),
@@ -50,6 +58,8 @@ internal object ActiveTripCodec {
             latestDepartureEpochMillis = json.getLong("latestDepartureEpochMillis"),
             navigationUrl = json.getString("navigationUrl"),
             expiresAtEpochMillis = json.getLong("expiresAtEpochMillis"),
+            locationMode = json.getString("locationMode"),
+            navigationToken = json.getString("navigationToken"),
         )
     }
 

@@ -48,6 +48,7 @@ import com.tteumsae.app.ui.route.plainTourText
 import com.tteumsae.app.ui.route.practicalVisitFacts
 import com.tteumsae.app.ui.route.placeSourceCaption
 import com.tteumsae.app.ui.route.placePhotoSourceCaption
+import com.tteumsae.app.ui.route.placePhotoMayCrop
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumMuted
 import com.tteumsae.app.ui.theme.TteumRed
@@ -129,6 +130,7 @@ internal fun SavedPlaceDetailScreen(
                     SavedPlaceImage(
                         imageUrl = heroImageUrl,
                         category = place.category,
+                        cropAllowed = placePhotoMayCrop(place, heroImageUrl),
                         modifier = Modifier.fillMaxSize(),
                     )
                     Row(
@@ -170,12 +172,9 @@ internal fun SavedPlaceDetailScreen(
                         .padding(horizontal = 20.dp, vertical = 22.dp),
                 ) {
                     photoSourceCaption?.let { caption ->
-                        Text(
-                            caption,
+                        TourPhotoAttribution(
+                            caption = caption,
                             modifier = Modifier.fillMaxWidth(),
-                            color = TteumMuted,
-                            fontSize = 11.sp,
-                            lineHeight = 16.sp,
                         )
                         Spacer(Modifier.height(10.dp))
                     }

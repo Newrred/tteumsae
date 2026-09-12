@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.tteumsae.app.ui.BottomNavigation
+import com.tteumsae.app.location.LocationAccessPolicy
 import com.tteumsae.app.ui.account.AccountDeletionDialogs
 import com.tteumsae.app.ui.account.AccountSettingsCard
 import com.tteumsae.app.ui.account.AccountUiState
@@ -72,8 +73,10 @@ internal fun SettingsScreen(
     onShowMessage: (String) -> Unit,
     onTabSelected: (MainTab) -> Unit,
 ) {
+    val automaticLocationEnabled = LocationAccessPolicy.automaticLocationEnabled
     var showSavedClearDialog by remember { mutableStateOf(false) }
     var showCacheClearDialog by remember { mutableStateOf(false) }
+    var showLicenseNotices by remember { mutableStateOf(false) }
 
     Scaffold(
         containerColor = Color(0xFFF7F8FA),
@@ -121,15 +124,17 @@ internal fun SettingsScreen(
 
                     SettingsSectionTitle("앱 사용")
                     SettingsGroup {
-                        SettingsRow(
-                            title = "위치 권한",
-                            description = if (locationPermissionGranted) "허용됨" else "허용되지 않음",
-                            onClick = onOpenLocationSettings,
-                        )
-                        SettingsDivider()
+                        if (automaticLocationEnabled) {
+                            SettingsRow(
+                                title = "위치 권한",
+                                description = if (locationPermissionGranted) "허용됨" else "허용되지 않음",
+                                onClick = onOpenLocationSettings,
+                            )
+                            SettingsDivider()
+                        }
                         SettingsRow(
                             title = "카카오맵 연결 확인",
-                            description = if (kakaoMapAvailable) "설치됨" else "설치 필요",
+                            description = if (kakaoMapAvailable) "설치됨" else "웹으로 연결",
                             onClick = onOpenKakaoMap,
                         )
                     }
@@ -164,13 +169,14 @@ internal fun SettingsScreen(
                             titleColor = if (privacyPolicyAvailable) TteumInk else TteumMuted,
                             onClick = if (privacyPolicyAvailable) onOpenPrivacyPolicy else null,
                         )
-                        SettingsDivider()
-                        SettingsRow(
-                            title = "위치기반서비스 이용약관",
-                            description = if (locationTermsAvailable) "보기" else "문서 준비 중",
-                            titleColor = if (locationTermsAvailable) TteumInk else TteumMuted,
-                            onClick = if (locationTermsAvailable) onOpenLocationTerms else null,
-                        )
+                        if (automaticLocationEnabled && locationTermsAvailable) {
+                            SettingsDivider()
+                            SettingsRow(
+                                title = "위치기반서비스 이용약관",
+                                description = "보기",
+                                onClick = onOpenLocationTerms,
+                            )
+                        }
                         SettingsDivider()
                         SettingsRow(
                             title = "문의하기",
@@ -190,6 +196,12 @@ internal fun SettingsScreen(
                         SettingsRow(
                             title = "데이터 출처",
                             description = "한국관광공사 TourAPI · 카카오맵",
+                        )
+                        SettingsDivider()
+                        SettingsRow(
+                            title = "오픈소스 라이선스",
+                            description = "라이브러리와 폰트 이용 고지 · 오프라인 보기",
+                            onClick = { showLicenseNotices = true },
                         )
                     }
                 }
@@ -221,6 +233,10 @@ internal fun SettingsScreen(
                 showSavedClearDialog = false
             },
         )
+    }
+
+    if (showLicenseNotices) {
+        LicenseNoticesDialog(onDismiss = { showLicenseNotices = false })
     }
 
     if (showCacheClearDialog) {

@@ -101,6 +101,7 @@ import com.tteumsae.app.ui.hasLocationPermission
 import com.tteumsae.app.ui.networkFailureMessage
 import com.tteumsae.app.ui.requestCurrentLocation
 import com.tteumsae.app.ui.shouldAutoLocateStart
+import com.tteumsae.app.location.LocationAccessPolicy
 import com.tteumsae.app.ui.theme.TteumInk
 import com.tteumsae.app.ui.theme.TteumHandle
 import com.tteumsae.app.ui.theme.TteumMuted
@@ -115,6 +116,12 @@ import kotlinx.coroutines.delay
 
 internal const val LOCATION_SEARCH_VISIBLE_LIMIT = 10
 private const val UNSUPPORTED_DESTINATION_MESSAGE = "현재는 강원도 목적지만 추천할 수 있어요."
+
+internal fun initialRouteStartQuery(
+    selectedName: String?,
+    automaticLocationEnabled: Boolean,
+    hasPermission: Boolean,
+): String = selectedName ?: if (automaticLocationEnabled && hasPermission) "현재 위치" else ""
 
 internal fun canContinueRouteInput(
     input: RouteFlowInput,
@@ -161,13 +168,17 @@ internal fun RouteLocationScreen(
     onNext: () -> Unit,
 ) {
     val context = LocalContext.current
+    val automaticLocationEnabled = LocationAccessPolicy.automaticLocationEnabled
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val isImeVisible = WindowInsets.isImeVisible
     var startQuery by rememberSaveable {
         mutableStateOf(
-            input.start?.name
-                ?: if (hasLocationPermission(context)) "현재 위치" else "",
+            initialRouteStartQuery(
+                selectedName = input.start?.name,
+                automaticLocationEnabled = automaticLocationEnabled,
+                hasPermission = automaticLocationEnabled && hasLocationPermission(context),
+            ),
         )
     }
     var destinationQuery by rememberSaveable {
@@ -194,7 +205,8 @@ internal fun RouteLocationScreen(
         }
     }
 
-    val locateCurrentPosition: () -> Unit = {
+    val locateCurrentPosition: () -> Unit = locate@{
+        if (!automaticLocationEnabled) return@locate
         cancelLocationRequest?.invoke()
         isLocating = true
         val cancel = requestCurrentLocation(
@@ -235,6 +247,7 @@ internal fun RouteLocationScreen(
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { permissions ->
+        if (!automaticLocationEnabled) return@rememberLauncherForActivityResult
         if (permissions.values.any { it }) {
             locateCurrentPosition()
         } else if (
@@ -252,7 +265,8 @@ internal fun RouteLocationScreen(
             ).show()
         }
     }
-    val useCurrentLocation = {
+    val useCurrentLocation: () -> Unit = useCurrent@{
+        if (!automaticLocationEnabled) return@useCurrent
         if (hasLocationPermission(context)) {
             locateCurrentPosition()
         } else {
@@ -279,13 +293,14 @@ internal fun RouteLocationScreen(
 
     LaunchedEffect(startQuery, input.start) {
         if (
-            hasLocationPermission(context) &&
-            shouldAutoLocateStart(startQuery, input.start != null)
+            automaticLocationEnabled && hasLocationPermission(context) &&
+            shouldAutoLocateStart(startQuery, input.start != null, automaticLocationEnabled)
         ) {
             useCurrentLocation()
         }
     }
     LaunchedEffect(input.start?.coordinates, input.start?.name) {
+        if (!automaticLocationEnabled) return@LaunchedEffect
         val start = input.start ?: return@LaunchedEffect
         if (start.name != "현재 위치") return@LaunchedEffect
         val address = try {
@@ -438,7 +453,11 @@ internal fun RouteLocationScreen(
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "늦지 않는 선에서 들를 곳을 찾아드려요.",
+                            if (automaticLocationEnabled) {
+                                "늦지 않는 선에서 들를 곳을 찾아드려요."
+                            } else {
+                                "선택한 출발지 기준으로 들를 곳을 찾아드려요."
+                            },
                             color = TteumMuted,
                             fontSize = 13.sp,
                         )
@@ -484,7 +503,7 @@ internal fun RouteLocationScreen(
                                 startQuery = it.name
                                 onStartSelected(RouteLocation(it.name, it.coordinates))
                             },
-                            onUseCurrentLocation = useCurrentLocation,
+                            onUseCurrentLocation = useCurrentLocation.takeIf { automaticLocationEnabled },
                             isLocating = isLocating,
                         )
                         HorizontalDivider(
@@ -585,7 +604,7 @@ internal fun RouteLocationScreen(
         ) { }
     }
 
-    if (showLocationSettingsDialog) {
+    if (automaticLocationEnabled && showLocationSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showLocationSettingsDialog = false },
             modifier = Modifier.widthIn(max = 420.dp),
@@ -612,7 +631,7 @@ internal fun RouteLocationScreen(
             tonalElevation = 0.dp,
         )
     }
-    if (showPermissionSettingsDialog) {
+    if (automaticLocationEnabled && showPermissionSettingsDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionSettingsDialog = false },
             modifier = Modifier.widthIn(max = 420.dp),

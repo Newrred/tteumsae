@@ -1,5 +1,12 @@
 # 시스템 아키텍처
 
+## 2026-09-13 위치 기능 분리
+
+기본 Android 빌드는 수동 장소 선택이다. `LocationAccessPolicy`와 Gradle의 `locationMode`로
+GPS 공급자 및 매니페스트를 컴파일 시 선택한다. 실제 GPS 구현은 `src/locationAutomatic`,
+기기 위치에 접근하지 않는 공급자는 `src/locationManual`에 있다. 복구 절차와 이전 경로/알림
+모드 분리는 [위치 빌드 모드](18_LOCATION_BUILD_MODES.md)를 따른다. 아래 GPS 설명은 자동 모드에 해당한다.
+
 ## 1. 전체 구성
 
 ```mermaid
