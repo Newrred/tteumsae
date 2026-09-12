@@ -1,10 +1,21 @@
 # 틈새 — 제3자 지식재산 이용 근거 및 확인 자료 초안
 
-작성·공식 자료 확인일: 2026-09-13 · 대상: Android `com.tteumsae.app` 0.13.0 / versionCode 33
+작성·공식 자료 확인일: 2026-09-13 · 대상: Android `com.tteumsae.app` 0.13.1 / versionCode 34
 
-code 33 갱신 상태: 최종 수동 빌드·설치·라이선스 화면 및 홈·접힌 검색 시트의 지도 로고
-실기기 검증을 완료했다. 기존 첨부 PDF는 보존하며, 갱신본은 별도
-`tteumsae-third-party-rights-0.13.0-code33.pdf`로 작성한다.
+code 34 갱신 상태: 공개 APK는 최종 수동 30E0 후보이며, 아래 주소 검색·결과 지도 보완과
+실기기 검증 범위를 반영한다. 기존 code 32/33의 사진·라이선스 검증 이력은 실제 수행 버전을
+유지한다. 이전 PDF를 보존하고 새 파일 `tteumsae-third-party-rights-0.13.1-code34.pdf`를 작성한다.
+
+- 대상 APK: `output/release-0.13.1/tteumsae-v0.13.1-34-manual-release.apk`, 44,896,004바이트.
+- SHA-256: `30E05594A326CC79386EBE838FBB0F15283C7ABFF1C76E7EB60A320D06A88F96`.
+- 수동 Android 227/227·51 suites, lint 오류 0·경고 48 및 서명 release 빌드 성공.
+- 최종 주소/시트 Maestro는 1/1 통과·73초·8장. 묶음 5→4→3과 중간 시트의 구성원 핀·
+  카카오 로고 노출을 실제 캡처에서 확인했다. 전체 기기·모든 화면 검증으로 확대하지 않는다.
+- 06:39 공개 APK 교체·익명 다운로드 해시 일치 확인은 원스토어 제출·승인과 별개다.
+- 새 권리 근거 PDF: `output/pdf/tteumsae-third-party-rights-0.13.1-code34.pdf`, 5쪽,
+  154,418바이트. 모든 페이지를 PNG로 렌더해 표·문단·출처 링크·쪽번호의 잘림 없이 검수했다.
+  PDF SHA-256: `F287577B3624720B17E80BC87E95548092E9E17117B24447348BD72FEA909915`.
+  원스토어 첨부 교체나 최종 신청은 이 문서 생성에 포함하지 않았다.
 
 ## 1. 자료의 목적과 범위
 
@@ -22,7 +33,7 @@ code 33 갱신 상태: 최종 수동 빌드·설치·라이선스 화면 및 홈
 | 구분 | 실제 사용 | 공식 이용 근거와 제한 |
 |---|---|---|
 | Kakao Maps SDK for Android v2 | `com.kakao.maps.open:android:2.14.0`. 홈·결과 지도, 핀·경로 표시 | [공식 SDK 소개](https://apis.map.kakao.com/android_v2/)와 [시작 안내](https://apis.map.kakao.com/android_v2/docs/getting-started/)가 앱 키 인증 후 SDK 사용을 안내한다. SDK 사용은 공개 이용조건에 따른 이용권이며, 지도·상표 소유권을 취득하는 것은 아니다. |
-| Kakao Local API | 장소 키워드 검색. 역지오코딩 구현도 존재하나 수동 출시 UI에서 자동 GPS 조회는 사용하지 않음 | [공식 Local 개발 가이드](https://developers.kakao.com/docs/ko/local/dev-guide), [플랫폼 서비스 약관](https://developers.kakao.com/terms/ko/site-terms) 및 [운영정책](https://developers.kakao.com/terms/ko/site-policies). 등록 앱·인증·서비스별 사용조건을 따라야 하며 키 공유, 상표 무단 사용, 소유권 고지 삭제를 허용하는 포괄 권한이 아니다. |
+| Kakao Local API | 장소 키워드 및 도로명·지번 주소 검색. 사용자가 선택한 주소 좌표를 경로 계산에 사용. 역지오코딩 구현도 존재하나 수동 출시 UI에서 자동 GPS 조회는 사용하지 않음 | [공식 Local 개발 가이드](https://developers.kakao.com/docs/latest/ko/local/dev-guide#address-coord), [플랫폼 서비스 약관](https://developers.kakao.com/terms/ko/site-terms) 및 [운영정책](https://developers.kakao.com/terms/ko/site-policies). 등록 앱·인증·서비스별 사용조건을 따라야 하며 키 공유, 상표 무단 사용, 소유권 고지 삭제를 허용하는 포괄 권한이 아니다. |
 | Kakao Mobility 길찾기 API | 서버가 자동차 기준 경로·경유 시간 계산. 앱은 계산 결과를 표시하고 카카오맵으로 길 안내 연결 | [공식 제품 안내](https://developers.kakaomobility.com/)와 [디벨로퍼스 운영정책](https://policy.kakaomobility.com/viewer/?pageCode=DEVELOPERS_TERMS)은 공개 API/SDK를 자체 앱에 연동할 수 있는 조건과 무료 한도·초과 이용 절차를 안내한다. 카카오모빌리티의 공식·제휴 서비스로 오인시키면 안 된다. 별도 제휴계약 체결을 주장하지 않는다. |
 
 실제 코드 위치:
@@ -32,6 +43,22 @@ code 33 갱신 상태: 최종 수동 빌드·설치·라이선스 화면 및 홈
 - 지도 표시: `android/app/src/main/java/com/tteumsae/app/ui/TteumsaeApp.kt`의 `MapView`, `KakaoMap`.
 - 서버 호출: `backend/lib/kakao-local.js`, `backend/lib/kakao-mobility.js`.
 - 외부 지도 연결: `android/app/src/main/java/com/tteumsae/app/platform/ExternalNavigation.kt`.
+
+code 34 추가 사용과 표시:
+
+- `backend/lib/kakao-local.js`의 주소형 검색은 Kakao Local
+  `v2/local/search/address.json`을 사용한다. 도로명·지번 주소를 모두 지원한다는 공식 설명과
+  코드의 주소 후보 정규화를 대조했다. 주소 결과는 장소와 구분하고 선택한 전체 주소를 표시한다.
+- 결과 지도는 지도와 목록을 계속 유지하는 3단계 시트와 SDK viewport padding을 사용한다.
+  로고 bottom margin을 중복 적용하지 않으며, 명시적 묶음 탐색 시 새 시트 여백을 적용한 뒤
+  구성원 좌표를 맞춘다. 일반 지도 제스처는 대기 중 묶음 초점 요청을 취소한다.
+- 최종 30E0의 `tmp/ux-v34-20260913/final30-balanced.png`, `final30-cluster-settled.png`,
+  `final30-cluster-four.png`, `final30-cluster-three.png`를 실제 검수했다. 구성원 핀 몸체·꼬리가
+  시트와 상단 전체 경로 버튼에 가리지 않고, 카카오 로고 전체가 지도 위에 보였다.
+- 전체 목록·펼친 검색 입력은 지도를 덮는 화면으로 구분한다. 이 관찰은 SDK 권리 양도나
+  모든 화면·기기의 상시 표시, 법적 면제 또는 스토어 승인 보장을 뜻하지 않는다.
+
+다음은 code 34에서도 유지되는 이전 검색 시트 보완과 실제 검증 이력이다.
 
 [카카오 지도 SDK 로고 표시 정책](https://apis.map.kakao.com/android_v2/docs/getting-started/precautions/)과
 [Logo 공식 참조](https://apis.map.kakao.com/android_v2/reference/com/kakao/vectormap/Logo.html)는
@@ -156,8 +183,8 @@ code 32 소스에는 [Android 오프라인 이용 고지](22_ANDROID_LICENSE_NOT
 |---|---|---|
 | 사진 출처의 완결성 | 최신 소스는 메타데이터 유무와 관계없이 상세 사진의 TourAPI 출처를 표시하며, 상세 2곳에서 공식 이용조건 링크를 제공함. code 32 실기기에서 출처 노출·공식 외부 페이지 왕복 확인 | 개별 사진의 원출처·유형을 계속 대조. 일반 안내 문구가 미확인 사진의 권리 허락을 대신하지 않음. 없는 작가명·연도를 만들어 넣지 않음. |
 | 제3유형 사진 표시 | 공통 `SavedPlaceImage` 호출 3곳은 실제 표시 URL에 일치하는 명확한 Type1만 Crop, Type3·미확인·상충 메타데이터는 Fit으로 변경함. code 32 실기기 저장 상세에서 전체 구도 확인 | 사진 표시 최소 보완 완료. Fit 사용만으로 전체 개별 이용조건 충족을 보증하지 않음. |
-| 지도 로고 | code 33의 접힌 110dp 검색 시트 위 로고 전체 노출, 입력 다시 펼침, 홈 복귀 시 로고 위치 복구를 04:37 실기기 캡처로 확인. 기존 결과 지도 표본도 노출 확인 | 펼친 입력 화면의 일시 오버레이와 구분하며 모든 화면의 상시 노출로 표현하지 않음. |
-| OSS·폰트 고지 | code 32의 110개 모듈 목록·원문 7개 고지를 code 33에 유지. 계약 테스트 2/2, code 32 전체 고지 흐름 및 code 33 목록·Pretendard 원문·뒤로 실기기 재확인 | 네트워크 차단·큰 글자 검증은 별도. 제공사 공통 고지를 내부 네이티브 구성의 독립 SBOM으로 해석하지 않으며, Kotlin 재패키징 코드의 별도 상위 NOTICE 전수 확인 등 한계는 docs22에 명시. |
+| 지도 로고 | code 33의 접힌 검색 시트 보정을 유지. 최종 code 34의 중간 결과 시트·묶음 5→4→3에서 로고 전체 노출과 구성원 핀 가림 해소를 실제 캡처로 확인 | 전체 목록·펼친 입력이 지도를 덮는 화면과 구분하며 모든 화면의 상시 노출로 표현하지 않음. |
+| OSS·폰트 고지 | code 32의 110개 모듈 목록·원문 7개 고지를 code 34에 유지. 이번 주소·UI 변경은 의존성·폰트·고지를 변경하지 않음. 계약 테스트 2/2, code 32 전체 고지 흐름 및 code 33 목록·Pretendard 원문·뒤로 실기기 재확인 | 이 고지 흐름을 code 34에서 새로 전부 검사했다고 표현하지 않음. 네트워크 차단·큰 글자 고지 화면 검증은 별도. 제공사 공통 고지를 내부 네이티브 구성의 독립 SBOM으로 해석하지 않으며, Kotlin 재패키징 코드의 별도 상위 NOTICE 전수 확인 등 한계는 docs22에 명시. |
 | 기타 보조 공공데이터 | 기상·집중률·무장애·공영주차장의 공식 출처를 3.1절에 추가 | 계정별 승인 자료는 별도. 공영주차장 통합 데이터의 구체적 이용조건은 추가 확인 범위. |
 | API 계정별 증빙 | 공개 약관과 코드의 실제 사용만 대조 | 키를 가린 앱 등록/활용 승인 화면 또는 권리자가 발행한 서류를 필요 범위에서 추가. 이 문서에 계정 승인 완료·별도 계약 체결을 허위 기재하지 않음. |
 
