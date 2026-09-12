@@ -1,3 +1,4 @@
+# Run explicitly after preparing the documented release-QA state; not a general smoke flow.
 appId: com.tteumsae.app
 name: Manual release - loaded tourism screens
 ---

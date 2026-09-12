@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -174,6 +175,7 @@ import com.kakao.vectormap.KakaoMapReadyCallback
 import com.kakao.vectormap.GestureType
 import com.kakao.vectormap.LatLng
 import com.kakao.vectormap.MapLifeCycleCallback
+import com.kakao.vectormap.MapGravity
 import com.kakao.vectormap.MapView
 import com.kakao.vectormap.camera.CameraAnimation
 import com.kakao.vectormap.camera.CameraUpdateFactory
@@ -1133,6 +1135,11 @@ private fun activeTripFor(
     )
 }
 
+internal fun homeMapLogoBottomMarginDp(
+    routeInputOpen: Boolean,
+    navigationBottomInsetDp: Float,
+): Float = 12f + if (routeInputOpen) 110f + navigationBottomInsetDp.coerceAtLeast(0f) else 0f
+
 @Composable
 private fun HomeScreen(
     showIntro: Boolean,
@@ -1145,6 +1152,10 @@ private fun HomeScreen(
     onTabSelected: (MainTab) -> Unit,
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
+    val navigationBottomInsetDp = with(density) {
+        WindowInsets.navigationBars.getBottom(density).toDp().value
+    }
     val automaticLocationEnabled = LocationAccessPolicy.automaticLocationEnabled
     var isLocating by remember { mutableStateOf(false) }
     var cancelLocationRequest by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -1236,6 +1247,10 @@ private fun HomeScreen(
                 requestedLocation = currentLocationTarget.takeIf { automaticLocationEnabled },
                 centerRequestedLocation = !routeInputOpen,
                 cameraTarget = routeMapFocusTarget,
+                logoBottomMargin = homeMapLogoBottomMarginDp(
+                    routeInputOpen,
+                    navigationBottomInsetDp,
+                ).dp,
             )
             AnimatedVisibility(
                 visible = !routeInputOpen,
@@ -2281,6 +2296,7 @@ private fun MapBackground(
     requestedLocation: RequestedMapLocation? = null,
     centerRequestedLocation: Boolean = true,
     cameraTarget: RequestedMapLocation? = null,
+    logoBottomMargin: Dp? = null,
 ) {
     KakaoMapSurface(
         modifier = modifier,
@@ -2290,6 +2306,7 @@ private fun MapBackground(
         requestedLocation = requestedLocation,
         centerRequestedLocation = centerRequestedLocation,
         cameraTarget = cameraTarget,
+        logoBottomMargin = logoBottomMargin,
         routeStops = listOfNotNull(
             cameraTarget?.let { target ->
                 "목적지" to Coordinates(target.latitude, target.longitude)
@@ -2414,6 +2431,7 @@ private fun KakaoMapSurface(
     corridorPoints: List<Coordinates> = emptyList(),
     corridorRadiusMeters: Int = 0,
     mapBottomPadding: Dp = 300.dp,
+    logoBottomMargin: Dp? = null,
     onMapInteraction: () -> Unit = {},
     onCandidateClick: (String) -> Unit = {},
     onClusterClick: (List<String>) -> Unit = {},
@@ -2458,6 +2476,8 @@ private fun KakaoMapSurface(
     val latestZoomLevel by rememberUpdatedState(currentZoomLevel)
     val latestClusterDistanceDp by rememberUpdatedState(clusterDistanceDp)
     val density = LocalDensity.current
+    val logoBottomMarginPixels = with(density) { logoBottomMargin?.toPx() }
+    val logoEndMarginPixels = with(density) { 12.dp.toPx() }
     val hasRouteCandidates = candidateMarkers.isNotEmpty()
     val mapHorizontalPaddingPixels = with(density) {
         if (hasRouteCandidates) 72.dp.toPx().toInt() else 0
@@ -2523,6 +2543,13 @@ private fun KakaoMapSurface(
             },
             object : KakaoMapReadyCallback() {
                 override fun onMapReady(readyMap: KakaoMap) {
+                    logoBottomMarginPixels?.let { bottom ->
+                        readyMap.logo?.setPosition(
+                            MapGravity.BOTTOM or MapGravity.RIGHT,
+                            logoEndMarginPixels,
+                            bottom,
+                        )
+                    }
                     readyMap.setPadding(
                         mapHorizontalPaddingPixels,
                         mapTopPaddingPixels,
@@ -2600,6 +2627,18 @@ private fun KakaoMapSurface(
             mapHorizontalPaddingPixels,
             mapBottomPaddingPixels,
         )
+    }
+
+    // Move only the SDK attribution, never the camera viewport. The expanded
+    // search form is a temporary overlay; its collapsed map must show the logo.
+    LaunchedEffect(kakaoMap, logoBottomMarginPixels, logoEndMarginPixels) {
+        logoBottomMarginPixels?.let { bottom ->
+            kakaoMap?.logo?.setPosition(
+                MapGravity.BOTTOM or MapGravity.RIGHT,
+                logoEndMarginPixels,
+                bottom,
+            )
+        }
     }
 
     LaunchedEffect(kakaoMap, cameraTarget?.requestId) {

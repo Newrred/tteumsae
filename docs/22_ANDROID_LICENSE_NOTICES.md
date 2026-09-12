@@ -53,8 +53,10 @@ SLF4J는 캐시 POM 대신 실제 JAR 내부 MIT 원문을 사용했다.
 - `node --test scripts/licenses-contract.test.mjs`: 구현 전 2/2 실패 → 구현 후 2/2 통과.
 - 이 테스트는 실제 runtime 좌표 전체와 catalog 일치, 원문 파일 존재/길이/안전한 이름,
   모듈별 문서 참조, Pretendard 본문 보존, 설정 연결·로컬 읽기·WebView 없음 등을 확인한다.
-- 최종 code32 Android 전체190/190, lint0오류/48경고, 서명 release 빌드·실기기 설치 성공.
-  Maestro에서 라이선스 목록, Pretendard/Supabase/Kakao 원문과 목록·뒤로·닫기를 실제 확인했다.
+- code32 Android 전체190/190, lint0오류/48경고, 서명 release 빌드·실기기 설치 성공.
+  당시 Maestro에서 라이선스 목록, Pretendard/Supabase/Kakao 원문과 목록·뒤로·닫기를 실제 확인했다.
+  코드/의존성/고지를 바꾸지 않은 code33에서도 수동·자동 전체195/195, 수동 lint0오류/48경고,
+  서명 수동 APK 업데이트 설치를 통과했다. code33은 접힌 검색 시트의 SDK 로고 위치 보완이다.
   네트워크 차단 상태와 큰 글자 설정은 미검증이다. 오프라인 구현은 assets 전용 읽기와
   위 Node 계약 테스트로 확인했으며 이를 네트워크 차단 실기기 테스트로 표현하지 않는다.
 - 카카오 공통 고지는 버전별 내부 네이티브 구성의 독립 SBOM이 아니다. MPL 등 소스 제공

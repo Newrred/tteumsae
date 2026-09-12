@@ -75,7 +75,7 @@ android {
         applicationId = "com.tteumsae.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 32
+        versionCode = 33
         versionName = "0.13.0"
         buildConfigField("boolean", "AUTOMATIC_LOCATION_ENABLED", automaticLocationEnabled.toString())
         buildConfigField(
